@@ -130,21 +130,36 @@ sudo journalctl -u sendspin -f
 
 ---
 
-## Future Enhancement (Release 2)
+## Release 2: Now Playing Metadata Display (Implemented)
 
-### Now Playing Metadata Display
+### Problem Discovered
 
-**Investigation Complete:** SendSpin provides metadata via environment variables through hook system.
+Music Assistant does not populate the SendSpin `metadata@v1` protocol role. Testing with raw WebSocket message logging confirmed MA sends:
+- `server/hello` with `active_roles: ["metadata@v1"]` (advertises support)
+- `server/state` with ALL metadata fields null (title, artist, album, artwork_url, etc.)
+- `group/update` with `playback_state: "stopped"`
+- `server/time` every 3 seconds (clock sync only)
 
-**Required Changes:**
-1. Add `--hook-start` and `--hook-stop` to service file
-2. Create metadata capture script (`/var/local/www/commandw/sendspin-metadata.sh`)
-3. Add `SENDSPINMETA_FILE` constant
-4. Add metadata command to `renderer.php`
-5. JavaScript polling for metadata updates
-6. UI template updates for "Now Playing" display
+No track metadata is ever sent through the SendSpin protocol, despite the role being advertised. This is an MA-side bug - the SendSpin protocol itself fully supports metadata delivery (ESPHome reference implementation proves this with text sensors for title/artist/album and numeric sensors for progress/duration).
 
-**See detailed plan:** `SENDSPIN_RELEASE2_METADATA_PLAN.md`
+Additionally, SendSpin CLI hooks (`--hook-start` / `--hook-stop`) only pass connection info (server name, client ID, event type) - NO track metadata.
+
+### Working Solution: Home Assistant API Polling
+
+Since MA exposes a full `media_player` entity to Home Assistant with all track metadata, the metadata sink daemon polls HA's REST API instead of relying on the broken SendSpin metadata path.
+
+**Implementation:**
+- `sendspin-metadata-sink.py` daemon on port 8929
+- Polls `GET /api/states/media_player.moode_sendspin` every 3 seconds
+- Extracts: title, artist, album, duration, artwork URL
+- Downloads cover art via HA proxy URL, caches locally
+- Writes moOde `~~~` format to `/var/local/www/sendspinmeta.txt`
+- SendSpin WebSocket listener kept for connection monitoring only
+- HA token in systemd service `Environment` directive
+
+**Tested:** Track changes captured in real-time, cover art downloading correctly.
+
+**Branch:** `sendspin-advanced`
 
 ---
 

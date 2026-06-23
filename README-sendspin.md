@@ -41,11 +41,11 @@ Database entries:
 
 ### What Minimal Install Does NOT Do
 
-1. ❌ Show now playing metadata
-2. ❌ Sync volume with Music Assistant
-3. ❌ Check for SendSpin updates
-4. ❌ Auto-discover servers
-5. ❌ Customize audio format/delay
+1. ~~Show now playing metadata~~ → Done in Release 2 (HA polling, see below)
+2. Sync volume with Music Assistant
+3. Check for SendSpin updates
+4. Auto-discover servers
+5. Customize audio format/delay
 
 ---
 
@@ -292,8 +292,44 @@ README-sendspin.md              → User documentation
 ```
 moode-sendspin-installer.sh     → With metadata, volume sync, updates
 SENDSPIN_ADVANCED_PR.md         → Release 2 documentation
-sendspin-metadata-hook.sh       → Metadata capture
+hooks/sendspin-metadata-sink.py → Metadata sink daemon (HA polling mode)
 sendspin-volume-sync.sh         → Volume synchronization
+```
+
+### Release 2: Metadata Sink (Implemented June 2026)
+
+The metadata sink is a standalone daemon that writes now-playing track
+information to moOde's metadata file format. It works around a Music
+Assistant bug where MA advertises but does not populate the SendSpin
+`metadata@v1` protocol role.
+
+**How it works:**
+- Daemon listens on port 8929 as a SendSpin client (metadata role)
+- Polls Home Assistant REST API every 3 seconds for track data
+- Writes to `/var/local/www/sendspinmeta.txt` in moOde format:
+  `Title~~~Artist~~~Album~~~Duration~~~CoverPath~~~Codec`
+- Downloads and caches cover art in `/var/local/www/imagesw/sendspin-covers/`
+- SendSpin WebSocket connection kept for server monitoring only
+
+**Requirements:**
+- Home Assistant on local network (port 8123) accessible from Pi
+- HA long-lived access token (stored in systemd service Environment)
+- Music Assistant integrated with Home Assistant
+- SendSpin CLI 7.5.0+ (provides aiosendspin library dependency)
+
+**Service management:**
+```bash
+# Status
+sudo systemctl status sendspin-metadata-sink
+
+# Restart (use SIGKILL if stuck in deactivating)
+sudo systemctl kill -s SIGKILL sendspin-metadata-sink
+sleep 2
+sudo systemctl reset-failed sendspin-metadata-sink
+sudo systemctl start sendspin-metadata-sink
+
+# View logs
+sudo journalctl -u sendspin-metadata-sink -f
 ```
 
 ---

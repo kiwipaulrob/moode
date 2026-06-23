@@ -18,30 +18,59 @@ first.
 
 ## Feature List
 
-### 1. Now Playing Metadata Display (Priority 1)
+### 1. Now Playing Metadata Display (DONE - Implemented June 2026)
 
 Display song title, artist, album, and cover art in moOde UI when streaming
 from SendSpin via Music Assistant.
 
-**Approach:**
-- SendSpin daemon provides `--hook-start` and `--hook-stop` CLI flags
-- Hook scripts receive metadata via `SENDSPIN_*` environment variables
-- Metadata written to `/var/local/www/sendspinmeta.txt` (moOde `~~~` format)
-- PHP handler serves metadata via AJAX
-- JavaScript polls every 5 seconds when SendSpin is active
+**Original Plan (hook-based):**
+- SendSpin daemon `--hook-start` / `--hook-stop` scripts
+- Metadata via `SENDSPIN_*` environment variables
+
+**Actual Implementation (HA polling):**
+- SendSpin hooks only pass connection info (server name, client ID) - NO track metadata
+- Music Assistant advertises `metadata@v1` role but sends all-null fields (confirmed via raw WebSocket logging)
+- MA sends only `server/hello`, `server/state` (null metadata), `group/update` (stopped), and `server/time` every 3s
+- This is an MA-side bug; the SendSpin protocol itself fully supports metadata (ESPHome reference implementation proves this)
+
+**Working Solution:**
+- Standalone daemon (`sendspin-metadata-sink.py`) on port 8929
+- Polls Home Assistant REST API every 3 seconds for `media_player.moode_sendspin` entity state
+- Extracts title, artist, album, duration, and artwork URL from HA attributes
+- Downloads cover art via HA proxy URL to `/var/local/www/imagesw/sendspin-covers/`
+- Writes moOde metadata format to `/var/local/www/sendspinmeta.txt`: `Title~~~Artist~~~Album~~~Duration~~~CoverPath~~~Codec`
+- Only rewrites file on track change (detected by title/artist comparison)
+- Clears metadata when HA reports state other than playing/paused
+- SendSpin WebSocket listener kept for connection monitoring only
+- HA long-lived access token embedded in systemd service `Environment` directive
 
 **Files:**
-- `hooks/sendspin-metadata.sh` - Metadata capture hook script
-- `www/inc/constants.php` - Add `SENDSPINMETA_FILE` constant
-- `www/command/renderer.php` - Add `get_sendspinmeta` case
-- `www/templates/ren-config.html` - Now Playing display section
+- `hooks/sendspin-metadata-sink.py` - Main daemon (HA polling + SendSpin listener)
+- `/etc/systemd/system/sendspin-metadata-sink.service` - Service with HA_TOKEN env var
+- `/var/local/www/sendspinmeta.txt` - Output metadata file (moOde ~~~ format)
+- `/var/local/www/imagesw/sendspin-covers/` - Cached cover art directory
 
-**Environment Variables (from SendSpin daemon):**
+**Systemd Service:**
+```ini
+[Unit]
+Description=SendSpin Metadata Sink for moOde (HA Polling)
+After=network-online.target sendspin.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/root/.local/share/uv/tools/sendspin/bin/python /var/local/www/commandw/sendspin-metadata-sink.py
+Restart=on-failure
+RestartSec=10
+Environment="HOME=/root"
+Environment="HA_TOKEN=<long-lived-access-token>"
 ```
-SENDSPIN_TITLE, SENDSPIN_ARTIST, SENDSPIN_ALBUM
-SENDSPIN_DURATION, SENDSPIN_COVER_URL, SENDSPIN_CODEC
-SENDSPIN_STATE
-```
+
+**Verified Working:**
+- Track changes captured in real-time (< 3 second latency)
+- Cover art downloads and caches correctly
+- Metadata clears when playback stops
+- Tested with multiple rapid track changes (Palehound, Big Thief, Japanese Breakfast, Angel Olsen, Waxahatchee)
 
 ---
 
@@ -161,8 +190,11 @@ Run SendSpin as non-root user with proper audio group access.
 
 - Release 1 (`sendspin-integration`) must be deployed and working
 - SendSpin CLI 7.5.0+ (hook support verified)
-- Music Assistant must provide metadata via SendSpin protocol
-- Album art URLs must be accessible from moOde Pi
+- Home Assistant accessible from Pi on local network (port 8123)
+- HA long-lived access token with read access to `media_player.moode_sendspin`
+- Music Assistant integrated with Home Assistant (provides media_player entity)
+- NOTE: Music Assistant does NOT populate SendSpin metadata@v1 fields (bug confirmed June 2026).
+  HA polling is the workaround until MA fixes their server-side metadata implementation.
 
 ---
 
