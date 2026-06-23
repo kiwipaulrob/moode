@@ -18,6 +18,7 @@ Systemd service: sendspin-metadata-sink.service
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import signal
@@ -30,6 +31,7 @@ VENV_SITE = "/root/.local/share/uv/tools/sendspin/lib/python3.12/site-packages"
 sys.path.insert(0, VENV_SITE)
 
 from aiohttp import web
+from aiohttp.http import WSMsgType
 from aiosendspin.client.client import SendspinClient
 from aiosendspin.client.listener import ClientListener
 from aiosendspin.models.types import Roles
@@ -45,7 +47,7 @@ CLIENT_ID = "sendspin-metadata-moOde"
 CLEARED_META = "~~~SendSpin~~~Stopped~~~0~~~~~~"
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("sendspin-meta-sink")
@@ -125,6 +127,13 @@ current_client: SendspinClient | None = None
 def on_metadata(payload):
     """Called when server sends metadata updates."""
     meta = getattr(payload, "metadata", None)
+    logger.debug("Raw metadata object: %s", meta)
+    logger.debug("Raw payload type: %s", type(payload).__name__)
+    # Log all attributes of meta
+    if meta is not None:
+        for attr in ["timestamp", "title", "artist", "album_artist", "album", "artwork_url", "year", "track", "progress", "repeat", "shuffle"]:
+            val = getattr(meta, attr, "<missing>")
+            logger.debug("  meta.%s = %r", attr, val)
     if meta is None:
         return
 
@@ -149,10 +158,39 @@ def on_disconnect():
     clear_meta_file()
 
 
+class RawLoggingWebSocket:
+    """Wraps an aiohttp WebSocketResponse to log all incoming messages."""
+
+    def __init__(self, ws: web.WebSocketResponse):
+        self._ws = ws
+        self._msg_count = 0
+
+    def __getattr__(self, name):
+        return getattr(self._ws, name)
+
+    async def __aiter__(self):
+        async for msg in self._ws:
+            self._msg_count += 1
+            if msg.type == WSMsgType.TEXT:
+                # Log every text message - truncate to 500 chars
+                raw = msg.data[:500] if len(msg.data) > 500 else msg.data
+                logger.debug("[RAW %d] TEXT: %s", self._msg_count, raw)
+            elif msg.type == WSMsgType.BINARY:
+                logger.debug("[RAW %d] BINARY: %d bytes, first byte=%d", self._msg_count, len(msg.data), msg.data[0] if msg.data else -1)
+            elif msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
+                logger.debug("[RAW %d] CLOSE/CLOSED", self._msg_count)
+            elif msg.type == WSMsgType.ERROR:
+                logger.debug("[RAW %d] ERROR", self._msg_count)
+            yield msg
+
+
 async def handle_connection(ws: web.WebSocketResponse) -> None:
     """Handle incoming server connection."""
     global current_client
     logger.info("Server connecting...")
+
+    # Wrap WebSocket to log raw messages
+    ws_wrapper = RawLoggingWebSocket(ws)
 
     client = SendspinClient(
         client_id=CLIENT_ID,
@@ -166,7 +204,7 @@ async def handle_connection(ws: web.WebSocketResponse) -> None:
     current_client = client
 
     try:
-        await client.attach_websocket(ws)
+        await client.attach_websocket(ws_wrapper)
         logger.info("Server connected, waiting for metadata...")
         # Keep connection alive until disconnected
         disconnect_event = asyncio.Event()
