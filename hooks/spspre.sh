@@ -60,20 +60,11 @@ if [ "$DSP_STATE" = "enabled" ] && [ "$LOOPBACK" = "available" ]; then
     # --- Route through CamillaDSP via Loopback ---
 
     cat > "$ALSA_SENDSPIN_CONF" << 'DSP_CONF'
-# SendSpin ALSA config - CamillaDSP loopback mode
-# Routes audio through CamillaDSP for room correction/EQ
 pcm.sendspin {
-    type plug
-    slave {
-        pcm {
-            type hw
-            card Loopback
-            device 0
-            subdevice 0
-        }
-        period_time 1160
-        buffer_time 4640
-    }
+type plug
+slave {
+pcm "plughw:Loopback,0,0"
+}
 }
 DSP_CONF
 
@@ -88,23 +79,16 @@ else
     CARD_NUM="${CARD_NUM:-0}"
 
     cat > "$ALSA_SENDSPIN_CONF" << DIRECT_CONF
-# SendSpin ALSA config - Direct hardware mode
 pcm.sendspin {
-    type plug
-    slave {
-        pcm {
-            type hw
-            card ${CARD_NUM}
-            device 0
-        }
-        period_time 1160
-        buffer_time 4640
-    }
+type plug
+slave {
+pcm "plughw:${CARD_NUM},0"
+}
 }
 DIRECT_CONF
 
     echo "direct" > "$STATE_FILE"
-    log "Audio routed direct to hw:${CARD_NUM},0 (no DSP)"
+    log "Audio routed direct to plughw:${CARD_NUM},0 (no DSP)"
 fi
 
 chmod 644 "$ALSA_SENDSPIN_CONF" 2>/dev/null || true
