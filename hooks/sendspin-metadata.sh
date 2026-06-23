@@ -32,14 +32,22 @@ sanitise() {
     echo -n "$1" | tr -d '\000-\010\013\014\016-\037' | sed 's/~~~/ /g'
 }
 
-if [ "${SENDSPIN_STATE:-}" = "playing" ]; then
+# SendSpin passes SENDSPIN_EVENT (start/stop), not SENDSPIN_STATE
+if [ "${SENDSPIN_EVENT:-}" = "start" ]; then
     # --- Stream started: capture metadata ---
 
-    TITLE=$(sanitise "${SENDSPIN_TITLE:-Unknown}")
-    ARTIST=$(sanitise "${SENDSPIN_ARTIST:-Unknown}")
+    TITLE=$(sanitise "${SENDSPIN_TITLE:-Streaming}")
+    ARTIST=$(sanitise "${SENDSPIN_ARTIST:-SendSpin}")
     ALBUM=$(sanitise "${SENDSPIN_ALBUM:-}")
     DURATION=$(sanitise "${SENDSPIN_DURATION:-0}")
     CODEC=$(sanitise "${SENDSPIN_CODEC:-SendSpin}")
+    SERVER=$(sanitise "${SENDSPIN_SERVER_NAME:-}")
+
+    # Use server name as artist if no metadata available
+    # SendSpin 7.5.0 hooks only pass connection info, not track metadata
+    if [ "$TITLE" = "Streaming" ] && [ -n "$SERVER" ]; then
+        ARTIST="via $SERVER"
+    fi
 
     # Download cover art if URL provided
     COVER_PATH=""
@@ -69,19 +77,19 @@ if [ "${SENDSPIN_STATE:-}" = "playing" ]; then
     chmod 644 "$META_FILE" 2>/dev/null || true
     chown www-data:www-data "$META_FILE" 2>/dev/null || true
 
-    log "Metadata updated: ${TITLE} by ${ARTIST}"
+    log "Stream started: ${TITLE} by ${ARTIST} (event=start)"
 
-elif [ "${SENDSPIN_STATE:-}" = "stopped" ] || [ -z "${SENDSPIN_STATE:-}" ]; then
+elif [ "${SENDSPIN_EVENT:-}" = "stop" ] || [ -z "${SENDSPIN_EVENT:-}" ]; then
     # --- Stream stopped: clear metadata ---
 
     echo -e "~~~SendSpin~~~Stopped~~~0~~~~~~" > "$META_FILE"
     chmod 644 "$META_FILE" 2>/dev/null || true
     chown www-data:www-data "$META_FILE" 2>/dev/null || true
 
-    log "Metadata cleared (stream stopped)"
+    log "Stream stopped (event=stop)"
 
 else
-    log "Unknown SENDSPIN_STATE: ${SENDSPIN_STATE:-empty}"
+    log "Unknown SENDSPIN_EVENT: ${SENDSPIN_EVENT:-empty}"
 fi
 
 # Clean up old cover art (keep last 50 files)
