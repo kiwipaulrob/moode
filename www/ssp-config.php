@@ -12,6 +12,20 @@ require_once __DIR__ . '/inc/sql.php';
 $dbh = sqlConnect();
 phpSession('open');
 
+// Handle save
+if (isset($_POST['save']) && $_POST['save'] == '1') {
+	foreach ($_POST['config'] as $key => $value) {
+		chkValue($key, $value);
+		sqlUpdate('cfg_sendspin', $dbh, $key, $value);
+	}
+	if ($_SESSION['sendspinsvc'] == '1') {
+		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin will apply settings on next restart');
+	} else {
+		$notify = array('title' => '', 'msg' => '');
+	}
+	submitJob('sendspinsvc', '', $notify['title'], $notify['msg']);
+}
+
 // Handle update request
 if (isset($_POST['update_sendspin']) && $_POST['update_sendspin'] == '1') {
 	if ($_SESSION['sendspinsvc'] == '1') {
@@ -24,6 +38,13 @@ if (isset($_POST['update_sendspin']) && $_POST['update_sendspin'] == '1') {
 }
 
 phpSession('close');
+
+// Read config from DB
+$result = sqlRead('cfg_sendspin', $dbh);
+$cfgSendspin = array();
+foreach ($result as $row) {
+	$cfgSendspin[$row['param']] = $row['value'];
+}
 
 // Get installed version
 $_installed_version = getSendspinVersion();
@@ -49,8 +70,6 @@ if ($pypi_json !== false) {
 		$_latest_version = $pypi_data['info']['version'];
 		$_latest_version_display = htmlspecialchars($_latest_version);
 		$_can_update = true;
-
-		// Compare versions
 		if ($_installed_version && version_compare($_installed_version, $_latest_version, '<')) {
 			$_update_available = true;
 		}
@@ -59,6 +78,7 @@ if ($pypi_json !== false) {
 	$_latest_version_display = 'Unable to check';
 }
 
+// Build selects
 $_select['sendspin_update_btn'] = $_SESSION['sendspinsvc'] == '1' && $_update_available ?
 	'<button class="btn btn-medium btn-primary config-btn" type="submit" name="update_sendspin" value="1">Update</button>' :
 	'';
@@ -66,6 +86,33 @@ $_select['sendspin_update_btn'] = $_SESSION['sendspinsvc'] == '1' && $_update_av
 $_select['installed_version'] = $_installed_version_display;
 $_select['latest_version'] = $_latest_version_display;
 $_select['update_available'] = $_update_available ? 'yes' : 'no';
+
+// Audio codec
+$codec = $cfgSendspin['audio_codec'] ?? 'flac';
+$_select['audio_codec'] .= "<option value=\"flac\" " . (($codec == 'flac') ? "selected" : "") . ">FLAC</option>\n";
+$_select['audio_codec'] .= "<option value=\"pcm\" " . (($codec == 'pcm') ? "selected" : "") . ">PCM</option>\n";
+
+// Sample rate
+$rate = $cfgSendspin['audio_rate'] ?? '48000';
+$_select['audio_rate'] .= "<option value=\"44100\" " . (($rate == '44100') ? "selected" : "") . ">44100 Hz</option>\n";
+$_select['audio_rate'] .= "<option value=\"48000\" " . (($rate == '48000') ? "selected" : "") . ">48000 Hz (Default)</option>\n";
+$_select['audio_rate'] .= "<option value=\"96000\" " . (($rate == '96000') ? "selected" : "") . ">96000 Hz</option>\n";
+
+// Bit depth
+$depth = $cfgSendspin['audio_depth'] ?? '16';
+$_select['audio_depth'] .= "<option value=\"16\" " . (($depth == '16') ? "selected" : "") . ">16 bit (Default)</option>\n";
+$_select['audio_depth'] .= "<option value=\"24\" " . (($depth == '24') ? "selected" : "") . ">24 bit</option>\n";
+$_select['audio_depth'] .= "<option value=\"32\" " . (($depth == '32') ? "selected" : "") . ">32 bit</option>\n";
+
+// Static delay
+$_select['static_delay_ms'] = $cfgSendspin['static_delay_ms'] ?? '0';
+
+// Log level
+$log_level = $cfgSendspin['log_level'] ?? 'INFO';
+$_select['log_level'] .= "<option value=\"DEBUG\" " . (($log_level == 'DEBUG') ? "selected" : "") . ">DEBUG</option>\n";
+$_select['log_level'] .= "<option value=\"INFO\" " . (($log_level == 'INFO') ? "selected" : "") . ">INFO (Default)</option>\n";
+$_select['log_level'] .= "<option value=\"WARNING\" " . (($log_level == 'WARNING') ? "selected" : "") . ">WARNING</option>\n";
+$_select['log_level'] .= "<option value=\"ERROR\" " . (($log_level == 'ERROR') ? "selected" : "") . ">ERROR</option>\n";
 
 waitWorker('ssp_config');
 

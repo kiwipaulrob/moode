@@ -36,12 +36,62 @@
                 </span>
 			</div>
 
-			<div class="config-horiz-rule">Metadata</div>
+			<div class="config-horiz-rule">Audio format</div>
 
-			<label class="control-label">Metadata source</label>
+			<label class="control-label" for="audio-codec">Codec</label>
 			<div class="controls">
-				<span class="config-help-static">
-					Track metadata and cover art are polled from Home Assistant via the sendspin-metadata-sink service.
+				<select id="audio-codec" class="config-select-large" name="config[audio_codec]">
+					$_select[audio_codec]
+				</select>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-audio-codec" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-audio-codec" class="config-help-info">
+					Audio codec for the SendSpin stream. FLAC is lossless and recommended. PCM is uncompressed but uses more bandwidth.
+				</span>
+			</div>
+
+			<label class="control-label" for="audio-rate">Sample rate</label>
+			<div class="controls">
+				<select id="audio-rate" class="config-select-large" name="config[audio_rate]">
+					$_select[audio_rate]
+				</select>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-audio-rate" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-audio-rate" class="config-help-info">
+					Sample rate in Hz. 48000 is the default and recommended for most setups. Higher rates increase bandwidth but may improve quality with capable DACs.
+				</span>
+			</div>
+
+			<label class="control-label" for="audio-depth">Bit depth</label>
+			<div class="controls">
+				<select id="audio-depth" class="config-select-large" name="config[audio_depth]">
+					$_select[audio_depth]
+				</select>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-audio-depth" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-audio-depth" class="config-help-info">
+					Bit depth for audio samples. 16 bit is CD quality. 24 bit provides more headroom. Higher values may not be supported by all DACs.
+				</span>
+			</div>
+
+			<div class="config-horiz-rule">Sync tuning</div>
+
+			<label class="control-label" for="static-delay-ms">Static delay (ms)</label>
+			<div class="controls">
+				<input class="config-input-large" type="number" min="0" max="500" step="5" id="static-delay-ms" name="config[static_delay_ms]" value="$_select[static_delay_ms]" required>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-static-delay" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-static-delay" class="config-help-info">
+					Extra playback delay in milliseconds applied after clock sync. Increase if SendSpin audio is ahead of other rooms. Default: 0.
+				</span>
+			</div>
+
+			<div class="config-horiz-rule">Logging</div>
+
+			<label class="control-label" for="log-level">Log level</label>
+			<div class="controls">
+				<select id="log-level" class="config-select-large" name="config[log_level]">
+					$_select[log_level]
+				</select>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-log-level" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-log-level" class="config-help-info">
+					Verbosity of the SendSpin daemon log. DEBUG for troubleshooting, INFO for normal operation, WARNING/ERROR to reduce log noise.
 				</span>
 			</div>
 
@@ -50,8 +100,8 @@
 			<label class="control-label">Volume mode</label>
 			<div class="controls">
 				<span class="config-help-static">
-					Software volume (internal). Hardware volume control is disabled because the USB DAC has no hardware mixer.
-					Volume is controlled from the Music Assistant controller.
+					Software volume (internal). Set via <code>--hardware-volume false</code> in the service file.
+					The SMSL USB DAC has no hardware mixer, so the SendSpin daemon applies volume digitally.
 				</span>
 			</div>
 
@@ -60,7 +110,7 @@
 			<label class="control-label">Audio device</label>
 			<div class="controls">
 				<span class="config-help-static">
-					sendspin (routes through ALSA plug → plughw:0,0 → SMSL USB AUDIO)
+					sendspin (routes through ALSA plug &rarr; plughw:0,0 &rarr; SMSL USB AUDIO)
 				</span>
 			</div>
 
