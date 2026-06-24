@@ -426,7 +426,7 @@ function startSendspin() {
 
 	// Start SendSpin daemon
 	sysCmd('systemctl start sendspin');
-tsysCmd('systemctl enable sendspin');
+	sysCmd('systemctl enable sendspin');
 
 	workerLog('startSendspin(): daemon started (MPD was playing: ' . ($mpdWasPlaying ? 'yes' : 'no') . ')');
 }
@@ -434,7 +434,7 @@ tsysCmd('systemctl enable sendspin');
 function stopSendspin() {
 	// Stop SendSpin daemon
 	sysCmd('systemctl stop sendspin');
-tsysCmd('systemctl disable sendspin');
+	sysCmd('systemctl disable sendspin');
 
 	// Restore ALSA to exclusive mode
 	configureAlsaForSendspin(false);
@@ -479,7 +479,7 @@ function stopAllRenderers() {
 // === Release 2: Advanced Functions ===
 
 function getSendspinVersion() {
-    $result = sysCmd('sendspin --version 2>/dev/null');
+    $result = sysCmd('/root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
     $version = (!empty($result) && isset($result[0])) ? trim($result[0]) : 'unknown';
     return $version;
 }
@@ -499,27 +499,28 @@ function checkSendspinUpdate() {
 }
 
 function updateSendspin() {
-    sysCmd('uv tool upgrade sendspin 2>&1');
-    sleep(2);
-    sysCmd('systemctl restart sendspin 2>/dev/null');
-    workerLog('updateSendspin(): SendSpin updated and restarted');
+    sysCmd('sudo -u root bash -c "/root/.local/share/uv/tools/sendspin/bin/python -m uv tool upgrade sendspin 2>&1 && systemctl restart sendspin" > /tmp/sendspin-update.log 2>&1 &');
+    workerLog('updateSendspin(): upgrade launched in background');
     return true;
 }
 
-function generateSendspinService() {
+function generateSendspinService($dbh = null) {
 	// Read config from DB
-	$dbh = sqlConnect();
+	if ($dbh === null) {
+		$dbh = sqlConnect();
+	}
 	$result = sqlRead('cfg_sendspin', $dbh);
 	$cfg = array();
 	foreach ($result as $row) {
 		$cfg[$row['param']] = $row['value'];
 	}
 
-	$codec = $cfg['audio_codec'] ?? 'flac';
-	$rate = $cfg['audio_rate'] ?? '48000';
-	$depth = $cfg['audio_depth'] ?? '16';
-	$delay = $cfg['static_delay_ms'] ?? '0';
-	$log_level = $cfg['log_level'] ?? 'INFO';
+	// Validate inputs to prevent invalid service file
+	$codec = in_array($cfg['audio_codec'] ?? '', ['flac', 'pcm']) ? $cfg['audio_codec'] : 'flac';
+	$rate = in_array($cfg['audio_rate'] ?? '', ['44100', '48000', '96000']) ? $cfg['audio_rate'] : '48000';
+	$depth = in_array($cfg['audio_depth'] ?? '', ['16', '24', '32']) ? $cfg['audio_depth'] : '16';
+	$delay = max(0, min(500, (int)($cfg['static_delay_ms'] ?? 0)));
+	$log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
 
 	$audio_format = "{$codec}:{$rate}:{$depth}:2";
 

@@ -11,6 +11,14 @@ require_once __DIR__ . '/inc/session.php';
 require_once __DIR__ . '/inc/sql.php';
 
 $dbh = sqlConnect();
+
+// Use stored session ID if no cookie, so moOde's session is always loaded
+if (session_status() === PHP_SESSION_NONE && !isset($_COOKIE[session_name()])) {
+	$storedId = sqlQuery("SELECT value FROM cfg_system WHERE param='sessionid'", $dbh);
+	if (!empty($storedId) && !empty($storedId[0]['value'])) {
+		session_id($storedId[0]['value']);
+	}
+}
 phpSession('open');
 updAlsaVolume($_SESSION['amixname']);
 
@@ -222,17 +230,6 @@ if (isset($_POST['rbrestart']) && $_POST['rbrestart'] == 1) {
 }
 
 phpSession('close');
-
-// If session is empty (no cookie or incognito), load all cfg_system into session
-if (!isset($_SESSION['feat_bitmask'])) {
-	$rows = sqlRead('cfg_system', $dbh);
-	foreach ($rows as $row) {
-		if (!str_contains($row['param'], 'RESERVED_')) {
-			$_SESSION[$row['param']] = $row['value'];
-		}
-	}
-	unset($_SESSION['wrkready']);
-}
 
 // Bluetooth
 $_feat_bluetooth = $_SESSION['feat_bitmask'] & FEAT_BLUETOOTH ? '' : 'hide';

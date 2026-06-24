@@ -6,6 +6,7 @@ Wants=network-online.target
 [Service]
 Type=forking
 PIDFile=/run/worker.pid
+ExecStartPre=/bin/rm -f /run/worker.pid
 ExecStart=/usr/bin/php /var/www/daemon/worker.php
 Restart=on-failure
 RestartSec=5

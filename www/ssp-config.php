@@ -19,11 +19,13 @@ if (isset($_POST['save']) && $_POST['save'] == '1') {
 		sqlUpdate('cfg_sendspin', $dbh, $key, $value);
 	}
 	// Regenerate service file from updated config
-	generateSendspinService();
+	generateSendspinService($dbh);
+	// Restart service if running
 	if ($_SESSION['sendspinsvc'] == '1') {
-		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin settings applied (service restarted)');
+		sysCmd('sudo systemctl restart sendspin');
+		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin settings applied and service restarted');
 	} else {
-		$notify = array('title' => '', 'msg' => '');
+		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin settings saved (service not running)');
 	}
 	submitJob('sendspinsvc', '', $notify['title'], $notify['msg']);
 }
@@ -40,6 +42,17 @@ if (isset($_POST['update_sendspin']) && $_POST['update_sendspin'] == '1') {
 }
 
 phpSession('close');
+
+// If session is empty (no cookie or incognito), load all cfg_system into session
+if (!isset($_SESSION['feat_bitmask'])) {
+	$rows = sqlRead('cfg_system', $dbh);
+	foreach ($rows as $row) {
+		if (!str_contains($row['param'], 'RESERVED_')) {
+			$_SESSION[$row['param']] = $row['value'];
+		}
+	}
+	unset($_SESSION['wrkready']);
+}
 
 // Read config from DB
 $result = sqlRead('cfg_sendspin', $dbh);
