@@ -223,12 +223,15 @@ if (isset($_POST['rbrestart']) && $_POST['rbrestart'] == 1) {
 
 phpSession('close');
 
-// If session is empty (e.g. incognito/no cookie), load feat_bitmask from DB
+// If session is empty (no cookie or incognito), load all cfg_system into session
 if (!isset($_SESSION['feat_bitmask'])) {
-	$result = sqlQuery("SELECT value FROM cfg_system WHERE param='feat_bitmask'", $dbh);
-	if (!empty($result)) {
-		$_SESSION['feat_bitmask'] = $result[0]['value'];
+	$rows = sqlRead('cfg_system', $dbh);
+	foreach ($rows as $row) {
+		if (!str_contains($row['param'], 'RESERVED_')) {
+			$_SESSION[$row['param']] = $row['value'];
+		}
 	}
+	unset($_SESSION['wrkready']);
 }
 
 // Bluetooth
