@@ -1,0 +1,70 @@
+<!--
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright 2024 SendSpin moOde integration
+*/
+-->
+<div id="container">
+<div class="container">
+	<h1 class="ren-config">SendSpin</h1>
+
+    <form class="form-horizontal" action="" method="post">
+    	<legend>Settings
+			<button class="legend-config btn btn-medium btn-primary btn-submit" type="submit" name="save" value="1">Save</button>
+		</legend>
+
+		<div class="control-group">
+
+			<div class="config-horiz-rule">Version</div>
+
+			<label class="control-label" for="installed-version">Installed</label>
+			<div class="controls">
+				<input class="config-input-large" type="text" id="installed-version" name="installed_version" value="$_select[installed_version]" readonly>
+			</div>
+
+			<label class="control-label" for="latest-version">Latest</label>
+			<div class="controls">
+				<input class="config-input-large" type="text" id="latest-version" name="latest_version" value="$_select[latest_version]" readonly>
+			</div>
+
+			<div class="controls" id="sendspin-update-row">
+				$_select[sendspin_update_btn]
+				<span class="config-btn-after">Update SendSpin</span>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-sendspin-update" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-sendspin-update" class="config-help-info">
+					Updates the SendSpin CLI to the latest version using uv tool upgrade. The SendSpin service will be restarted after the update.
+                </span>
+			</div>
+
+			<div class="config-horiz-rule">Metadata</div>
+
+			<label class="control-label">Metadata source</label>
+			<div class="controls">
+				<span class="config-help-static">
+					Track metadata and cover art are polled from Home Assistant via the sendspin-metadata-sink service.
+				</span>
+			</div>
+
+			<div class="config-horiz-rule">Volume control</div>
+
+			<label class="control-label">Volume mode</label>
+			<div class="controls">
+				<span class="config-help-static">
+					Software volume (internal). Hardware volume control is disabled because the USB DAC has no hardware mixer.
+					Volume is controlled from the Music Assistant controller.
+				</span>
+			</div>
+
+			<div class="config-horiz-rule">ALSA device</div>
+
+			<label class="control-label">Audio device</label>
+			<div class="controls">
+				<span class="config-help-static">
+					sendspin (routes through ALSA plug → plughw:0,0 → SMSL USB AUDIO)
+				</span>
+			</div>
+
+		</div>
+	</form>
+</div>
+</div>

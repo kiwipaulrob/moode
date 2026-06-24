@@ -126,6 +126,16 @@ def cleanup_old_covers(max_keep=50):
         pass
 
 
+def is_meta_file_cleared():
+    """Check if metadata file was externally cleared (e.g., by spspost.sh)."""
+    try:
+        with open(META_FILE, "r") as f:
+            content = f.read().strip()
+            return content == CLEARED_META
+    except (FileNotFoundError, IOError):
+        return True
+
+
 # --- HA Polling State ---
 last_title = None
 last_artist = None
@@ -182,8 +192,10 @@ async def poll_ha_metadata(session):
     elif artwork_url and not artwork_url.startswith("http"):
         artwork_url = f"{HA_URL}{artwork_url}"
 
-    # Only update file if track changed
-    if title != last_title or artist != last_artist:
+    # Update file if track changed OR if it was cleared externally
+    # (spspost.sh clears the file on sendspin stop, but the same track
+    #  may still be playing when sendspin restarts)
+    if title != last_title or artist != last_artist or is_meta_file_cleared():
         logger.info("Track changed: %s by %s (state=%s)", title, artist, state)
         cover_path = download_cover(artwork_url) if state == "playing" else ""
         write_meta_file(title, artist, album, duration, cover_path)

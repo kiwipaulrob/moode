@@ -110,18 +110,6 @@
 
 		<div class="control-group $_feat_airplay">
 			<legend>AirPlay</legend>
-
-			<div class="$_install_airplay_hide">
-				<label class="control-label">Shairport-sync</label>
-				<div class="controls">
-					<button class="btn btn-primary btn-small config-btn set-button btn-submit" type="submit" name="install_airplay" value="1">$_airplay_btn_text</button>
-					<span class="config-btn-after">$_airplay_available_version</span>
-					<span class="config-help-static">
-						View the <a href="./install_renderers.txt" class="target-blank-link" target="_blank">Installation guide</a> for more information.
-					</span>
-				</div>
-			</div>
-
 			<label class="control-label">Service</label>
 			<div class="controls">
 				<div class="toggle">
@@ -138,7 +126,7 @@
 			<label class="control-label" for="airplayname">Name</label>
 			<div class="controls">
 				<input class="config-input-large" type="text" id="airplayname" name="airplayname" value="$_select[airplayname]" required">
-				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_airplay_settings" value="novalue" $_airplay_svcbtn_disable><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_airplay_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
 			</div>
 			<label class="control-label">Resume MPD</label>
 			<div class="controls">
@@ -159,25 +147,14 @@
 			</div>
 
 			<div class="controls">
-				<a href="apl-config.php" $_airplay_editlink_disable><button class="btn btn-medium btn-primary config-btn" $_airplay_svcbtn_disable>Edit</button></a>
+				<a href="apl-config.php"><button class="btn btn-medium btn-primary config-btn">Edit</button></a>
 				<span class="config-btn-after">Airplay settings</span>
 			</div>
 		</div>
 
 		<div class="control-group $_feat_spotify">
 			<legend>Spotify Connect</legend>
-
-			<div class="$_install_spotify_hide">
-				<label class="control-label">Librespot</label>
-				<div class="controls">
-					<button class="btn btn-primary btn-small config-btn set-button btn-submit" type="submit" name="install_spotify" value="1">$_spotify_btn_text</button>
-					<span class="config-btn-after">$_spotify_available_version</span>
-					<span class="config-help-static">
-						View the <a href="./install_renderers.txt" class="target-blank-link" target="_blank">Installation guide</a> for more information.
-					</span>
-				</div>
-			</div>
-
+			<p class="sub-legend">This service requires a Spotify Premium account.</p>
 			<label class="control-label">Service</label>
 			<div class="controls">
 				<div class="toggle">
@@ -186,18 +163,15 @@
 				</div>
 				<button id="btn-set-spotifysvc" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_spotify_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
 				<a aria-label="Help" class="config-info-toggle" data-cmd="info-spotifysvc" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
-				<span class="config-help-static">
-					This service requires a Spotify Premium account.
-				</span>
 				<span id="info-spotifysvc" class="config-help-info">
-					librespot by the Librespot Organization and maintained by Roderick Van Domburg and the librespot team.
+					librespot by the Librespot Organization and maintained by Roderick Van Domburg.
                 </span>
 			</div>
 
 			<label class="control-label" for="spotifyname">Name</label>
 			<div class="controls">
 				<input class="config-input-large" type="text" id="spotifyname" name="spotifyname" value="$_select[spotifyname]" required>
-				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_spotify_settings" value="novalue" $_spotify_svcbtn_disable><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_spotify_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
 			</div>
 
 			<label class="control-label">Resume MPD</label>
@@ -219,7 +193,7 @@
 			</div>
 
 			<div class="controls">
-				<a href="spo-config.php" $_spotify_editlink_disable><button class="btn btn-medium btn-primary config-btn" $_spotify_svcbtn_disable>Edit</button></a>
+				<a href="spo-config.php"><button class="btn btn-medium btn-primary config-btn">Edit</button></a>
 				<span class="config-btn-after">Spotify Connect settings</span>
 			</div>
 
@@ -277,44 +251,12 @@
 				$_deezer_credentials_msg
 			</div>
 		</div>
-		<div class="control-group $_feat_upmpdcli">
-			<legend>UPnP Client for MPD</legend>
-			<p class="sub-legend">This service functions as a UPnP media renderer that uses MPD for playback.</p>
-			<label class="control-label">Service</label>
-			<div class="controls">
-				<div class="toggle">
-					<label class="toggle-radio toggle-upnpsvc" for="toggle-upnpsvc-2">ON </label>$_select[upnpsvc_on]
-					<label class="toggle-radio toggle-upnpsvc" for="toggle-upnpsvc-1">OFF</label>$_select[upnpsvc_off]
-				</div>
-				<button id="btn-set-upnpsvc" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_upnp_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
-				<a aria-label="Help" class="config-info-toggle" data-cmd="info-upnpsvc" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
-				<span id="info-upnpsvc" class="config-help-info">
-					UPnP Client for MPD by Jean-Francois Dockes.
-                </span>
-			</div>
-
-			<label class="control-label" for="upnpname">Name</label>
-			<div class="controls">
-				<input class="config-input-large" type="text" id="upnpname" name="upnpname" value="$_select[upnpname]" required">
-				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_upnp_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
-			</div>
-
-			<div class="controls">
-				<a data-toggle="modal" href="#upnp-restart" $_upnp_link_disable><button class="btn btn-medium btn-primary config-btn" $_upnp_btn_disable>Restart</button></a>
-				<span class="config-btn-after">UPnP</span>
-			</div>
-
-			<div class="controls">
-				<a href="upp-config.php"><button class="btn btn-medium btn-primary config-btn">Edit</button></a>
-				<span class="config-btn-after">UPnP settings</span>
-			</div>
-		</div>
 
 		<div class="control-group $_feat_squeezelite">
 			<legend>Squeezelite</legend>
 			<p class="sub-legend">
-				This service requires <a href="https://lyrion.org" class="target-blank-link" target="_blank">Lyrion Music Server (LMS)</a>.<br>
-				<b>Caution:</b> ALSA volume will be 100% (0dB) if Squeezelite can't communicate with LMS.
+				This service requires Logitech Media Server (LMS) to be running on the network.<br>
+				<b>Caution:</b> Squeezelite hogs the audio output by default and so only turn it on when all other renderers are off otherwise it can interfere with the other renderers and with MPD.
 			</p>
 			<label class="control-label">Service</label>
 			<div class="controls">
@@ -353,10 +295,42 @@
 			</div>
 		</div>
 
+		<div class="control-group $_feat_upmpdcli">
+			<legend>UPnP Client for MPD</legend>
+			<p class="sub-legend">This service functions as a UPnP media renderer that uses MPD for playback.</p>
+			<label class="control-label">Service</label>
+			<div class="controls">
+				<div class="toggle">
+					<label class="toggle-radio toggle-upnpsvc" for="toggle-upnpsvc-2">ON </label>$_select[upnpsvc_on]
+					<label class="toggle-radio toggle-upnpsvc" for="toggle-upnpsvc-1">OFF</label>$_select[upnpsvc_off]
+				</div>
+				<button id="btn-set-upnpsvc" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_upnp_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-upnpsvc" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-upnpsvc" class="config-help-info">
+					UPnP Client for MPD by Jean-Francois Dockes.
+                </span>
+			</div>
+
+			<label class="control-label" for="upnpname">Name</label>
+			<div class="controls">
+				<input class="config-input-large" type="text" id="upnpname" name="upnpname" value="$_select[upnpname]" required">
+				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_upnp_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+			</div>
+
+			<div class="controls">
+				<a data-toggle="modal" href="#upnp-restart" $_upnp_link_disable><button class="btn btn-medium btn-primary config-btn" $_upnp_btn_disable>Restart</button></a>
+				<span class="config-btn-after">UPnP</span>
+			</div>
+
+			<div class="controls">
+				<a href="upp-config.php"><button class="btn btn-medium btn-primary config-btn">Edit</button></a>
+				<span class="config-btn-after">UPnP settings</span>
+			</div>
+		</div>
+
 		<div class="control-group $_feat_plexamp">
 			<legend>Plexamp</legend>
-			<p class="sub-legend $_pa_not_installed_msg">
-				This service is not installed.<br>
+			<p class="sub-legend">
 				 View the <a href="./setup_3rdparty_plexamp.txt" class="target-blank-link" target="_blank">Setup guide</a> and then visit the manufacturer website for the latest information on installing and configuring this component.
 			</p>
 			<label class="control-label">Service</label>
@@ -404,8 +378,7 @@
 
 		<div class="control-group $_feat_roonbridge">
 			<legend>RoonBridge</legend>
-			<p class="sub-legend $_rb_not_installed_msg">
-				This service is not installed.<br>
+			<p class="sub-legend">
 				View the <a href="./setup_3rdparty_roonbridge.txt" class="target-blank-link" target="_blank">Setup guide</a> and then visit the manufacturer website for the latest information on installing and configuring this component.
 			</p>
 			<label class="control-label">Service</label>
@@ -438,6 +411,45 @@
 				<a data-toggle="modal" href="#rb-restart" $_rb_link_disable><button class="btn btn-medium btn-primary config-btn" $_rb_btn_disable>Restart</button></a>
 				<span class="config-btn-after">RoonBridge</span>
 			</div>
+
+		<div class="control-group $_feat_sendspin">
+			<legend>SendSpin</legend>
+			<p class="sub-legend">
+				Requires sendspin-cli, view the <a href="./setup_3rdparty_sendspin.txt" class="target-blank-link" target="_blank">setup guide</a>.
+			</p>
+			<label class="control-label" for="sendspinname">Name</label>
+			<div class="controls">
+				<input class="config-input-large" type="text" id="sendspinname" name="sendspinname" value="$_select[sendspinname]" required>
+				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_sendspin_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-sendspinname" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-sendspinname" class="config-help-info">
+					The name that appears in your multi-room audio controller.
+				</span>
+			</div>
+
+			<label class="control-label">Service</label>
+			<div class="controls">
+				<div class="toggle">
+					<label class="toggle-radio toggle-sendspinsvc" for="toggle-sendspinsvc-2">ON </label>$_select[sendspinsvc_on]
+					<label class="toggle-radio toggle-sendspinsvc" for="toggle-sendspinsvc-1">OFF</label>$_select[sendspinsvc_off]
+				</div>
+				<button id="btn-set-sendspinsvc" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_sendspin_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-sendspinsvc" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-sendspinsvc" class="config-help-info">
+					SendSpin Multi-Room Audio Client.
+                </span>
+			</div>
+
+						<div class="controls">
+							<a data-toggle="modal" href="#sendspin-restart" $_sendspin_link_disable><button class="btn btn-medium btn-primary config-btn" $_sendspin_btn_disable>Restart</button></a>
+							<span class="config-btn-after">SendSpin</span>
+						</div>
+
+						<div class="controls">
+							<a href="ssp-config.php"><button class="btn btn-medium btn-primary config-btn">Edit</button></a>
+							<span class="config-btn-after">SendSpin settings</span>
+						</div>
+		</div>
 		</div>
 	</form>
 </div>
@@ -456,22 +468,6 @@
 	</div>
 </form>
 
-<!--DELETE:form class="form-horizontal" method="post">
-	<div id="install-airplay" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="install-airplay-label" aria-hidden="true">
-		<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-			<h3>Build and Install Shairport-sync?</h3>
-		</div>
-		<div class="modal-body">
-			After confirming, a progress status page will appear.
-			The build and install process can take some time so please be patient and periodically REFRESH the status screen.
-		</div>
-		<div class="modal-footer">
-			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
-			<button class="btn btn-primary btn-submit" type="submit" name="install_airplay" value="1">Yes</button>
-		</div>
-	</div>
-</form-->
-
 <form class="form-horizontal" method="post">
 	<div id="airplay-restart" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="airplay-restart-label" aria-hidden="true">
 		<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
@@ -484,22 +480,6 @@
 		</div>
 	</div>
 </form>
-
-<!--DELETE:form class="form-horizontal" method="post">
-	<div id="install-spotify" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="install-spotify-label" aria-hidden="true">
-		<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-			<h3>Build and Install Librespot?</h3>
-		</div>
-		<div class="modal-body">
-			After confirming, a progress status page will appear.
-			The build and install process can take some time so please be patient and periodically REFRESH the status screen.
-		</div>
-		<div class="modal-footer">
-			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
-			<button class="btn btn-primary btn-submit" type="submit" name="install_spotify" value="1">Yes</button>
-		</div>
-	</div>
-</form-->
 
 <form class="form-horizontal" method="post">
 	<div id="spotify-restart" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="spotify-restart-label" aria-hidden="true">
@@ -588,6 +568,19 @@
 		<div class="modal-footer">
 			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
 			<button class="btn btn-primary btn-submit" type="submit" name="rbrestart" value="1">Yes</button>
+		</div>
+	</div>
+</form>
+
+<form class="form-horizontal" method="post">
+	<div id="sendspin-restart" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="sendspin-restart-label" aria-hidden="true">
+		<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+			<h3>Restart SendSpin renderer?</h3>
+		</div>
+		<div class="modal-body"></div>
+		<div class="modal-footer">
+			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+			<button class="btn btn-primary btn-submit" type="submit" name="sendspinrestart" value="1">Yes</button>
 		</div>
 	</div>
 </form>
