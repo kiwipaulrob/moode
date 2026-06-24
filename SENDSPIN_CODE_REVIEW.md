@@ -448,30 +448,55 @@ $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERR
 
 ## Summary Table
 
-| ID | Severity | File | Issue |
-|----|----------|------|-------|
-| BUG-01 | **Critical** | `renderer.php` | `tsysCmd()` typo — undefined function, fatal error |
-| BUG-02 | **Critical** | `renderer.php` | Double `sqlConnect()` in `generateSendspinService()` — SQLite lock |
-| BUG-03 | **High** | `ssp-config.php` | Service not actually restarted on save |
-| BUG-04 | **High** | `ssp-config.php` | DB read before POST save — stale form values after save |
-| BUG-05 | **Medium** | `sendspin-display.js` | Pathname check allows overlay on configure modal |
-| ISSUE-01 | **High** | `ren-config.php` | Session fallback doesn't persist — blank page on every config visit |
-| ISSUE-02 | **Medium** | `renderer.php` | MPD stopped unconditionally on SendSpin start |
-| ISSUE-03 | **Medium** | installer | `generateSendspinService()` not called at install time |
-| ISSUE-04 | **Medium** | `renderer.php` | `sendspin` not in `www-data` PATH — version always `unknown` |
-| ISSUE-05 | **Medium** | `renderer.php` | `updateSendspin()` blocks PHP-FPM for 30–60s |
-| ISSUE-06 | **Medium** | `ssp-config.php` | Session fallback not applied to ssp-config.php |
-| STRUCT-01 | Low | `ren-config.php` | Mixed quote style in SendSpin section |
-| STRUCT-02 | Low | `ssp-config.html` | `<input type="number">` inconsistent with moOde UI pattern |
-| STRUCT-03 | Low | `ssp-config.php` | `waitWorker()` — verify call is present and correct |
-| STRUCT-05 | Low | `metadata-sink.py` | `aiosendspin` dependency undocumented |
-| STRUCT-06 | Low | `moode-worker.service` | Stale PIDFile on crash causes restart failure |
-| MINOR-01 | Info | `spspre.sh` | No error handling |
-| MINOR-02 | Info | `metadata-sink.py` | Hardcoded HA entity ID |
-| MINOR-03 | Info | `ren-config.html` | Minor indentation inconsistencies |
-| MINOR-04 | Info | `renderer.php` | No input validation in `generateSendspinService()` |
+| ID | Severity | File | Issue | Status |
+|----|----------|------|-------|--------|
+| BUG-01 | **Critical** | `renderer.php` | `tsysCmd()` typo — undefined function, fatal error | ✅ FIXED |
+| BUG-02 | **Critical** | `renderer.php` | Double `sqlConnect()` in `generateSendspinService()` — SQLite lock | ✅ FIXED |
+| BUG-03 | **High** | `ssp-config.php` | Service not actually restarted on save | ✅ FIXED |
+| BUG-04 | **High** | `ssp-config.php` | DB read before POST save — stale form values after save | ✅ FIXED (was already correct, added explicit restart) |
+| BUG-05 | **Medium** | `sendspin-display.js` | Pathname check allows overlay on configure modal | ⏳ Open |
+| ISSUE-01 | **High** | `ren-config.php` | Session fallback doesn't persist — blank page on every config visit | ✅ FIXED |
+| ISSUE-02 | **Medium** | `renderer.php` | MPD stopped unconditionally on SendSpin start | ⏳ Open |
+| ISSUE-03 | **Medium** | installer | `generateSendspinService()` not called at install time | ⏳ Open |
+| ISSUE-04 | **Medium** | `renderer.php` | `sendspin` not in `www-data` PATH — version always `unknown` | ✅ FIXED |
+| ISSUE-05 | **Medium** | `renderer.php` | `updateSendspin()` blocks PHP-FPM for 30–60s | ✅ FIXED |
+| ISSUE-06 | **Medium** | `ssp-config.php` | Session fallback not applied to ssp-config.php | ✅ FIXED |
+| STRUCT-01 | Low | `ren-config.php` | Mixed quote style in SendSpin section | ⏳ Open |
+| STRUCT-02 | Low | `ssp-config.html` | `<input type="number">` inconsistent with moOde UI pattern | ⏳ Open |
+| STRUCT-03 | Low | `ssp-config.php` | `waitWorker()` — verify call is present and correct | ⏳ Open |
+| STRUCT-05 | Low | `metadata-sink.py` | `aiosendspin` dependency undocumented | ⏳ Open |
+| STRUCT-06 | Low | `moode-worker.service` | Stale PIDFile on crash causes restart failure | ✅ FIXED |
+| MINOR-01 | Info | `spspre.sh` | No error handling | ⏳ Open |
+| MINOR-02 | Info | `metadata-sink.py` | Hardcoded HA entity ID | ⏳ Open |
+| MINOR-03 | Info | `ren-config.html` | Minor indentation inconsistencies | ⏳ Open |
+| MINOR-04 | Info | `renderer.php` | No input validation in `generateSendspinService()` | ✅ FIXED |
 
 ---
+
+## Completed Fixes (commit 4d40381a)
+
+1. **BUG-01** — Fixed `tsysCmd` typo in `startSendspin()` and `stopSendspin()` ✅
+2. **BUG-02** — `generateSendspinService()` now accepts optional `$dbh` parameter to avoid double `sqlConnect()` ✅
+3. **BUG-03** — Explicit `systemctl restart sendspin` after service file generation ✅
+4. **ISSUE-01** — `ren-config.php` now uses stored session ID before `phpSession('open')` so session persists across requests ✅
+5. **ISSUE-04** — `getSendspinVersion()` uses absolute binary path ✅
+6. **ISSUE-05** — `updateSendspin()` now runs asynchronously in background ✅
+7. **ISSUE-06** — Session fallback added to `ssp-config.php` ✅
+8. **MINOR-04** — Input validation added to `generateSendspinService()` ✅
+9. **STRUCT-06** — `ExecStartPre` added to `moode-worker.service` to clean stale PIDFile ✅
+
+## Remaining Open Items
+
+- **BUG-05** — `sendspin-display.js` pathname check needs hardening
+- **ISSUE-02** — MPD stopped unconditionally on SendSpin start
+- **ISSUE-03** — Installer should call `generateSendspinService()`
+- **STRUCT-01** — Mixed quote style in ren-config.php SendSpin section
+- **STRUCT-02** — Number input vs select dropdown for delay control
+- **STRUCT-03** — `waitWorker()` call verification
+- **STRUCT-05** — `aiosendspin` dependency documentation
+- **MINOR-01** — `spspre.sh` error handling
+- **MINOR-02** — Hardcoded HA entity ID
+- **MINOR-03** — ren-config.html indentation consistency
 
 ## Recommended Fix Order
 
