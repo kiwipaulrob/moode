@@ -11,6 +11,12 @@
 (function() {
     'use strict';
 
+    // Only run on the main playback page, not on config pages
+    if (window.location.pathname !== '/' &&
+        window.location.pathname !== '/index.php') {
+        return;  // Don't show overlay on config pages
+    }
+
     var pollTimer = null;
     var overlayshown = false;
 
