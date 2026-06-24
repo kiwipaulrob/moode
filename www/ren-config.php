@@ -27,6 +27,9 @@ if (isset($_POST['update_bt_settings'])) {
 	if (isset($_POST['btsvc']) && $_POST['btsvc'] != $_SESSION['btsvc']) {
 		$update = true;
 		phpSession('write', 'btsvc', $_POST['btsvc']);
+		if ($_POST['btsvc'] == '0') {
+			phpSession('write', 'pairing_agent', '0');
+		}
 	}
 	if (isset($update)) {
 		submitJob('btsvc', '"' . $currentBtName . '" ' . '"' . $_POST['btname'] . '"');
@@ -58,10 +61,6 @@ if (isset($_POST['update_rsmafterbt'])) {
 }
 
 // AirPlay
-if (isset($_POST['install_airplay'])) {
-	submitJob('install_airplay');
-	header('location: ren-status.php');
-}
 if (isset($_POST['update_airplay_settings'])) {
 	if (isset($_POST['airplayname']) && $_POST['airplayname'] != $_SESSION['airplayname']) {
 		$update = true;
@@ -83,10 +82,6 @@ if (isset($_POST['airplayrestart']) && $_POST['airplayrestart'] == 1 && $_SESSIO
 }
 
 // Spotify Connect
-if (isset($_POST['install_spotify'])) {
-	submitJob('install_spotify');
-	header('location: ren-status.php');
-}
 if (isset($_POST['update_spotify_settings'])) {
 	if (isset($_POST['spotifyname']) && $_POST['spotifyname'] != $_SESSION['spotifyname']) {
 		$update = true;
@@ -110,6 +105,24 @@ if (isset($_POST['spotify_clear_credentials']) && $_POST['spotify_clear_credenti
 	submitJob('spotify_clear_credentials', '', NOTIFY_TITLE_INFO, 'Credential cache cleared');
 }
 
+// SendSpin Multi-Room Audio
+if (isset($_POST['update_sendspin_settings'])) {
+	if (isset($_POST['sendspinsvc']) && $_POST['sendspinsvc'] != $_SESSION['sendspinsvc']) {
+		$update = true;
+		phpSession('write', 'sendspinsvc', $_POST['sendspinsvc']);
+	}
+	if (isset($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
+		$update = true;
+		phpSession("write", 'sendspinname', $_POST['sendspinname']);
+	}
+	if (isset($update)) {
+		submitJob('sendspinsvc');
+	}
+}
+if (isset($_POST['sendspinrestart']) && $_POST['sendspinrestart'] == 1 && $_SESSION['sendspinsvc'] == '1') {
+	submitJob('sendspinsvc', '', NOTIFY_TITLE_INFO, 'SendSpin' . NOTIFY_MSG_SVC_MANUAL_RESTART);
+}
+
 // Deezer Connect
 if (isset($_POST['update_deezer_settings'])) {
 	if (isset($_POST['deezername']) && $_POST['deezername'] != $_SESSION['deezername']) {
@@ -131,25 +144,6 @@ if (isset($_POST['deezerrestart']) && $_POST['deezerrestart'] == 1 && $_SESSION[
 	submitJob('deezersvc', '', NOTIFY_TITLE_INFO, NAME_DEEZER . NOTIFY_MSG_SVC_MANUAL_RESTART);
 }
 
-// UPnP client for MPD
-if (isset($_POST['update_upnp_settings'])) {
-	$currentUpnpName = $_SESSION['upnpname'];
-	if (isset($_POST['upnpname']) && $_POST['upnpname'] != $_SESSION['upnpname']) {
-		$update = true;
-		phpSession('write', 'upnpname', $_POST['upnpname']);
-	}
-	if (isset($_POST['upnpsvc']) && $_POST['upnpsvc'] != $_SESSION['upnpsvc']) {
-		$update = true;
-		phpSession('write', 'upnpsvc', $_POST['upnpsvc']);
-	}
-	if (isset($update)) {
-		submitJob('upnpsvc', '"' . $currentUpnpName . '" ' . '"' . $_POST['upnpname'] . '"');
-	}
-}
-if (isset($_POST['upnprestart']) && $_POST['upnprestart'] == 1 && $_SESSION['upnpsvc'] == '1') {
-	submitJob('upnpsvc', '', NOTIFY_TITLE_INFO, NAME_UPNP . NOTIFY_MSG_SVC_MANUAL_RESTART);
-}
-
 // Squeezelite
 if (isset($_POST['update_sl_settings'])) {
 	if (isset($_POST['slsvc']) && $_POST['slsvc'] != $_SESSION['slsvc']) {
@@ -169,6 +163,25 @@ if (isset($_POST['update_rsmaftersl'])) {
 if (isset($_POST['slrestart']) && $_POST['slrestart'] == 1) {
 	phpSession('write', 'rsmaftersl', 'No');
 	submitJob('slrestart', '', NOTIFY_TITLE_INFO, NAME_SQUEEZELITE . NOTIFY_MSG_SVC_MANUAL_RESTART);
+}
+
+// UPnP client for MPD
+if (isset($_POST['update_upnp_settings'])) {
+	$currentUpnpName = $_SESSION['upnpname'];
+	if (isset($_POST['upnpname']) && $_POST['upnpname'] != $_SESSION['upnpname']) {
+		$update = true;
+		phpSession('write', 'upnpname', $_POST['upnpname']);
+	}
+	if (isset($_POST['upnpsvc']) && $_POST['upnpsvc'] != $_SESSION['upnpsvc']) {
+		$update = true;
+		phpSession('write', 'upnpsvc', $_POST['upnpsvc']);
+	}
+	if (isset($update)) {
+		submitJob('upnpsvc', '"' . $currentUpnpName . '" ' . '"' . $_POST['upnpname'] . '"');
+	}
+}
+if (isset($_POST['upnprestart']) && $_POST['upnprestart'] == 1 && $_SESSION['upnpsvc'] == '1') {
+	submitJob('upnpsvc', '', NOTIFY_TITLE_INFO, NAME_UPNP . NOTIFY_MSG_SVC_MANUAL_RESTART);
 }
 
 // Plexamp
@@ -209,6 +222,14 @@ if (isset($_POST['rbrestart']) && $_POST['rbrestart'] == 1) {
 }
 
 phpSession('close');
+
+// If session is empty (e.g. incognito/no cookie), load feat_bitmask from DB
+if (!isset($_SESSION['feat_bitmask'])) {
+	$result = sqlQuery("SELECT value FROM cfg_system WHERE param='feat_bitmask'", $dbh);
+	if (!empty($result)) {
+		$_SESSION['feat_bitmask'] = $result[0]['value'];
+	}
+}
 
 // Bluetooth
 $_feat_bluetooth = $_SESSION['feat_bitmask'] & FEAT_BLUETOOTH ? '' : 'hide';
@@ -252,27 +273,9 @@ $_select['rsmafterbt_off']  .= "<input type=\"radio\" name=\"rsmafterbt\" id=\"t
 
 // AirPlay
 $_feat_airplay = $_SESSION['feat_bitmask'] & FEAT_AIRPLAY ? '' : 'hide';
-if (isAirPlayInstalled() === true) {
-	$_airplay_installed_version = sysCmd('dpkg-query --showformat=\'${Version}\n\' --show shairport-sync | grep moode')[0];
-	if (isAirPlayUpgradable() === true) {
-		$_install_airplay_hide = '';
-		$_airplay_btn_text = 'Upgrade';
-		$_airplay_available_version = 'To version ' . sqlQuery("SELECT version FROM cfg_plugin WHERE component='renderer' AND type='airplay'", $dbh)[0]['version'];
-	} else {
-		$_install_airplay_hide = 'hide';
-	}
-	$_airplay_svcbtn_disable = '';
-	$_airplay_editlink_disable = '';
-} else {
-	$_install_airplay_hide = '';
-	$_airplay_btn_text = 'Install';
-	$_airplay_available_version = 'Version ' . sqlQuery("SELECT version FROM cfg_plugin WHERE component='renderer' AND type='airplay'", $dbh)[0]['version'];
-	$_airplay_svcbtn_disable = 'disabled';
-	$_airplay_editlink_disable = 'onclick="return false;"';
-}
 $_SESSION['airplaysvc'] == '1' ? $_airplay_btn_disable = '' : $_airplay_btn_disable = 'disabled';
 $_SESSION['airplaysvc'] == '1' ? $_airplay_link_disable = '' : $_airplay_link_disable = 'onclick="return false;"';
-$autoClick = " onchange=\"autoClick('#btn-set-airplaysvc');\" " . $_airplay_svcbtn_disable;
+$autoClick = " onchange=\"autoClick('#btn-set-airplaysvc');\"";
 $_select['airplaysvc_on']  .= "<input type=\"radio\" name=\"airplaysvc\" id=\"toggle-airplaysvc-1\" value=\"1\" " . (($_SESSION['airplaysvc'] == '1') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['airplaysvc_off'] .= "<input type=\"radio\" name=\"airplaysvc\" id=\"toggle-airplaysvc-2\" value=\"0\" " . (($_SESSION['airplaysvc'] == '0') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['airplayname'] = $_SESSION['airplayname'];
@@ -282,27 +285,9 @@ $_select['rsmafterapl_off']  .= "<input type=\"radio\" name=\"rsmafterapl\" id=\
 
 // Spotify Connect
 $_feat_spotify = $_SESSION['feat_bitmask'] & FEAT_SPOTIFY ? '' : 'hide';
-if (isSpotifyInstalled() === true) {
-	$_spotify_installed_version = sysCmd('dpkg-query --showformat=\'${Version}\n\' --show librespot | grep moode')[0];
-	if (isSpotifyUpgradable() === true) {
-		$_install_spotify_hide = '';
-		$_spotify_btn_text = 'Upgrade';
-		$_spotify_available_version = 'To version ' . sqlQuery("SELECT version FROM cfg_plugin WHERE component='renderer' AND type='spotify-connect'", $dbh)[0]['version'];
-	} else {
-		$_install_spotify_hide = 'hide';
-	}
-	$_spotify_svcbtn_disable = '';
-	$_spotify_editlink_disable = '';
-} else {
-	$_install_spotify_hide = '';
-	$_spotify_btn_text = 'Install';
-	$_spotify_available_version = 'Version ' . sqlQuery("SELECT version FROM cfg_plugin WHERE component='renderer' AND type='spotify-connect'", $dbh)[0]['version'];
-	$_spotify_svcbtn_disable = 'disabled';
-	$_spotify_editlink_disable = 'onclick="return false;"';
-}
 $_SESSION['spotifysvc'] == '1' ? $_spotify_btn_disable = '' : $_spotify_btn_disable = 'disabled';
 $_SESSION['spotifysvc'] == '1' ? $_spotify_link_disable = '' : $_spotify_link_disable = 'onclick="return false;"';
-$autoClick = " onchange=\"autoClick('#btn-set-spotifysvc');\" " . $_spotify_svcbtn_disable;
+$autoClick = " onchange=\"autoClick('#btn-set-spotifysvc');\"";
 $_select['spotifysvc_on']  .= "<input type=\"radio\" name=\"spotifysvc\" id=\"toggle-spotifysvc-1\" value=\"1\" " . (($_SESSION['spotifysvc'] == '1') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['spotifysvc_off'] .= "<input type=\"radio\" name=\"spotifysvc\" id=\"toggle-spotifysvc-2\" value=\"0\" " . (($_SESSION['spotifysvc'] == '0') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['spotifyname'] = $_SESSION['spotifyname'];
@@ -335,17 +320,6 @@ $autoClick = " onchange=\"autoClick('#btn-set-rsmafterdeez');\" " . $_deezer_btn
 $_select['rsmafterdeez_on'] .= "<input type=\"radio\" name=\"rsmafterdeez\" id=\"toggle-rsmafterdeez-1\" value=\"Yes\" " . (($_SESSION['rsmafterdeez'] == 'Yes') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['rsmafterdeez_off']  .= "<input type=\"radio\" name=\"rsmafterdeez\" id=\"toggle-rsmafterdeez-2\" value=\"No\" " . (($_SESSION['rsmafterdeez'] == 'No') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 
-// UPnP client for MPD
-$_feat_upmpdcli = $_SESSION['feat_bitmask'] & FEAT_UPMPDCLI ? '' : 'hide';
-$_SESSION['upnpsvc'] == '1' ? $_upnp_btn_disable = '' : $_upnp_btn_disable = 'disabled';
-$_SESSION['upnpsvc'] == '1' ? $_upnp_link_disable = '' : $_upnp_link_disable = 'onclick="return false;"';
-$_SESSION['dlnasvc'] == '1' ? $_dlna_btn_disable = '' : $_dlna_btn_disable = 'disabled';
-$_SESSION['dlnasvc'] == '1' ? $_dlna_link_disable = '' : $_dlna_link_disable = 'onclick="return false;"';
-$autoClick = " onchange=\"autoClick('#btn-set-upnpsvc');\"";
-$_select['upnpsvc_on']  .= "<input type=\"radio\" name=\"upnpsvc\" id=\"toggle-upnpsvc-1\" value=\"1\" " . (($_SESSION['upnpsvc'] == '1') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
-$_select['upnpsvc_off'] .= "<input type=\"radio\" name=\"upnpsvc\" id=\"toggle-upnpsvc-2\" value=\"0\" " . (($_SESSION['upnpsvc'] == '0') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
-$_select['upnpname'] = $_SESSION['upnpname'];
-
 // Squeezelite
 $_feat_squeezelite = $_SESSION['feat_bitmask'] & FEAT_SQUEEZELITE ? '' : 'hide';
 $_SESSION['slsvc'] == '1' ? $_sl_btn_disable = '' : $_sl_btn_disable = 'disabled';
@@ -357,16 +331,21 @@ $autoClick = " onchange=\"autoClick('#btn-set-rsmaftersl');\" " . $_sl_btn_disab
 $_select['rsmaftersl_on'] .= "<input type=\"radio\" name=\"rsmaftersl\" id=\"toggle-rsmaftersl-1\" value=\"Yes\" " . (($_SESSION['rsmaftersl'] == 'Yes') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['rsmaftersl_off']  .= "<input type=\"radio\" name=\"rsmaftersl\" id=\"toggle-rsmaftersl-2\" value=\"No\" " . (($_SESSION['rsmaftersl'] == 'No') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 
+// UPnP client for MPD
+$_feat_upmpdcli = $_SESSION['feat_bitmask'] & FEAT_UPMPDCLI ? '' : 'hide';
+$_SESSION['upnpsvc'] == '1' ? $_upnp_btn_disable = '' : $_upnp_btn_disable = 'disabled';
+$_SESSION['upnpsvc'] == '1' ? $_upnp_link_disable = '' : $_upnp_link_disable = 'onclick="return false;"';
+$_SESSION['dlnasvc'] == '1' ? $_dlna_btn_disable = '' : $_dlna_btn_disable = 'disabled';
+$_SESSION['dlnasvc'] == '1' ? $_dlna_link_disable = '' : $_dlna_link_disable = 'onclick="return false;"';
+$autoClick = " onchange=\"autoClick('#btn-set-upnpsvc');\"";
+$_select['upnpsvc_on']  .= "<input type=\"radio\" name=\"upnpsvc\" id=\"toggle-upnpsvc-1\" value=\"1\" " . (($_SESSION['upnpsvc'] == '1') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
+$_select['upnpsvc_off'] .= "<input type=\"radio\" name=\"upnpsvc\" id=\"toggle-upnpsvc-2\" value=\"0\" " . (($_SESSION['upnpsvc'] == '0') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
+$_select['upnpname'] = $_SESSION['upnpname'];
+
 // Plexamp
 if (($_SESSION['feat_bitmask'] & FEAT_PLEXAMP)) {
 	$_feat_plexamp = '';
-	if ($_SESSION['plexamp_installed'] == 'yes') {
-		$_pa_svcbtn_disable = '';
-		$_pa_not_installed_msg = 'hide';
-	} else {
-		$_pa_svcbtn_disable = 'disabled';
-		$_pa_not_installed_msg = '';
-	}
+	$_SESSION['plexamp_installed'] == 'yes' ? $_pa_svcbtn_disable = '' : $_pa_svcbtn_disable = 'disabled';
 	$_SESSION['pasvc'] == '1' ? $_pa_btn_disable = '' : $_pa_btn_disable = 'disabled';
 	$_SESSION['pasvc'] == '1' ? $_pa_link_disable = '' : $_pa_link_disable = 'onclick="return false;"';
 	$autoClick = " onchange=\"autoClick('#btn-set-pasvc');\" " . $_pa_svcbtn_disable;
@@ -393,13 +372,7 @@ if (($_SESSION['feat_bitmask'] & FEAT_PLEXAMP)) {
 // RoonBridge
 if (($_SESSION['feat_bitmask'] & FEAT_ROONBRIDGE)) {
 	$_feat_roonbridge = '';
-	if ($_SESSION['roonbridge_installed'] == 'yes') {
-		$_rb_svcbtn_disable = '';
-		$_rb_not_installed_msg = 'hide';
-	} else {
-		$_rb_svcbtn_disable = 'disabled';
-		$_rb_not_installed_msg = '';
-	}
+	$_SESSION['roonbridge_installed'] == 'yes' ? $_rb_svcbtn_disable = '' : $_rb_svcbtn_disable = 'disabled';
 	$_SESSION['rbsvc'] == '1' ? $_rb_btn_disable = '' : $_rb_btn_disable = 'disabled';
 	$_SESSION['rbsvc'] == '1' ? $_rb_link_disable = '' : $_rb_link_disable = 'onclick="return false;"';
 	$autoClick = " onchange=\"autoClick('#btn-set-rbsvc');\" " . $_rb_svcbtn_disable;
@@ -412,6 +385,20 @@ if (($_SESSION['feat_bitmask'] & FEAT_ROONBRIDGE)) {
 	$_feat_roonbridge = 'hide';
 }
 
+// SendSpin Multi-Room Audio
+if (($_SESSION["feat_bitmask"] & FEAT_SENDSPIN)) {
+	$_feat_sendspin = "";
+	$_SESSION["sendspin_installed"] == "yes" ? $_sendspin_svcbtn_disable = "" : $_sendspin_svcbtn_disable = "disabled";
+	$_SESSION["sendspinsvc"] == "1" ? $_sendspin_btn_disable = "" : $_sendspin_btn_disable = "disabled";
+	$_SESSION["sendspinsvc"] == "1" ? $_sendspin_link_disable = "" : $_sendspin_link_disable = "onclick=\"return false;\"";
+	$autoClick = " onchange=\"autoClick('#btn-set-sendspinsvc');\"";
+	$_select['sendspinname'] = $_SESSION['sendspinname'];
+	$_select["sendspinsvc_on"]  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION["sendspinsvc"] == "1") ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+	$_select["sendspinsvc_off"] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION["sendspinsvc"] == "0") ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+} else {
+	$_feat_sendspin = "hide";
+}
+
 waitWorker('ren-config');
 
 $tpl = "ren-config.html";
@@ -420,4 +407,5 @@ storeBackLink($section, $tpl);
 
 include('header.php');
 eval("echoTemplate(\"" . getTemplate("templates/$tpl") . "\");");
-include('footer.php');
+include('footer.min.php');
+
