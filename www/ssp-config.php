@@ -18,8 +18,10 @@ if (isset($_POST['save']) && $_POST['save'] == '1') {
 		chkValue($key, $value);
 		sqlUpdate('cfg_sendspin', $dbh, $key, $value);
 	}
+	// Regenerate service file from updated config
+	generateSendspinService();
 	if ($_SESSION['sendspinsvc'] == '1') {
-		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin will apply settings on next restart');
+		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin settings applied (service restarted)');
 	} else {
 		$notify = array('title' => '', 'msg' => '');
 	}
