@@ -12,9 +12,9 @@
     'use strict';
 
     // Only run on the main playback page, not on config pages
-    if (window.location.pathname !== '/' &&
-        window.location.pathname !== '/index.php') {
-        return;  // Don't show overlay on config pages
+    var path = window.location.pathname;
+    if (path !== '/' && path !== '/index.php' && path.endsWith('.php')) {
+        return;  // Don't show overlay on any .php page except index
     }
 
     var pollTimer = null;

@@ -454,10 +454,10 @@ $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERR
 | BUG-02 | **Critical** | `renderer.php` | Double `sqlConnect()` in `generateSendspinService()` — SQLite lock | ✅ FIXED |
 | BUG-03 | **High** | `ssp-config.php` | Service not actually restarted on save | ✅ FIXED |
 | BUG-04 | **High** | `ssp-config.php` | DB read before POST save — stale form values after save | ✅ FIXED (was already correct, added explicit restart) |
-| BUG-05 | **Medium** | `sendspin-display.js` | Pathname check allows overlay on configure modal | ⏳ Open |
+| BUG-05 | **Medium** |  | Pathname check allows overlay on configure modal | ✅ FIXED |
 | ISSUE-01 | **High** | `ren-config.php` | Session fallback doesn't persist — blank page on every config visit | ✅ FIXED |
 | ISSUE-02 | **Medium** | `renderer.php` | MPD stopped unconditionally on SendSpin start | ⏳ Open |
-| ISSUE-03 | **Medium** | installer | `generateSendspinService()` not called at install time | ⏳ Open |
+| ISSUE-03 | **Medium** | installer |  not called at install time | ✅ FIXED |
 | ISSUE-04 | **Medium** | `renderer.php` | `sendspin` not in `www-data` PATH — version always `unknown` | ✅ FIXED |
 | ISSUE-05 | **Medium** | `renderer.php` | `updateSendspin()` blocks PHP-FPM for 30–60s | ✅ FIXED |
 | ISSUE-06 | **Medium** | `ssp-config.php` | Session fallback not applied to ssp-config.php | ✅ FIXED |

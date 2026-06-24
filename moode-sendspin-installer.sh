@@ -362,6 +362,12 @@ install_database_entries_minimal() {
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinsvc', '0');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspin_installed', 'yes');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinname', 'moode-sendspin');
+CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_depth', '16');
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('static_delay_ms', '0');
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('log_level', 'INFO');
 EOF
     
     record_install "database_minimal"
@@ -971,6 +977,12 @@ install_database_entries_full() {
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinsvc', '0');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspin_installed', 'yes');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinname', 'moode-sendspin');
+CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_depth', '16');
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('static_delay_ms', '0');
+INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('log_level', 'INFO');
 EOF
     
     # Update feat_bitmask
@@ -981,6 +993,32 @@ EOF
     
     record_install "database_full"
     log_success "Database configured (full)"
+}
+
+# ============================================================================
+# SERVICE FILE REGENERATION
+# ============================================================================
+
+install_regenerate_service() {
+    log_info "Regenerating service file from DB defaults..."
+    local php_script="/tmp/ssp-regenerate.php"
+    cat > "$php_script" << 'PHPEOF'
+<?php
+require_once '/var/www/inc/renderer.php';
+require_once '/var/www/inc/sql.php';
+$dbh = sqlConnect();
+$result = generateSendspinService($dbh);
+echo $result ? "Service file regenerated.\n" : "Failed to regenerate service file.\n";
+PHPEOF
+    local output
+    output=$(php "$php_script" 2>&1) || true
+    rm -f "$php_script"
+    echo "$output"
+    if echo "$output" | grep -q "regenerated"; then
+        log_success "Service file regenerated from DB"
+    else
+        log_warn "Could not regenerate service file (renderer.php may not be deployed yet)"
+    fi
 }
 
 # ============================================================================
@@ -1319,6 +1357,8 @@ run_installation() {
     echo ""
     if [[ "$verify_passed" == "true" ]]; then
         log_success "SendSpin installation completed successfully!"
+        # Regenerate service file from DB defaults so it stays in sync
+        install_regenerate_service
     else
         log_warn "Installation completed with some verification failures."
     fi
