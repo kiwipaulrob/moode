@@ -396,8 +396,11 @@ function getSendspinStatus() {
 	$result = sysCmd('systemctl is-active sendspin 2>/dev/null');
 	$status = (!empty($result) && isset($result[0])) ? $result[0] : 'inactive';
 	if ($status === 'active') {
+		// Get card number dynamically from DB (supports any ALSA card)
+		$cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");
+		$cardnum = (!empty($cardResult) && isset($cardResult[0])) ? trim($cardResult[0]) : '0';
 		// Check if actually streaming (process using audio)
-		$sndResult = sysCmd('fuser /dev/snd/pcmC0D0p 2>/dev/null');
+		$sndResult = sysCmd("fuser /dev/snd/pcmC{$cardnum}D0p 2>/dev/null");
 		if (!empty($sndResult)) {
 			// Check if sendspin is using the device
 			$sendspinPids = sysCmd('pgrep -f sendspin 2>/dev/null');
@@ -479,7 +482,7 @@ function stopAllRenderers() {
 // === Release 2: Advanced Functions ===
 
 function getSendspinVersion() {
-    $result = sysCmd('/root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
+    $result = sysCmd('sudo /root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
     $version = (!empty($result) && isset($result[0])) ? trim($result[0]) : 'unknown';
     return $version;
 }
@@ -562,7 +565,19 @@ SVC;
 		sysCmd("sudo cp {$tmpfile} {$file}");
 		sysCmd('sudo systemctl daemon-reload');
 		@unlink($tmpfile);
-		workerLog('generateSendspinService(): service regenerated from DB config');
+
+		// Also regenerate ALSA config with correct card number
+		$cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");
+		$cardnum = (!empty($cardResult) && isset($cardResult[0])) ? trim($cardResult[0]) : '0';
+		$alsaConf = "pcm.sendspin {\ntype plug\nslave {\npcm \"plughw:{$cardnum},0\"\n}\n}\n";
+		$alsaTmp = '/tmp/sendspin.alsa.tmp';
+		if (file_put_contents($alsaTmp, $alsaConf) !== false) {
+			chmod($alsaTmp, 0644);
+			sysCmd("sudo cp {$alsaTmp} /etc/alsa/conf.d/sendspin.conf");
+			@unlink($alsaTmp);
+		}
+
+		workerLog('generateSendspinService(): service + alsa conf regenerated from DB config');
 		return true;
 	}
 	workerLog('generateSendspinService(): failed to write temp service file');

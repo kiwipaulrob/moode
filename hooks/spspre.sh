@@ -8,12 +8,15 @@ log() {
     logger -t sendspin-spspre "$1" 2>/dev/null || true
 }
 
-# ALSA config
-cat > /etc/alsa/conf.d/sendspin.conf << 'EOF'
+# Read card number from DB (supports any ALSA card)
+CARD_NUM=$(sqlite3 "$DB_FILE" "SELECT value FROM cfg_system WHERE param='cardnum';" 2>/dev/null || echo "0")
+
+# ALSA config with dynamic card number
+cat > /etc/alsa/conf.d/sendspin.conf << EOF
 pcm.sendspin {
 type plug
 slave {
-pcm "plughw:0,0"
+pcm "plughw:${CARD_NUM},0"
 }
 }
 EOF
