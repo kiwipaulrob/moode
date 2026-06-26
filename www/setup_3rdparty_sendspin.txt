@@ -1,0 +1,218 @@
+################################################################################
+#
+#  Setup Guide for SendSpin Multi-Room Audio Renderer
+#
+#  Version: 1.2 (2026-06-21)
+#
+################################################################################
+
+OVERVIEW
+
+This document provides setup instructions for using SendSpin with moOde. SendSpin
+is a synchronized multi-room audio protocol that allows moOde to act as an audio
+endpoint in a multi-room audio system.
+
+With SendSpin integration, moOde becomes a multi-room audio endpoint that can:
+- Receive synchronized audio from a SendSpin server (e.g., Music Assistant)
+- Play audio simultaneously with other SendSpin clients
+- Resume MPD playback when SendSpin streaming stops
+
+REQUIREMENTS
+
+- moOde 9.x or later
+- SendSpin CLI (sendspin) installed
+- Raspberry Pi 3/4/5 or compatible Linux system
+- Network connection to SendSpin server
+
+INSTALLATION
+
+Step 1: Install SendSpin CLI
+
+SSH to your moOde device and install SendSpin:
+
+    # Install uv (Python package manager)
+    pip3 install uv --break-system-packages
+
+    # Install sendspin-cli
+    uv tool install sendspin
+
+Verify installation:
+    sendspin --version    # Should show 7.5.0 or later
+
+Step 2: Enable SendSpin in moOde
+
+1. Open moOde web UI
+2. Go to Configure → Renderers
+3. Find the "SendSpin" section
+4. Set the Name field (this appears in your controller)
+5. Toggle the Service switch to ON
+6. Click the arrow button to save
+
+Step 3: Verify in Your Controller
+
+1. Open your multi-room audio controller (e.g., Music Assistant)
+2. Your moOde device should appear with the name you configured
+3. Select it as an audio output and start playback
+4. Audio should stream to moOde
+
+CONFIGURATION OPTIONS (RENDERERS PAGE)
+
+Name:
+    The name that appears in your multi-room audio controller.
+    Default: "moode-sendspin"
+    Change this to identify your device (e.g., "Kitchen Speaker", "Living Room")
+
+Service Toggle:
+    ON  - SendSpin is active and appears as an available endpoint
+    OFF - SendSpin is stopped and does not appear in the controller
+
+Resume MPD:
+    ON  - MPD resumes playback when SendSpin disconnects
+    OFF - MPD stays stopped after SendSpin disconnects
+
+Restart Button:
+    Restarts the SendSpin service. Use this if the device disappears from
+    the controller or audio stops working.
+
+Edit Button:
+    Opens the SendSpin configuration page (ssp-config.php) with advanced
+    settings including audio format, delay tuning, log level, and updates.
+
+CONFIGURATION OPTIONS (CONFIG PAGE)
+
+Version:
+    Shows installed SendSpin version and latest available on PyPI.
+    Latest version check is cached for 1 hour to avoid slow page loads.
+
+Update Button:
+    Updates SendSpin CLI to the latest version using uv tool upgrade.
+    Runs in the background - the service restarts automatically.
+
+Audio Format:
+    Codec: FLAC (lossless, recommended) or PCM (uncompressed)
+    Sample Rate: 44100, 48000 (default), or 96000 Hz
+    Bit Depth: 16 (CD quality), 24, or 32 bit
+    Changes take effect on next service restart.
+
+Static Delay (ms):
+    Extra playback delay in milliseconds (0-500ms), applied on top of
+    automatic clock synchronisation. Increase if this room is slightly
+    ahead of other multi-room speakers.
+
+Log Level:
+    DEBUG - all events for troubleshooting
+    INFO  - normal operational messages (default)
+    WARNING - reduced log noise
+    ERROR - critical events only
+
+Volume Mode:
+    Software volume (internal). The SendSpin daemon applies volume
+    digitally since the connected DAC has no hardware mixer. Master
+    volume in Music Assistant controls the SendSpin output level.
+
+Audio Output:
+    Shows the current ALSA device chain:
+    sendspin -> plughw:X,0 -> Device Name
+    (X = current ALSA card number from moOde settings)
+
+
+VOLUME LEVEL
+
+SendSpin output is attenuated by approximately 3dB to match the level of other
+moOde audio sources. This ensures consistent volume when switching between MPD
+playback and SendSpin streaming.
+
+If you need to adjust this:
+- Edit /etc/alsa/conf.d/sendspin.conf
+- Change the ttable values (0.707 = -3dB, 1.0 = 0dB, 0.5 = -6dB)
+- Restart SendSpin: sudo systemctl restart sendspin
+
+TROUBLESHOOTING
+
+"Device in Use" error [PaErrorCode -9985]:
+
+    This error occurs when SendSpin cannot open the audio device because MPD
+    is currently using it.
+
+    SOLUTION: Enable the SendSpin service in moOde UI first. The integration
+    handles ALSA device sharing automatically. If you start SendSpin manually
+    via SSH, stop MPD first:
+
+        mpc stop
+        sudo systemctl start sendspin
+
+No audio when streaming starts:
+
+    1. Check SendSpin service status:
+       sudo systemctl status sendspin
+
+    2. View SendSpin logs:
+       sudo journalctl -u sendspin -f
+
+    3. Verify the daemon is running:
+       pgrep -f "sendspin daemon"
+
+    4. Check ALSA configuration:
+       aplay -L | grep sendspin
+
+moOde device not appearing in controller:
+
+    1. Check that Service is toggled ON in moOde UI
+    2. Verify mDNS discovery is working:
+       sendspin --list-servers
+    3. Ensure your controller is on the same network
+    4. Check firewall settings (port 44556/UDP for mDNS)
+    5. Restart SendSpin service
+
+Audio dropouts or stuttering:
+
+    1. Check CPU usage during playback: top
+    2. Ensure adequate power supply (especially for Pi 4/5)
+    3. Try a wired network connection instead of WiFi
+    4. Lower the audio quality in your controller settings
+
+MPD does not resume after SendSpin stops:
+
+    1. Check that Resume MPD is enabled in moOde settings
+    2. Verify MPD was playing before SendSpin started
+    3. Check moOde logs: sudo tail -f /var/log/moode.log
+
+Command Reference
+
+    # Check SendSpin status
+    sudo systemctl status sendspin
+
+    # View SendSpin logs
+    sudo journalctl -u sendspin -f
+
+    # List available SendSpin servers on network
+    sendspin --list-servers
+
+    # List audio devices
+    sendspin --list-audio-devices
+
+    # Restart SendSpin
+    sudo systemctl restart sendspin
+
+    # Check ALSA configuration
+    cat /etc/alsa/conf.d/sendspin.conf
+    aplay -L | grep -A2 sendspin
+
+VERSION HISTORY
+
+v1.2 (2026-06-21)
+  - Added volume level information
+  - Fixed spelling and grammar
+  - Updated troubleshooting section
+  - Added command reference section
+
+v1.1 (2026-06-19)
+  - Updated for moOde UI integration
+  - Auto-configuration documentation
+
+v1.0 (2026-02-28)
+  - Initial release
+
+################################################################################
+#  For support, visit https://github.com/kiwipaulrob/moode/issues
+################################################################################
