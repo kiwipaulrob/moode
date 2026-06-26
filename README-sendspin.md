@@ -405,3 +405,9 @@ sudo journalctl -u sendspin-metadata-sink -f
 ---
 
 *Documentation for SendSpin Release 1 (Minimal Install)*
+
+---
+
+## For moOde Maintainer
+
+A comprehensive PR document for Tim Curtis is available at `SENDSPIN_PR.md`. It details every file changed, database schema, architecture decisions, code quality measures, and integration notes for incorporating SendSpin into the main moOde build.

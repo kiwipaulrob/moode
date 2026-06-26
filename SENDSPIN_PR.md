@@ -1,193 +1,172 @@
-# SendSpin Integration for moOde - Pull Request
+# SendSpin Multi-Room Audio Client for moOde
 
-**Version:** 6.0.0  
-**Date:** June 21, 2026  
-**Author:** Paul Robertson (@kiwipaulrob)  
+## Overview
 
----
+SendSpin is an open-source, synchronized multi-room audio receiver. This integration adds SendSpin as a first-class renderer in moOde, following the same patterns as AirPlay, Spotify, Bluetooth, and other existing renderers.
 
-## Summary
-
-This PR adds SendSpin multi-room audio renderer integration to moOde, allowing moOde to act as a synchronized audio endpoint in a SendSpin multi-room audio system (e.g., Music Assistant).
-
-### Features
-- Full UI integration in Configure → Renderers
-- Service toggle with auto-save
-- Custom endpoint naming
-- Manual restart button
-- Volume level matching (-3dB attenuation via ALSA)
-- MPD coexistence (auto-stop/resume)
-- Safe array access and error handling
-- Direct hardware audio access (avoids dmix IPC issues)
-
----
+**What it does:** Allows moOde to appear as an audio endpoint in multi-room systems (Music Assistant, etc.) with synchronized playback, now-playing metadata, and full configuration via the moOde web UI.
 
 ## Files Changed
 
-### 1. `/var/www/inc/constants.php`
-- Added `FEAT_SENDSPIN = 262144` feature constant
+### New Files Created
 
-### 2. `/var/www/inc/renderer.php`
-- Added `getSendspinStatus()` - Safe service status checking
-- Added `startSendspin()` - Service start with MPD state preservation
-- Added `stopSendspin()` - Service stop with MPD resume
-- Added `configureAlsaForSendspin()` - ALSA configuration logging
+| File | Purpose |
+|------|---------|
+| `inc/constants.php` | `FEAT_SENDSPIN` bitmask constant (bit 18 = 262144) |
+| `inc/renderer.php` | `startSendspin()`, `stopSendspin()`, `getSendspinStatus()`, `getSendspinVersion()`, `updateSendspin()`, `generateSendspinService()` |
+| `templates/ssp-config.html` | Dedicated config page template (audio format, delay, log level, version, updates) |
+| `ssp-config.php` | Config page controller with save handler, PyPI version check, service regeneration |
+| `js/sendspin-display.js` | Frontend overlay for now-playing metadata display |
+| `setup_3rdparty_sendspin.txt` | Setup guide for end users |
+| `etc/systemd/system/sendspin.service` | SendSpin daemon systemd unit |
+| `etc/systemd/system/moode-worker.service` | Worker daemon (replaces rc.local for renderer lifecycle) |
+| `etc/alsa/conf.d/sendspin.conf` | ALSA plug device configuration |
+| Various hooks | Pre/post start scripts (`spspre.sh`, `spspost.sh`), metadata hooks |
 
-### 3. `/var/www/ren-config.php`
-- Added POST handler for `update_sendspin_settings`
-- Added POST handler for `sendspinrestart`
-- Added session variable initialization
-- Added `$autoClick` handler for JavaScript toggle
+### Modified Files
 
-### 4. `/var/www/templates/ren-config.html`
-- Added SendSpin configuration section
-- Name input field with auto-save
-- Service ON/OFF toggle
-- Restart button with modal
-- Help text for all fields
+| File | Changes |
+|------|---------|
+| `ren-config.php` | Added `$_feat_sendspin` visibility check, POST handlers for name/service/resume-mpd, session var init |
+| `templates/ren-config.html` | Added SendSpin section with Name, Service toggle, Resume MPD toggle, Restart, Edit buttons |
+| `daemon/worker.php` | Added `sendspinsvc` and `sendspinrestart` job handlers, startup detection, lifecycle logging |
+| `footer.min.php` | No changes — sendspin-display.js loaded via existing include mechanism in the SendSpin section |
 
-### 5. `/var/www/daemon/worker.php`
-- Added startup check for SendSpin service
-- Added `sendspinsvc` job handler
-- Added `sendspinrestart` job handler
+## Database Schema
 
-### 6. `/etc/systemd/system/sendspin.service`
-- Systemd service definition with timeout
-- Environment configuration
-- Auto-restart on failure
+### New Session Variables
 
-### 7. `/etc/alsa/conf.d/sendspin.conf`
-- ALSA plug plugin configuration
-- Direct hardware access (card 0, device 0)
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `sendspinsvc` | `0` | Service ON/OFF toggle |
+| `sendspinname` | `moode-sendspin` | Endpoint name visible in controllers |
+| `sendspin_installed` | `yes` | Installation flag |
+| `mpd_was_playing` | `0` | MPD state before SendSpin start |
+| `rsmafterss` | `No` | Resume MPD after SendSpin disconnect |
 
-### 8. `/var/www/setup_3rdparty_sendspin.txt`
-- Complete setup documentation
-- Troubleshooting guide
-- Command reference
+### New Database Tables
 
----
+**`cfg_sendspin`** — Stores SendSpin audio configuration:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `param` | CHAR(32) | Setting name (`audio_codec`, `audio_rate`, `audio_depth`, `static_delay_ms`, `log_level`) |
+| `value` | CHAR(128) | Setting value |
+
+### Feature Bitmask
+
+```php
+define('FEAT_SENDSPIN', 262144); // bit 18
+```
+
+Stored in `cfg_system.feat_bitmask`. OR'd with existing bitmask. Does not conflict with any existing feature bits.
+
+## Architecture
+
+### Renderer Lifecycle
+
+```
+User toggle ON → ren-config.php POST handler
+                → submitJob('sendspinsvc')
+                → worker.php dispatches
+                → startSendspin()
+                    → save MPD state
+                    → mpc stop (release ALSA)
+                    → systemctl start sendspin
+
+User toggle OFF → ren-config.php POST handler
+                → submitJob('sendspinsvc')
+                → worker.php dispatches
+                → stopSendspin()
+                    → systemctl stop sendspin
+                    → resume MPD if rsmafterss=Yes
+```
+
+### Service File Generation
+
+The systemd service file is dynamically generated from the `cfg_sendspin` database table on each config save. This means:
+
+- Audio format, delay, and log level changes take effect on next service restart
+- No manual editing of systemd unit files required
+- The ALSA config (`/etc/alsa/conf.d/sendspin.conf`) is also regenerated with the correct card number
+
+### Metadata Display
+
+When streaming, a frontend overlay shows cover art, title, artist, and album on the main playback page. The overlay:
+
+- Polls `/var/local/www/sendspinmeta.txt` every 2 seconds
+- Only activates on the main playback page (`/` or `/index.php`)
+- Never displays on config pages
+- Auto-hides when streaming stops
+
+## Dependencies
+
+**Runtime (installed separately, not bundled with moOde):**
+- `sendspin` CLI (installed via `uv tool install sendspin`)
+- `uv` Python package manager (installed via `pip3 install uv`)
+
+**No new PHP extensions or libraries required.** All code uses existing moOde infrastructure.
+
+## Code Quality
+
+- **All 20 identified issues documented and tracked** in `SENDSPIN_CODE_REVIEW.md`
+- **9 critical bugs fixed** including: session handling for incognito/empty sessions, double SQLite connect deadlock, typo `tsysCmd`, service restart on save, ALSA card number dynamic resolution
+- **Input validation** on all config values (codec, rate, depth, delay, log_level whitelisted)
+- **Error handling** — systemd units have `Restart=on-failure`, temp file writes use `@` suppression
+- **No PHP notices/warnings** in normal operation
+- **Follows moOde conventions** — same template engine (`echoTemplate`), same session pattern (`phpSession`), same UI pattern (config-help-info, toggle-radio, config-btn)
 
 ## Installation
 
-### Prerequisites
-- moOde 9.x or later
-- sendspin-cli installed (`uv tool install sendspin`)
-
-### Quick Install
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-integration/moode-sendspin-installer.sh | sudo bash
+sudo bash moode-sendspin-installer.sh
 ```
 
-### Manual Verification
-```bash
-# Check installation
-sudo moode-sendspin-installer.sh --check
+The installer auto-detects the PHP version, creates all necessary files, configures the database, and enables the systemd services.
 
-# View logs
-sudo journalctl -u sendspin -f
+## Uninstallation
+
+```bash
+sudo bash moode-sendspin-installer.sh --uninstall
 ```
 
----
+Restores original moOde files from backup.
 
-## Code Quality Improvements (v6.0)
+## PR Integration Notes for Maintainer
 
-### Critical Fixes
-1. **Safe Array Access** - `getSendspinStatus()` now checks array bounds before accessing `[0]`
-2. **ALSA Stability** - Changed from `type route` to `type plug` with direct hardware to avoid dmix IPC key issues
-3. **Service Timeout** - Added `TimeoutStartSec=30` for faster failure detection
+### Minimal PR Surface
 
-### Minor Improvements
-- Consistent quote usage in PHP
-- Proper `$_select["sendspinname"]` session assignment
-- Simplified `configureAlsaForSendspin()` logging
-- Improved streaming detection using `fuser` + `pgrep`
+If you want the smallest possible integration, you can omit:
 
----
+1. **`ssp-config.php` and `templates/ssp-config.html`** — The basic SendSpin controls (ON/OFF, Name, Resume MPD, Restart) work without the dedicated config page
+2. **`js/sendspin-display.js`** — The metadata overlay is optional; the renderer works without it
+3. **`sendspin-metadata-sink.py`** — The HA polling daemon is optional; metadata can be provided by the SendSpin protocol directly
+4. **`moode-worker.service`** — The existing `rc.local` mechanism can be used instead
 
-## Testing Checklist
+Minimum required files:
+- `inc/constants.php` (one constant line)
+- `inc/renderer.php` (lifecycle functions)
+- `ren-config.php` (handler + session vars)
+- `templates/ren-config.html` (UI section)
+- `daemon/worker.php` (job handlers)
+- Database entries (`sendspinsvc`, `sendspinname`, `sendspin_installed`, `rsmafterss`)
+- Systemd service file for sendspin daemon
 
-- [ ] Installer runs without errors
-- [ ] PHP syntax valid for all modified files
-- [ ] Database entries created correctly
-- [ ] Service toggle works in UI
-- [ ] Name field saves and persists
-- [ ] Restart button functions
-- [ ] MPD stops when SendSpin enabled
-- [ ] MPD resumes when SendSpin disabled
-- [ ] Audio plays from Music Assistant
-- [ ] Volume levels match between sources
-- [ ] No errors in `journalctl -u sendspin`
+### Backward Compatibility
 
----
+- **No existing moOde features are affected** — SendSpin is registered via its own feature bit (18)
+- **No existing session variables are modified** — all new vars have unique names
+- **No existing database tables are modified** — `cfg_sendspin` is a new table
+- **Existing renderers continue to work unchanged** — the ALSA device arbitration is handled by the user enabling/disabling renderers
 
-## Compatibility
+### Testing Performed
 
-| Component | Minimum Version | Notes |
-|-----------|-----------------|-------|
-| moOde | 9.0.0 | Tested on 9.4.2 |
-| sendspin-cli | 7.5.0 | Hook support required for future metadata feature |
-| PHP | 8.0 | Uses modern PHP syntax |
-
----
-
-## Release 2: Now Playing Metadata Display (Implemented)
-
-### Problem Discovered
-
-Music Assistant does not populate the SendSpin `metadata@v1` protocol role. Testing with raw WebSocket message logging confirmed MA sends:
-- `server/hello` with `active_roles: ["metadata@v1"]` (advertises support)
-- `server/state` with ALL metadata fields null (title, artist, album, artwork_url, etc.)
-- `group/update` with `playback_state: "stopped"`
-- `server/time` every 3 seconds (clock sync only)
-
-No track metadata is ever sent through the SendSpin protocol, despite the role being advertised. This is an MA-side bug - the SendSpin protocol itself fully supports metadata delivery (ESPHome reference implementation proves this with text sensors for title/artist/album and numeric sensors for progress/duration).
-
-Additionally, SendSpin CLI hooks (`--hook-start` / `--hook-stop`) only pass connection info (server name, client ID, event type) - NO track metadata.
-
-### Working Solution: Home Assistant API Polling
-
-Since MA exposes a full `media_player` entity to Home Assistant with all track metadata, the metadata sink daemon polls HA's REST API instead of relying on the broken SendSpin metadata path.
-
-**Implementation:**
-- `sendspin-metadata-sink.py` daemon on port 8929
-- Polls `GET /api/states/media_player.moode_sendspin` every 3 seconds
-- Extracts: title, artist, album, duration, artwork URL
-- Downloads cover art via HA proxy URL, caches locally
-- Writes moOde `~~~` format to `/var/local/www/sendspinmeta.txt`
-- SendSpin WebSocket listener kept for connection monitoring only
-- HA token in systemd service `Environment` directive
-
-**Tested:** Track changes captured in real-time, cover art downloading correctly.
-
-**Branch:** `sendspin-advanced`
-
----
-
-## Troubleshooting
-
-### "Device in Use" Error
-MPD must release the ALSA device before SendSpin can use it. The integration handles this automatically - enable SendSpin in the UI first.
-
-### SendSpin Not Appearing in Controller
-1. Check service is active: `sudo systemctl status sendspin`
-2. Verify mDNS: `sendspin --list-servers`
-3. Check firewall: Port 44556/UDP for mDNS
-
-### No Audio
-1. Check ALSA config: `aplay -L | grep sendspin`
-2. Verify device: `cat /etc/alsa/conf.d/sendspin.conf`
-3. Test speaker: `speaker-test -D sendspin -c 2`
-
----
-
-## Credits
-
-- moOde audio player project by Tim Curtis
-- SendSpin protocol by [author]
-- Integration by Paul Robertson
-
----
-
-## License
-
-GPL-3.0-or-later (same as moOde)
+- HTTP 200 on all configured pages
+- PHP syntax check on all modified files
+- Session handling tested with and without cookies (incognito mode)
+- Service file regeneration tested with all audio format combinations
+- ALSA config verified with different card numbers
+- MPD coexistence tested (stop/resume cycle)
+- Metadata overlay tested with active and stopped streams
+- PyPI version check tested with cached and uncached states
+- Uninstall/clean removal tested
