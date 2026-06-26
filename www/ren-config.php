@@ -129,6 +129,11 @@ if (isset($_POST['update_sendspin_settings'])) {
 }
 if (isset($_POST['sendspinrestart']) && $_POST['sendspinrestart'] == 1 && $_SESSION['sendspinsvc'] == '1') {
 	submitJob('sendspinsvc', '', NOTIFY_TITLE_INFO, 'SendSpin' . NOTIFY_MSG_SVC_MANUAL_RESTART);
+
+// SendSpin Resume MPD
+if (isset($_POST['update_rsmafterss'])) {
+	phpSession('write', 'rsmafterss', $_POST['rsmafterss']);
+}
 }
 
 // Deezer Connect
@@ -395,6 +400,9 @@ if (($_SESSION["feat_bitmask"] & FEAT_SENDSPIN)) {
 	$_select['sendspinname'] = $_SESSION['sendspinname'];
 	$_select["sendspinsvc_on"]  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION["sendspinsvc"] == "1") ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
 	$_select["sendspinsvc_off"] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION["sendspinsvc"] == "0") ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+	$autoClick = " onchange=\"autoClick('#btn-set-rsmafterss');\" " . $_sendspin_btn_disable;
+	$_select['rsmafterss_on'] .= "<input type=\"radio\" name=\"rsmafterss\" id=\"toggle-rsmafterss-1\" value=\"Yes\" " . (($_SESSION['rsmafterss'] == 'Yes') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
+	$_select['rsmafterss_off']  .= "<input type=\"radio\" name=\"rsmafterss\" id=\"toggle-rsmafterss-2\" value=\"No\" " . (($_SESSION['rsmafterss'] == 'No') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 } else {
 	$_feat_sendspin = "hide";
 }
@@ -408,4 +416,3 @@ storeBackLink($section, $tpl);
 include('header.php');
 eval("echoTemplate(\"" . getTemplate("templates/$tpl") . "\");");
 include('footer.min.php');
-

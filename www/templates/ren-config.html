@@ -441,6 +441,19 @@
 			</div>
 
 						<div class="controls">
+			<label class="control-label">Resume MPD</label>
+			<div class="controls">
+				<div class="toggle">
+					<label class="toggle-radio toggle-rsmafterss" for="toggle-rsmafterss-2">ON </label>$_select[rsmafterss_on]
+					<label class="toggle-radio toggle-rsmafterss" for="toggle-rsmafterss-1">OFF</label>$_select[rsmafterss_off]
+				</div>
+				<button id="btn-set-rsmafterss" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_rsmafterss" value="novalue" $_sendspin_btn_disable><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-rsmafterss" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-rsmafterss" class="config-help-info">
+					Resume MPD playback after the SendSpin client stops playing or disconnects.
+				</span>
+			</div>
+
 							<a data-toggle="modal" href="#sendspin-restart" $_sendspin_link_disable><button class="btn btn-medium btn-primary config-btn" $_sendspin_btn_disable>Restart</button></a>
 							<span class="config-btn-after">SendSpin</span>
 						</div>

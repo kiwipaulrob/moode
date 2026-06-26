@@ -442,8 +442,8 @@ function stopSendspin() {
 	// Restore ALSA to exclusive mode
 	configureAlsaForSendspin(false);
 
-	// Optionally resume MPD if it was playing
-	if ($_SESSION['mpd_was_playing'] == '1') {
+	// Optionally resume MPD if it was playing and Resume MPD is enabled
+	if ($_SESSION['mpd_was_playing'] == '1' && ($_SESSION['rsmafterss'] ?? 'No') == 'Yes') {
 		sysCmd('mpc play');
 		phpSession('write', 'mpd_was_playing', '0');
 		workerLog('stopSendspin(): MPD playback resumed');
