@@ -274,7 +274,39 @@ check_installation() {
 }
 
 # ============================================================================
-# INSTALLATION FUNCTIONS - MINIMAL (Endpoint Only)
+# PREREQUISITES (Python, uv, sendspin CLI)
+# ============================================================================
+
+install_prerequisites() {
+    log_info "Checking and installing prerequisites..."
+    
+    # Check/install Python 3
+    if ! command -v python3 &>/dev/null; then
+        log_info "  Installing Python 3..."
+        apt-get update -qq && apt-get install -y -qq python3 python3-pip
+    fi
+    
+    # Check/install uv
+    if ! command -v uv &>/dev/null; then
+        log_info "  Installing uv (Python package manager)..."
+        pip3 install uv --break-system-packages -q
+    fi
+    
+    # Check/install sendspin CLI
+    if ! command -v sendspin &>/dev/null; then
+        log_info "  Installing sendspin CLI via uv..."
+        uv tool install sendspin -q
+        log_success "  sendspin CLI installed ($(sendspin --version 2>/dev/null || echo 'unknown'))"
+    else
+        log_info "  sendspin CLI already installed ($(sendspin --version 2>/dev/null || echo 'unknown'))"
+    fi
+    
+    record_install "prerequisites"
+    log_success "Prerequisites installed"
+}
+
+# ============================================================================
+# ALSA CONFIG
 # ============================================================================
 
 install_alsa_config() {
@@ -1361,6 +1393,9 @@ run_installation() {
     
     echo ""
     log_section "Starting Installation"
+    
+    # Install prerequisites (Python, uv, sendspin CLI)
+    install_prerequisites
     
     # Install based on mode
     if [[ "$INSTALL_MODE" == "minimal" ]]; then
