@@ -346,6 +346,46 @@ EOF
     log_success "Systemd service installed"
 }
 
+# ============================================================================
+# MOODE WORKER SERVICE
+# ============================================================================
+
+install_moode_worker_service() {
+    log_info "Installing moOde worker systemd service..."
+    local service_file="${SYSTEMD_DIR}/moode-worker.service"
+    
+    # Backup existing service file
+    if [[ -f "$service_file" ]]; then
+        log_info "  Backing up existing moode-worker.service"
+        backup_file "$service_file" "moode-worker.service"
+    fi
+    
+    cat > "$service_file" << 'EOF'
+[Unit]
+Description=moOde Worker Daemon
+After=network-online.target php8.2-fpm.service
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/run/worker.pid
+ExecStartPre=/bin/rm -f /run/worker.pid
+ExecStart=/usr/bin/php /var/www/daemon/worker.php
+Restart=on-failure
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    
+    chmod 644 "$service_file"
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable moode-worker.service 2>/dev/null || true
+    record_install "moode_worker_service"
+    log_success "moOde worker service installed and enabled"
+}
+
 install_database_entries_minimal() {
     log_info "Configuring database (minimal)..."
     
@@ -362,6 +402,7 @@ install_database_entries_minimal() {
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinsvc', '0');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspin_installed', 'yes');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinname', 'moode-sendspin');
+INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('rsmafterss', 'No');
 CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
@@ -637,9 +678,11 @@ install_ren_config_php() {
 if (isset($_POST['update_sendspin_settings'])) {
 	if (isset($_POST['sendspinsvc']) && $_POST['sendspinsvc'] != $_SESSION['sendspinsvc']) {
 		$update = true;
-		phpSession('write', 'sendspinsvc', $_POST['sendspinsvc']);
-	}
-	if (isset($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
+		phpSession('write', 'sendspinsvc', $_POST['sendspinsvc'])
+
+... [OUTPUT TRUNCATED - 12 chars omitted out of 50012 total] ...
+
+set($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
 		$update = true;
 		phpSession('write', 'sendspinname', $_POST['sendspinname']);
 		sysCmd("sed -i 's/--name .*/--name " . $_POST['sendspinname'] . "/' /etc/systemd/system/sendspin.service");
@@ -977,6 +1020,7 @@ install_database_entries_full() {
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinsvc', '0');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspin_installed', 'yes');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinname', 'moode-sendspin');
+INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('rsmafterss', 'No');
 CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
@@ -1322,10 +1366,12 @@ run_installation() {
     if [[ "$INSTALL_MODE" == "minimal" ]]; then
         install_alsa_config
         install_systemd_service
+        install_moode_worker_service
         install_database_entries_minimal
     else
         install_alsa_config
         install_systemd_service
+        install_moode_worker_service
         install_constants_php
         install_renderer_php
         install_lib_min_js
