@@ -39,13 +39,52 @@ Database entries:
 6. ✅ Handles MPD coexistence (auto-stop/resume)
 7. ✅ Manual control only - no metadata display
 
-### What Minimal Install Does NOT Do
+### Release 2 Complete Feature List
 
-1. ~~Show now playing metadata~~ → Done in Release 2 (HA polling, see below)
-2. Sync volume with Music Assistant
-3. Check for SendSpin updates
-4. Auto-discover servers
-5. Customize audio format/delay
+SendSpin for moOde now includes:
+
+### Core Renderer (ren-config.php)
+- ✅ ON/OFF toggle with auto-save
+- ✅ Name field
+- ✅ Resume MPD toggle (rsmafterss)
+- ✅ Restart button with confirmation modal
+- ✅ Edit button linking to settings page
+- ✅ Start/stops SendSpin daemon via systemd
+- ✅ Auto-start on boot (moode-worker.service)
+- ✅ Status detection (active/inactive/streaming)
+
+### Metadata Display
+- ✅ Music Assistant HA polling
+- ✅ Overlay with cover art, title, artist, album
+- ✅ 2-second polling interval
+- ✅ Auto-hide when playback stops
+- ✅ Only on main page (not config pages)
+
+### Config Page (ssp-config.php)
+- ✅ Version display (installed + latest via PyPI, cached hourly)
+- ✅ Update button (background uv tool upgrade)
+- ✅ Audio format selector (codec: FLAC/PCM, rate: 44.1/48/96kHz, depth: 16/24/32)
+- ✅ Static delay tuning (0-500ms)
+- ✅ Log level selector (DEBUG/INFO/WARNING/ERROR)
+- ✅ Dynamic ALSA device info (card number + device name)
+- ✅ Volume mode info
+- ✅ Save button with live service regeneration
+- ✅ Help tooltips on all settings
+
+### Service Management
+- ✅ Systemd service with auto-restart
+- ✅ Hardware volume disabled (software volume)
+- ✅ ALSA config dynamic (supports any card number)
+- ✅ Service file regeneration on config save
+- ✅ Pre/post start hooks (spspre.sh, spspost.sh)
+- ✅ MPD coexistence (auto-stop/resume with toggle)
+- ✅ worker.php integration (lifecycle detection)
+
+### GitHub Integration
+- ✅ Code on sendspin-advanced branch
+- ✅ Code review document (SENDSPIN_CODE_REVIEW.md)
+- ✅ Installer script (moode-sendspin-installer.sh)
+- ✅ README documentation
 
 ---
 

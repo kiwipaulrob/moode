@@ -99,18 +99,23 @@
 
 			<label class="control-label">Volume mode</label>
 			<div class="controls">
-				<span class="config-help-static">
-					Software volume (internal). Set via <code>--hardware-volume false</code> in the service file.
-					The SMSL USB DAC has no hardware mixer, so the SendSpin daemon applies volume digitally.
+				<span class="config-help-static">Software volume (internal)</span>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-volume-mode" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-volume-mode" class="config-help-info">
+					The SendSpin daemon applies volume digitally because the connected DAC has no hardware mixer. Set via <code>--hardware-volume false</code> in the service file. Master volume in Music Assistant controls the SendSpin output level.
 				</span>
 			</div>
 
-			<div class="config-horiz-rule">ALSA device</div>
+			<div class="config-horiz-rule">Audio output</div>
 
 			<label class="control-label">Audio device</label>
 			<div class="controls">
 				<span class="config-help-static">
-					sendspin (routes through ALSA plug &rarr; plughw:0,0 &rarr; SMSL USB AUDIO)
+					sendspin (routes through ALSA plug  ->  plughw:$_select[alsa_cardnum],0  ->  $_select[alsa_devname])
+				</span>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-alsa-device" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-alsa-device" class="config-help-info">
+					The audio output chain: the SendSpin virtual device <code>sendspin</code> routes through the ALSA plug layer (<code>plughw:$_select[alsa_cardnum],0</code>) to the physical DAC. The plug layer handles format conversion so the DAC receives audio in its native format.
 				</span>
 			</div>
 
