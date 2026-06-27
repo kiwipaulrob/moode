@@ -379,28 +379,41 @@ function stopRoonBridge() {
 	sendFECmd('rbactive0');
 }
 
-// Sendspin
-// ALSA dmix plugin configuration for shared audio device access
-const SENDSPIN_ALSA_CONF = '/etc/alsa/conf.d/_audioout.conf';
+// Stop all renderers
+function stopAllRenderers() {
+	$renderers = array(
+		'btsvc'		 => 'stopBluetooth',
+		'airplaysvc' => 'stopAirPlay',
+		'spotifysvc' => 'stopSpotify',
+		'deezersvc'  => 'stopDeezer',
+		'upnpsvc'	 => 'stopUPnP',
+		'slsvc'		 => 'stopSqueezeLite',
+		'pasvc'		 => 'stopPlexamp',
+		'rbsvc'		 => 'stopRoonBridge'
+	);
 
-function configureAlsaForSendspin($enable) {
-	// NOTE: SendSpin uses direct hardware access via sendspin.conf
-	// The dmix approach has IPC key issues with moOde's _audioout configuration
-	// Using type plug with hw:0,0 provides reliable operation
-	workerLog('configureAlsaForSendspin(): ' . ($enable ? 'shared' : 'exclusive') . ' mode (direct hw)');
-	return true;
+	// Watchdog (so monitored renderers are not auto restarted)
+	sysCmd('killall -s9 watchdog.sh');
+	workerLog('stopAllRenderers(): watchdog stopped');
+
+	// Renderers
+	foreach ($renderers as $svc => $stopFunction) {
+		if ($_SESSION[$svc] == '1') {
+			$stopFunction();
+			workerLog('stopAllRenderers(): ' . $svc . ' stopped');
+		}
+	}
 }
+
+// SendSpin Multi-Room Audio renderer functions
 
 function getSendspinStatus() {
 	// Check systemd service status safely
 	$result = sysCmd('systemctl is-active sendspin 2>/dev/null');
 	$status = (!empty($result) && isset($result[0])) ? $result[0] : 'inactive';
 	if ($status === 'active') {
-		// Get card number dynamically from DB (supports any ALSA card)
-		$cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");
-		$cardnum = (!empty($cardResult) && isset($cardResult[0])) ? trim($cardResult[0]) : '0';
 		// Check if actually streaming (process using audio)
-		$sndResult = sysCmd("fuser /dev/snd/pcmC{$cardnum}D0p 2>/dev/null");
+		$sndResult = sysCmd('fuser /dev/snd/pcmC0D0p 2>/dev/null');
 		if (!empty($sndResult)) {
 			// Check if sendspin is using the device
 			$sendspinPids = sysCmd('pgrep -f sendspin 2>/dev/null');
@@ -424,7 +437,7 @@ function startSendspin() {
 	// Stop MPD to release ALSA device
 	sysCmd('mpc stop');
 
-	// Configure ALSA for shared access
+	// Note: Using direct hardware access, dmix has IPC issues
 	configureAlsaForSendspin(true);
 
 	// Start SendSpin daemon
@@ -439,11 +452,12 @@ function stopSendspin() {
 	sysCmd('systemctl stop sendspin');
 	sysCmd('systemctl disable sendspin');
 
-	// Restore ALSA to exclusive mode
+	// Note: Using direct hardware access
 	configureAlsaForSendspin(false);
 
-	// Optionally resume MPD if it was playing and Resume MPD is enabled
-	if ($_SESSION['mpd_was_playing'] == '1' && ($_SESSION['rsmafterss'] ?? 'No') == 'Yes') {
+	// Optionally resume MPD if it was playing
+	if ($_SESSION['mpd_was_playing'] == '1') {
+		sleep(1); // Allow SendSpin to release device
 		sysCmd('mpc play');
 		phpSession('write', 'mpd_was_playing', '0');
 		workerLog('stopSendspin(): MPD playback resumed');
@@ -452,34 +466,16 @@ function stopSendspin() {
 	workerLog('stopSendspin(): daemon stopped');
 }
 
-// Stop all renderers
-function stopAllRenderers() {
-	$renderers = array(
-		'btsvc'		 => 'stopBluetooth',
-		'airplaysvc' => 'stopAirPlay',
-		'spotifysvc' => 'stopSpotify',
-		'deezersvc'  => 'stopDeezer',
-		'upnpsvc'	 => 'stopUPnP',
-		'slsvc'		 => 'stopSqueezeLite',
-		'pasvc'		 => 'stopPlexamp',
-		'rbsvc'		 => 'stopRoonBridge',
-		'sendspinsvc' => 'stopSendspin'
-	);
-
-	// Watchdog (so monitored renderers are not auto restarted)
-	sysCmd('killall -s9 watchdog.sh');
-	workerLog('stopAllRenderers(): watchdog stopped');
-
-	// Renderers
-	foreach ($renderers as $svc => $stopFunction) {
-		if ($_SESSION[$svc] == '1') {
-			$stopFunction();
-			workerLog('stopAllRenderers(): ' . $svc . ' stopped');
-		}
-	}
+function configureAlsaForSendspin($enable) {
+	// NOTE: SendSpin uses direct hardware access via sendspin.conf
+	// The dmix approach has IPC key issues with moOde's _audioout configuration
+	// Using type plug with hw:0,0 provides reliable operation
+	workerLog('configureAlsaForSendspin(): ' . ($enable ? 'shared' : 'exclusive') . ' mode (direct hw)');
+	return true;
 }
 
-// === Release 2: Advanced Functions ===
+
+// === SendSpin Advanced Functions (Release 2) ===
 
 function getSendspinVersion() {
     $result = sysCmd('sudo /root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
@@ -508,26 +504,24 @@ function updateSendspin() {
 }
 
 function generateSendspinService($dbh = null) {
-	// Read config from DB
-	if ($dbh === null) {
-		$dbh = sqlConnect();
-	}
-	$result = sqlRead('cfg_sendspin', $dbh);
-	$cfg = array();
-	foreach ($result as $row) {
-		$cfg[$row['param']] = $row['value'];
-	}
+    if ($dbh === null) {
+        $dbh = sqlConnect();
+    }
+    $result = sqlRead('cfg_sendspin', $dbh);
+    $cfg = array();
+    foreach ($result as $row) {
+        $cfg[$row['param']] = $row['value'];
+    }
 
-	// Validate inputs to prevent invalid service file
-	$codec = in_array($cfg['audio_codec'] ?? '', ['flac', 'pcm']) ? $cfg['audio_codec'] : 'flac';
-	$rate = in_array($cfg['audio_rate'] ?? '', ['44100', '48000', '96000']) ? $cfg['audio_rate'] : '48000';
-	$depth = in_array($cfg['audio_depth'] ?? '', ['16', '24', '32']) ? $cfg['audio_depth'] : '16';
-	$delay = max(0, min(500, (int)($cfg['static_delay_ms'] ?? 0)));
-	$log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
+    $codec = in_array($cfg['audio_codec'] ?? '', ['flac', 'pcm']) ? $cfg['audio_codec'] : 'flac';
+    $rate = in_array($cfg['audio_rate'] ?? '', ['44100', '48000', '96000']) ? $cfg['audio_rate'] : '48000';
+    $depth = in_array($cfg['audio_depth'] ?? '', ['16', '24', '32']) ? $cfg['audio_depth'] : '16';
+    $delay = max(0, min(500, (int)($cfg['static_delay_ms'] ?? 0)));
+    $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
 
-	$audio_format = "{$codec}:{$rate}:{$depth}:2";
+    $audio_format = "{$codec}:{$rate}:{$depth}:2";
 
-	$service = <<<SVC
+    $service = <<<SVC
 [Unit]
 Description=SendSpin Audio Receiver
 After=network-online.target sound.target avahi-daemon.service
@@ -548,7 +542,6 @@ RestartSec=5
 TimeoutStartSec=30
 Environment="HOME=/root"
 
-# Real-time priority for sub-ms sync
 LimitRTPRIO=99
 LimitMEMLOCK=8388608
 
@@ -556,30 +549,28 @@ LimitMEMLOCK=8388608
 WantedBy=multi-user.target
 SVC;
 
-	$file = '/etc/systemd/system/sendspin.service';
-	// Write via sudo (www-data cannot write to /etc/systemd/)
-	$tmpfile = '/tmp/sendspin.service.tmp';
-	$result = file_put_contents($tmpfile, $service);
-	if ($result !== false) {
-		chmod($tmpfile, 0644);
-		sysCmd("sudo cp {$tmpfile} {$file}");
-		sysCmd('sudo systemctl daemon-reload');
-		@unlink($tmpfile);
+    $file = '/etc/systemd/system/sendspin.service';
+    $tmpfile = '/tmp/sendspin.service.tmp';
+    $result = file_put_contents($tmpfile, $service);
+    if ($result !== false) {
+        chmod($tmpfile, 0644);
+        sysCmd("sudo cp {$tmpfile} {$file}");
+        sysCmd('sudo systemctl daemon-reload');
+        @unlink($tmpfile);
 
-		// Also regenerate ALSA config with correct card number
-		$cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");
-		$cardnum = (!empty($cardResult) && isset($cardResult[0])) ? trim($cardResult[0]) : '0';
-		$alsaConf = "pcm.sendspin {\ntype plug\nslave {\npcm \"plughw:{$cardnum},0\"\n}\n}\n";
-		$alsaTmp = '/tmp/sendspin.alsa.tmp';
-		if (file_put_contents($alsaTmp, $alsaConf) !== false) {
-			chmod($alsaTmp, 0644);
-			sysCmd("sudo cp {$alsaTmp} /etc/alsa/conf.d/sendspin.conf");
-			@unlink($alsaTmp);
-		}
+        $cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");
+        $cardnum = (!empty($cardResult) && isset($cardResult[0])) ? trim($cardResult[0]) : '0';
+        $alsaConf = "pcm.sendspin {\ntype plug\nslave {\npcm \"plughw:{$cardnum},0\"\n}\n}\n";
+        $alsaTmp = '/tmp/sendspin.alsa.tmp';
+        if (file_put_contents($alsaTmp, $alsaConf) !== false) {
+            chmod($alsaTmp, 0644);
+            sysCmd("sudo cp {$alsaTmp} /etc/alsa/conf.d/sendspin.conf");
+            @unlink($alsaTmp);
+        }
 
-		workerLog('generateSendspinService(): service + alsa conf regenerated from DB config');
-		return true;
-	}
-	workerLog('generateSendspinService(): failed to write temp service file');
-	return false;
+        workerLog('generateSendspinService(): service + alsa conf regenerated from DB config');
+        return true;
+    }
+    workerLog('generateSendspinService(): failed to write temp service file');
+    return false;
 }
