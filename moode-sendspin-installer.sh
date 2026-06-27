@@ -1156,7 +1156,10 @@ INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000')
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_depth', '16');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('static_delay_ms', '0');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('log_level', 'INFO');
+<<<<<<< HEAD
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('volume_mode', 'software');
+=======
+>>>>>>> 5cb598dc (Sync installer: session ordering fix, ssp-config deploy, Edit button)
 EOF
     
     # Update feat_bitmask
