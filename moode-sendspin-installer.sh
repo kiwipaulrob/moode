@@ -49,6 +49,8 @@ FULL_INSTALL_FILES=(
     "${WWW_DIR}/js/lib.min.js"
     "${WWW_DIR}/ren-config.php"
     "${WWW_DIR}/templates/ren-config.html"
+    "${WWW_DIR}/ssp-config.php"
+    "${WWW_DIR}/templates/ssp-config.html"
     "${WWW_DIR}/setup_3rdparty_sendspin.txt"
     "${WWW_DIR}/command/queue.php"
     "${WWW_DIR}/worker.php"
@@ -67,6 +69,8 @@ BACKUP_FILES=(
     "lib.min.js"
     "ren-config.php"
     "ren-config.html"
+    "ssp-config.php"
+    "ssp-config.html"
     "setup_3rdparty_sendspin.txt"
     "worker.php"
     "queue.php"
@@ -191,6 +195,14 @@ detect_ren_config_html() {
 
 detect_setup_txt() {
     [[ -f "${WWW_DIR}/setup_3rdparty_sendspin.txt" ]]
+}
+
+detect_ssp_config_php() {
+    [[ -f "${WWW_DIR}/ssp-config.php" ]]
+}
+
+detect_ssp_config_html() {
+    [[ -f "${WWW_DIR}/templates/ssp-config.html" ]]
 }
 
 detect_systemd_service() {
@@ -694,56 +706,82 @@ install_ren_config_php() {
     
     backup_file "$target" "ren-config.php"
     
-    # Find line with waitWorker and insert before it
-    local line=$(grep -n "waitWorker('ren-config')" "$target" | head -1 | cut -d: -f1)
+    # ------------------------------------------------------------------
+    # Step 1: Insert the POST handler block BEFORE phpSession('close')
+    # This is critical - handlers must run while the session is still open
+    # so that phpSession('close') writes the updated session to disk.
+    # ------------------------------------------------------------------
     
-    if [[ -z "$line" ]]; then
-        log_error "Could not find insertion point in ren-config.php"
+    local close_line=$(grep -n "phpSession('close')" "$target" | head -1 | cut -d: -f1)
+    
+    if [[ -z "$close_line" ]]; then
+        log_error "Could not find phpSession('close') in ren-config.php"
         return 1
     fi
     
-    # Create temp file with SendSpin code inserted
-    head -n $((line-1)) "$target" > /tmp/ren-config-new.php
+    # Insert POST handler before the blank line before phpSession('close')
+    local insert_line=$((close_line - 1))
+    
+    head -n $((insert_line - 1)) "$target" > /tmp/ren-config-new.php
     
     cat >> /tmp/ren-config-new.php << 'EOF'
-// SendSpin Multi-Room Audio
+// SendSpin Multi-Room Audio POST handler
 if (isset($_POST['update_sendspin_settings'])) {
-	if (isset($_POST['sendspinsvc']) && $_POST['sendspinsvc'] != $_SESSION['sendspinsvc']) {
-		$update = true;
-		phpSession('write', 'sendspinsvc', $_POST['sendspinsvc'])
-
-... [OUTPUT TRUNCATED - 12 chars omitted out of 50012 total] ...
-
-set($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
-		$update = true;
-		phpSession('write', 'sendspinname', $_POST['sendspinname']);
-		sysCmd("sed -i 's/--name .*/--name " . $_POST['sendspinname'] . "/' /etc/systemd/system/sendspin.service");
-		sysCmd('systemctl daemon-reload');
-	}
-	if (isset($update)) {
-		submitJob('sendspinsvc');
-	}
+    if (isset($_POST['sendspinsvc']) && $_POST['sendspinsvc'] != $_SESSION['sendspinsvc']) {
+        $update = true;
+        phpSession('write', 'sendspinsvc', $_POST['sendspinsvc']);
+    }
+    if (isset($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
+        $update = true;
+        phpSession('write', 'sendspinname', $_POST['sendspinname']);
+        sysCmd("sed -i 's/--name .*/--name " . $_POST['sendspinname'] . "/' /etc/systemd/system/sendspin.service");
+        sysCmd('systemctl daemon-reload');
+    }
+    if (isset($update)) {
+        submitJob('sendspinsvc');
+    }
 }
 if (isset($_POST['sendspinrestart']) && $_POST['sendspinrestart'] == 1 && $_SESSION['sendspinsvc'] == '1') {
-	submitJob('sendspinrestart', '', NOTIFY_TITLE_INFO, 'SendSpin' . NOTIFY_MSG_SVC_MANUAL_RESTART);
-}
-
-if (($_SESSION['feat_bitmask'] & FEAT_SENDSPIN)) {
-	$_feat_sendspin = '';
-	$_SESSION['sendspin_installed'] == 'yes' ? $_sendspin_svcbtn_disable = '' : $_sendspin_svcbtn_disable = 'disabled';
-	$_SESSION['sendspinsvc'] == '1' ? $_sendspin_btn_disable = '' : $_sendspin_btn_disable = 'disabled';
-	$_SESSION['sendspinsvc'] == '1' ? $_sendspin_link_disable = '' : $_sendspin_link_disable = 'onclick=\"return false;\"';
-	$autoClick = " onchange=\\\"autoClick('#btn-set-sendspinsvc');\\\"";
-	$_select['sendspinsvc_on']  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION['sendspinsvc'] == '1') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . \">\\n\";
-	$_select['sendspinsvc_off'] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION['sendspinsvc'] == '0') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . \">\\n\";
-	$_select["sendspinname"] = $_SESSION["sendspinname"];
-} else {
-	$_feat_sendspin = 'hide';
+    submitJob('sendspinrestart', '', NOTIFY_TITLE_INFO, 'SendSpin' . NOTIFY_MSG_SVC_MANUAL_RESTART);
 }
 
 EOF
     
-    tail -n +$line "$target" >> /tmp/ren-config-new.php
+    tail -n +$insert_line "$target" >> /tmp/ren-config-new.php
+    mv /tmp/ren-config-new.php "$target"
+    
+    # ------------------------------------------------------------------
+    # Step 2: Insert the rendering block BEFORE waitWorker('ren-config')
+    # This generates the feature display and toggle controls.
+    # ------------------------------------------------------------------
+    
+    local wait_line=$(grep -n "waitWorker('ren-config')" "$target" | head -1 | cut -d: -f1)
+    
+    if [[ -z "$wait_line" ]]; then
+        log_error "Could not find waitWorker in ren-config.php"
+        return 1
+    fi
+    
+    head -n $((wait_line - 1)) "$target" > /tmp/ren-config-new.php
+    
+    cat >> /tmp/ren-config-new.php << 'EOF'
+if (($_SESSION['feat_bitmask'] & FEAT_SENDSPIN)) {
+    $_feat_sendspin = '';
+    $_SESSION['sendspin_installed'] == 'yes' ? $_sendspin_svcbtn_disable = '' : $_sendspin_svcbtn_disable = 'disabled';
+    $_SESSION['sendspinsvc'] == '1' ? $_sendspin_btn_disable = '' : $_sendspin_btn_disable = 'disabled';
+    $_SESSION['sendspinsvc'] == '1' ? $_sendspin_link_disable = '' : $_sendspin_link_disable = 'onclick="return false;"';
+    $autoClick = " onchange=\"autoClick('#btn-set-sendspinsvc');\"";
+    $_select['sendspinsvc_on']  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION['sendspinsvc'] == '1') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+    $_select['sendspinsvc_off'] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION['sendspinsvc'] == '0') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+    $_select["sendspinname"] = $_SESSION["sendspinname"];
+} else {
+    $_feat_sendspin = 'hide';
+}
+
+
+EOF
+    
+    tail -n +$wait_line "$target" >> /tmp/ren-config-new.php
     mv /tmp/ren-config-new.php "$target"
     
     if verify_php_syntax "$target"; then
@@ -814,6 +852,10 @@ install_ren_config_html() {
 			</div>
 
 			<div class="controls">
+				<a href="ssp-config.php" $_sendspin_link_disable><button class="btn btn-medium btn-primary config-btn" $_sendspin_btn_disable>Edit</button></a>
+				<span class="config-btn-after">SendSpin</span>
+			</div>
+			<div class="controls">
 				<a data-toggle="modal" href="#sendspin-restart" $_sendspin_link_disable><button class="btn btn-medium btn-primary config-btn" $_sendspin_btn_disable>Restart</button></a>
 				<span class="config-btn-after">SendSpin</span>
 			</div>
@@ -843,6 +885,60 @@ EOF
     
     record_install "ren_config_html"
     log_success "ren-config.html updated"
+}
+
+# ============================================================================
+# INSTALLATION FUNCTIONS - SendSpin Settings Page (ssp-config)
+# ============================================================================
+
+install_ssp_config_php() {
+    log_info "Deploying ssp-config.php..."
+    
+    local target="${WWW_DIR}/ssp-config.php"
+    
+    if detect_ssp_config_php; then
+        log_warn "ssp-config.php already exists"
+        return 0
+    fi
+    
+    if download_from_github "www/ssp-config.php" "$target"; then
+        chown www-data:www-data "$target"
+        if verify_php_syntax "$target"; then
+            record_install "ssp_config_php"
+            log_success "ssp-config.php deployed"
+        else
+            log_error "PHP syntax check failed for ssp-config.php"
+            return 1
+        fi
+    else
+        log_error "Failed to download ssp-config.php"
+        return 1
+    fi
+}
+
+install_ssp_config_html() {
+    log_info "Deploying ssp-config.html..."
+    
+    local target="${WWW_DIR}/templates/ssp-config.html"
+    
+    if detect_ssp_config_html; then
+        log_warn "ssp-config.html already exists"
+        return 0
+    fi
+    
+    if download_from_github "www/templates/ssp-config.html" "$target"; then
+        chown www-data:www-data "$target"
+        record_install "ssp_config_html"
+        log_success "ssp-config.html deployed"
+    else
+        log_error "Failed to download ssp-config.html"
+        return 1
+    fi
+}
+
+install_ssp_config() {
+    install_ssp_config_php || return 1
+    install_ssp_config_html || return 1
 }
 
 install_setup_txt() {
@@ -1233,6 +1329,11 @@ uninstall_sendspin() {
         # Remove setup documentation
         rm -f "${WWW_DIR}/setup_3rdparty_sendspin.txt"
         log_success "Removed documentation"
+        
+        # Remove ssp-config page
+        rm -f "${WWW_DIR}/ssp-config.php"
+        rm -f "${WWW_DIR}/templates/ssp-config.html"
+        log_success "Removed ssp-config page"
     else
         log_warn "No backup found! Attempting manual cleanup..."
         
@@ -1246,12 +1347,15 @@ uninstall_sendspin() {
         sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
         sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
         rm -f "${WWW_DIR}/setup_3rdparty_sendspin.txt"
+        rm -f "${WWW_DIR}/ssp-config.php"
+        rm -f "${WWW_DIR}/templates/ssp-config.html"
     fi
     
     # Remove database entries
     if [[ -f "$DB_PATH" ]]; then
         log_info "Removing database entries..."
         sqlite3 "$DB_PATH" "DELETE FROM cfg_system WHERE param LIKE 'sendspin%';" 2>/dev/null || true
+        sqlite3 "$DB_PATH" "DROP TABLE IF EXISTS cfg_sendspin;" 2>/dev/null || true
         
         # Remove feat_bitmask bit
         local current_bitmask
@@ -1297,6 +1401,16 @@ uninstall_sendspin() {
     
     if detect_ren_config_html; then
         log_warn "Traces found in ren-config.html"
+        found_traces=true
+    fi
+    
+    if detect_ssp_config_php; then
+        log_warn "Traces found in ssp-config.php"
+        found_traces=true
+    fi
+    
+    if detect_ssp_config_html; then
+        log_warn "Traces found in ssp-config.html"
         found_traces=true
     fi
     
@@ -1413,6 +1527,7 @@ run_installation() {
         install_worker_php
         install_ren_config_php
         install_ren_config_html
+        install_ssp_config
         install_setup_txt
         install_database_entries_full
     fi
@@ -1429,6 +1544,8 @@ run_installation() {
         detect_worker_php || { log_error "worker.php verification failed"; verify_passed=false; }
         detect_ren_config_php || { log_error "ren-config.php verification failed"; verify_passed=false; }
         detect_ren_config_html || { log_error "ren-config.html verification failed"; verify_passed=false; }
+        detect_ssp_config_php || { log_error "ssp-config.php verification failed"; verify_passed=false; }
+        detect_ssp_config_html || { log_error "ssp-config.html verification failed"; verify_passed=false; }
     fi
     
     detect_systemd_service || { log_error "systemd service verification failed"; verify_passed=false; }
