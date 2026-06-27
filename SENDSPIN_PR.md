@@ -17,10 +17,11 @@ SendSpin is an open-source, synchronized multi-room audio receiver. This integra
 | `templates/ssp-config.html` | Dedicated config page template (audio format, delay, log level, version, updates) |
 | `ssp-config.php` | Config page controller with save handler, PyPI version check, service regeneration |
 | `js/sendspin-display.js` | Frontend overlay for now-playing metadata display |
+| `commandw/sendspin-spspre.sh` | Pre-start hook — writes ALSA config with dynamic card number from DB |
 | `setup_3rdparty_sendspin.txt` | Setup guide for end users |
 | `etc/systemd/system/sendspin.service` | SendSpin daemon systemd unit |
 | `etc/systemd/system/moode-worker.service` | Worker daemon (replaces rc.local for renderer lifecycle) |
-| `etc/alsa/conf.d/sendspin.conf` | ALSA plug device configuration |
+| `etc/alsa/conf.d/sendspin.conf` | ALSA plug device configuration (regenerated dynamically) |
 | Various hooks | Pre/post start scripts (`spspre.sh`, `spspost.sh`), metadata hooks |
 
 ### Modified Files
