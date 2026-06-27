@@ -34,6 +34,30 @@ sudo bash moode-sendspin-installer.sh
 
 The installer automatically installs Python 3, `uv`, and `sendspin` CLI if they are not already present.
 
+### Installer Options
+
+```bash
+# Full install (default) — all features, config page, metadata overlay
+sudo bash moode-sendspin-installer.sh
+
+# Minimal install — ON/OFF toggle + Resume MPD only (no config page)
+sudo bash moode-sendspin-installer.sh --minimal
+
+# Check current installation status
+sudo bash moode-sendspin-installer.sh --check
+
+# Uninstall
+sudo bash moode-sendspin-installer.sh --uninstall
+```
+
+### Running from moOde's Built-in SSH Terminal
+
+moOde has a built-in SSH terminal (System → SSH Terminal). You can run the installer directly from there:
+
+1. Open moOde web UI → System → SSH Terminal
+2. Paste the commands above
+3. Enter your password when prompted
+
 ## What the Installer Does
 
 | Component | File |

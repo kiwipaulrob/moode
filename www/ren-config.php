@@ -440,7 +440,7 @@ if (($_SESSION['feat_bitmask'] & FEAT_SENDSPIN)) {
 	$autoClick = " onchange=\"autoClick('#btn-set-sendspinsvc');\"";
 	$_select['sendspinsvc_on']  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION['sendspinsvc'] == '1') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
 	$_select['sendspinsvc_off'] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION['sendspinsvc'] == '0') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
-	$_select["sendspinname"] = $_SESSION["sendspinname"];
+	$_select['sendspinname'] = $_SESSION['sendspinname'];
 } else {
 	$_feat_sendspin = 'hide';
 }
