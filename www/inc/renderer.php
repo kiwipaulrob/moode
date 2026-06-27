@@ -518,6 +518,7 @@ function generateSendspinService($dbh = null) {
     $depth = in_array($cfg['audio_depth'] ?? '', ['16', '24', '32']) ? $cfg['audio_depth'] : '16';
     $delay = max(0, min(500, (int)($cfg['static_delay_ms'] ?? 0)));
     $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
+    $hw_volume = ($cfg['volume_mode'] ?? 'software') === 'hardware' ? 'true' : 'false';
 
     $audio_format = "{$codec}:{$rate}:{$depth}:2";
 
@@ -531,7 +532,7 @@ Wants=network-online.target
 Type=simple
 ExecStartPre=/var/local/www/commandw/spspre.sh
 ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device sendspin --audio-format {$audio_format} --name moode-sendspin \
-    --hardware-volume false \
+    --hardware-volume {$hw_volume} \
     --static-delay-ms {$delay} \
     --log-level {$log_level} \
     --hook-start /var/local/www/commandw/sendspin-metadata.sh \

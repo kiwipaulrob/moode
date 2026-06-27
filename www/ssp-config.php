@@ -129,6 +129,18 @@ $_select['log_level'] .= "<option value=\"INFO\" " . (($log_level == 'INFO') ? "
 $_select['log_level'] .= "<option value=\"WARNING\" " . (($log_level == 'WARNING') ? "selected" : "") . ">WARNING</option>\n";
 $_select['log_level'] .= "<option value=\"ERROR\" " . (($log_level == 'ERROR') ? "selected" : "") . ">ERROR</option>\n";
 
+// Volume mode
+$volume_mode = $cfgSendspin['volume_mode'] ?? 'software';
+$_select['volume_mode'] = '';
+$_select['volume_mode'] .= "<option value=\"software\" " . (($volume_mode == 'software') ? "selected" : "") . ">Software volume</option>\n";
+$_select['volume_mode'] .= "<option value=\"hardware\" " . (($volume_mode == 'hardware') ? "selected" : "") . ">Hardware volume (DAC)</option>\n";
+
+// ALSA card info
+$cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");
+$_select['alsa_cardnum'] = (!empty($cardResult) && isset($cardResult[0])) ? trim($cardResult[0]) : '?';
+$nameResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='devname'\" 2>/dev/null");
+$_select['alsa_devname'] = (!empty($nameResult) && isset($nameResult[0])) ? trim($nameResult[0]) : 'unknown';
+
 waitWorker('ssp_config');
 
 $tpl = "ssp-config.html";

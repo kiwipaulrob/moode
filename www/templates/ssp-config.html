@@ -97,12 +97,14 @@
 
 			<div class="config-horiz-rule">Volume control</div>
 
-			<label class="control-label">Volume mode</label>
+			<label class="control-label" for="volume-mode">Volume mode</label>
 			<div class="controls">
-				<span class="config-help-static">Software volume (internal)</span>
+				<select id="volume-mode" class="config-select-large" name="config[volume_mode]">
+					$_select[volume_mode]
+				</select>
 				<a aria-label="Help" class="config-info-toggle" data-cmd="info-volume-mode" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
 				<span id="info-volume-mode" class="config-help-info">
-					The SendSpin daemon applies volume digitally because the connected DAC has no hardware mixer. Set via <code>--hardware-volume false</code> in the service file. Master volume in Music Assistant controls the SendSpin output level.
+					Controls how SendSpin manages audio level. <strong>Software volume</strong> applies attenuation digitally in the SendSpin daemon. <strong>Hardware volume</strong> lets the DAC handle attenuation via its hardware mixer — better quality, but only works if the DAC supports it and is not shared with other audio outputs.
 				</span>
 			</div>
 
