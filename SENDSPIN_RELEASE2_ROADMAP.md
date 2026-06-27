@@ -1,211 +1,69 @@
-# SendSpin Release 2: Advanced Features Roadmap
+# SendSpin for moOde — Feature Status
 
 **Branch:** `sendspin-advanced`
-**Base:** `sendspin-integration` (Release 1)
-**Target:** moOde 9.4.2+, SendSpin CLI 7.5.0+
+**Updated:** 2026-06-28
 
----
+## Completed Features
 
-## Overview
+### 1. Metadata Display (formerly Priority 1)
+- **JS overlay** (`sendspin-display.js`) polls `/var/local/www/sendspinmeta.txt` every 2 seconds
+- Shows cover art, title, artist, album on the main playback page
+- Auto-hides when streaming stops
+- Only activates on main page (`/` or `/index.php`) — never on config pages
+- **Data source:** Home Assistant REST API polling via `sendspin-metadata-sink.py` daemon
+  - Polls HA every 3 seconds for `media_player.moode_sendspin` state
+  - Downloads and caches cover art locally
+  - Workaround for Music Assistant's missing `metadata@v1` server-side implementation
 
-Release 2 builds on the core SendSpin integration (Release 1) with advanced
-features for metadata display, volume synchronisation, CamillaDSP support,
-and version management. These features were identified during the Release 1
-code review as enhancements that require the core integration to be stable
-first.
+### 2. Version Check and Update Button (was Priority 5)
+- **Config page** (`ssp-config.php`) shows installed and latest available versions
+- PyPI JSON API check (cached for 1 hour)
+- One-click update via `uv tool upgrade sendspin` (background, non-blocking)
+- Service restarts automatically after update
 
----
+### 3. Audio Format Configuration
+- Codec: FLAC or PCM (whitelisted)
+- Sample rate: 44100, 48000, 96000 Hz
+- Bit depth: 16, 24, 32 bit
+- Config saved to `cfg_sendspin` DB table
+- Service file regenerated dynamically on save via `generateSendspinService()`
 
-## Feature List
+### 4. Service Lifecycle
+- `moode-worker.service` replaces rc.local for worker daemon
+- `sendspin-spspre.sh` — pre-start hook that writes ALSA config with dynamic cardnum
+- Service file regeneration from DB (survives reboot)
+- Restart=on-failure with 5-second delay
+- Real-time priority (LimitRTPRIO=99, LimitMEMLOCK=8388608)
 
-### 1. Now Playing Metadata Display (DONE - Implemented June 2026)
+### 5. Session Handling
+- Stored session ID restored before `phpSession('open')` — works in incognito/no-cookie
+- All session variables have defaults
+- `Resume MPD` toggle (`rsmafterss`) — user-controlled MPD auto-resume
 
-Display song title, artist, album, and cover art in moOde UI when streaming
-from SendSpin via Music Assistant.
+### 6. Dynamic ALSA Device Support
+- ALSA card number read from DB, not hardcoded
+- Works with any USB DAC on any card number
+- ALSA config regenerated on every service start
 
-**Original Plan (hook-based):**
-- SendSpin daemon `--hook-start` / `--hook-stop` scripts
-- Metadata via `SENDSPIN_*` environment variables
+## Deferred / Not Implemented
 
-**Actual Implementation (HA polling):**
-- SendSpin hooks only pass connection info (server name, client ID) - NO track metadata
-- Music Assistant advertises `metadata@v1` role but sends all-null fields (confirmed via raw WebSocket logging)
-- MA sends only `server/hello`, `server/state` (null metadata), `group/update` (stopped), and `server/time` every 3s
-- This is an MA-side bug; the SendSpin protocol itself fully supports metadata (ESPHome reference implementation proves this)
+### CamillaDSP Loopback Support (was Priority 3)
+- **Status:** Deferred indefinitely
+- **Reason:** CamillaDSP operates downstream of the ALSA plug layer. SendSpin audio flows through `sendspin → plughw → DAC`, and CamillaDSP processes audio after that point. It works transparently without any SendSpin-specific code. The only exception is Bluetooth, which has a CDSP maxvol setting due to Bluetooth's unique volume path — SendSpin does not share this issue.
 
-**Working Solution:**
-- Standalone daemon (`sendspin-metadata-sink.py`) on port 8929
-- Polls Home Assistant REST API every 3 seconds for `media_player.moode_sendspin` entity state
-- Extracts title, artist, album, duration, and artwork URL from HA attributes
-- Downloads cover art via HA proxy URL to `/var/local/www/imagesw/sendspin-covers/`
-- Writes moOde metadata format to `/var/local/www/sendspinmeta.txt`: `Title~~~Artist~~~Album~~~Duration~~~CoverPath~~~Codec`
-- Only rewrites file on track change (detected by title/artist comparison)
-- Clears metadata when HA reports state other than playing/paused
-- SendSpin WebSocket listener kept for connection monitoring only
-- HA long-lived access token embedded in systemd service `Environment` directive
+### Buffer Tuning for Sync Precision (was Priority 4)
+- **Status:** Deferred
+- **Reason:** Music Assistant handles network-layer synchronisation. SendSpin's `--static-delay-ms` (0–500ms) is available in the service file for manual tuning if needed. The default ALSA buffer settings are sufficient for reliable playback.
 
-**Files:**
-- `hooks/sendspin-metadata-sink.py` - Main daemon (HA polling + SendSpin listener)
-- `/etc/systemd/system/sendspin-metadata-sink.service` - Service with HA_TOKEN env var
-- `/var/local/www/sendspinmeta.txt` - Output metadata file (moOde ~~~ format)
-- `/var/local/www/imagesw/sendspin-covers/` - Cached cover art directory
+### Service Hardening / Non-Root Execution (was Priority 6)
+- **Status:** Not started
+- **Reason:** The service runs as root to access `sendspin` binary in `/root/.local/` and `systemctl` operations. This is consistent with moOde's existing architecture (most services run as root). A dedicated `moodeaudio` user setup would be a separate improvement.
 
-**Systemd Service:**
-```ini
-[Unit]
-Description=SendSpin Metadata Sink for moOde (HA Polling)
-After=network-online.target sendspin.service
-Wants=network-online.target
+### Volume Sync with Music Assistant
+- **Status:** Not started
+- **Reason:** `--hardware-volume false` delegates volume to software control in the SendSpin daemon. Music Assistant's volume slider controls the SendSpin output level through this channel. Hardware volume mixers are not supported by the SMSL DAC.
 
-[Service]
-Type=simple
-ExecStart=/root/.local/share/uv/tools/sendspin/bin/python /var/local/www/commandw/sendspin-metadata-sink.py
-Restart=on-failure
-RestartSec=10
-Environment="HOME=/root"
-Environment="HA_TOKEN=<long-lived-access-token>"
-```
+## Future Considerations
 
-**Verified Working:**
-- Track changes captured in real-time (< 3 second latency)
-- Cover art downloads and caches correctly
-- Metadata clears when playback stops
-- Tested with multiple rapid track changes (Palehound, Big Thief, Japanese Breakfast, Angel Olsen, Waxahatchee)
-
----
-
-### 2. Volume Synchronisation (Priority 2)
-
-Two-way volume sync between Music Assistant and moOde.
-
-**Approach:**
-- SendSpin `--hook-set-volume` receives volume changes from controller
-- Hook script writes volume to moOde's ALSA mixer via `amixer`
-- moOde volume changes propagated back to SendSpin via CLI command
-
-**Files:**
-- `hooks/sendspin-volume-sync.sh` - Volume sync hook script
-- `www/ren-config.php` - POST handler for sendspinvol
-- `www/templates/ren-config.html` - Volume slider in SendSpin section
-
----
-
-### 3. CamillaDSP Loopback Support (Priority 3)
-
-Route SendSpin audio through moOde's CamillaDSP chain when DSP is enabled,
-instead of direct hardware access. Preserves room correction and EQ.
-
-**Approach:**
-- Detect if CamillaDSP is enabled by checking `cfg_system` for `camilladsp`
-- If enabled: route SendSpin to `hw:Loopback,0,0` (CamillaDSP input)
-- If disabled: use direct hardware (current Release 1 behaviour)
-- `spspre.sh` hook checks DSP state before playback starts
-
-**Files:**
-- `hooks/spspre.sh` - Pre-play hook for DSP detection
-- `hooks/spspost.sh` - Post-play hook for state cleanup
-- `etc/alsa/conf.d/sendspin.conf` - Updated with loopback option
-- `www/inc/renderer.php` - `configureAlsaForSendspin()` updated
-
----
-
-### 4. Buffer Tuning for Sync Precision (Priority 4)
-
-Optimise ALSA buffer/period sizes for SendSpin's sub-millisecond sync.
-
-**Approach:**
-- Smaller period_time allows SendSpin's Kalman filter to adjust samples
-  more precisely
-- Add tunable parameters to sendspin.conf
-- Test with various network conditions
-
-**Configuration:**
-```
-pcm.sendspin {
-    type plug
-    slave {
-        pcm {
-            type hw
-            card 0
-            device 0
-        }
-        period_time 1160
-        buffer_time 4640
-    }
-}
-```
-
-**Files:**
-- `etc/alsa/conf.d/sendspin.conf` - Updated with buffer parameters
-- `etc/alsa/conf.d/sendspin-hq.conf` - High-quality preset (optional)
-
----
-
-### 5. Version Check and Update Button (Priority 5)
-
-Show SendSpin CLI version in moOde UI with update notification.
-
-**Approach:**
-- PHP calls `sendspin --version` and `pip index versions sendspin`
-- Display current version and "Update available" badge if newer exists
-- One-click update via `uv tool upgrade sendspin`
-- Restart service after update
-
-**Files:**
-- `www/inc/renderer.php` - `getSendspinVersion()` function
-- `www/ren-config.php` - POST handler for sendspinupdate
-- `www/templates/ren-config.html` - Version display + update button
-- `www/daemon/worker.php` - Case handler for sendspinupdate
-
----
-
-### 6. Systemd Service Hardening (Priority 6)
-
-Run SendSpin as non-root user with proper audio group access.
-
-**Approach:**
-- Create `moodeaudio` user if not present (moOde standard user)
-- Add `User=moodeaudio`, `SupplementaryGroups=audio,netdev` to service
-- Add `LimitRTPRIO=99` and `LimitMEMLOCK=8388608` for real-time priority
-- Ensure uv tool accessible to moodeaudio user
-
-**Files:**
-- `etc/systemd/system/sendspin.service` - Hardened service definition
-- `moode-sendspin-installer.sh` - User creation logic
-
----
-
-## Implementation Order
-
-1. Metadata display (highest user value - visible improvement)
-2. Volume sync (improves usability)
-3. CamillaDSP support (addresses reviewer feedback)
-4. Buffer tuning (performance optimisation)
-5. Version check/update (maintenance convenience)
-6. Service hardening (security improvement)
-
----
-
-## Dependencies
-
-- Release 1 (`sendspin-integration`) must be deployed and working
-- SendSpin CLI 7.5.0+ (hook support verified)
-- Home Assistant accessible from Pi on local network (port 8123)
-- HA long-lived access token with read access to `media_player.moode_sendspin`
-- Music Assistant integrated with Home Assistant (provides media_player entity)
-- NOTE: Music Assistant does NOT populate SendSpin metadata@v1 fields (bug confirmed June 2026).
-  HA polling is the workaround until MA fixes their server-side metadata implementation.
-
----
-
-## Testing Strategy
-
-Each feature will be tested on the Pi (192.168.214.25) with:
-1. PHP syntax verification (`php -l`) before deployment
-2. Manual hook testing with simulated environment variables
-3. Web UI verification after deployment
-4. Music Assistant streaming test for end-to-end validation
-
----
-
-*Created June 23, 2026 on sendspin-advanced branch*
+- **Upgrade path for moOde 10:** The installer handles re-patching after a moOde update. Documentation covers this.
+- **PR to upstream moOde:** `SENDSPIN_PR.md` documents all changes for maintainer review.

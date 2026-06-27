@@ -16,13 +16,15 @@ SendSpin is an open-source, synchronized multi-room audio receiver. This integra
 | `inc/renderer.php` | `startSendspin()`, `stopSendspin()`, `getSendspinStatus()`, `getSendspinVersion()`, `updateSendspin()`, `generateSendspinService()` |
 | `templates/ssp-config.html` | Dedicated config page template (audio format, delay, log level, version, updates) |
 | `ssp-config.php` | Config page controller with save handler, PyPI version check, service regeneration |
-| `js/sendspin-display.js` | Frontend overlay for now-playing metadata display |
-| `commandw/sendspin-spspre.sh` | Pre-start hook — writes ALSA config with dynamic card number from DB |
-| `setup_3rdparty_sendspin.txt` | Setup guide for end users |
-| `etc/systemd/system/sendspin.service` | SendSpin daemon systemd unit |
+| `commandw/sendspin-spspre.sh` | Pre-start hook — writes ALSA config with dynamic card number from DB (separate from moOde's stock `spspre.sh` to avoid conflicts during updates) |
+| `ssp-config.php` | Config page controller with save handler, PyPI version check (cached 1 hour), service regeneration |
+| `templates/ssp-config.html` | Config page template: version display, audio format (codec/rate/depth), log level, audio output info |
+| `js/sendspin-display.js` | Frontend overlay for now-playing metadata — polls every 2s, only on main page |
+| `setup_3rdparty_sendspin.txt` | Setup guide (v2.0) |
+| `etc/systemd/system/sendspin.service` | SendSpin daemon — restart=on-failure, real-time priority, --hardware-volume false |
 | `etc/systemd/system/moode-worker.service` | Worker daemon (replaces rc.local for renderer lifecycle) |
-| `etc/alsa/conf.d/sendspin.conf` | ALSA plug device configuration (regenerated dynamically) |
-| Various hooks | Pre/post start scripts (`spspre.sh`, `spspost.sh`), metadata hooks |
+| `etc/alsa/conf.d/sendspin.conf` | ALSA plug device configuration (regenerated dynamically with correct card number) |
+| Various hooks | `sendspin-metadata.sh`, `sendspin-volume-sync.sh`, `spspost.sh` |
 
 ### Modified Files
 

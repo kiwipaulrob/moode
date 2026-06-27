@@ -19,7 +19,7 @@
 | `www/js/sendspin-display.js` | New | JS overlay for metadata display |
 | `www/inc/renderer.php` | Modified | SendSpin renderer functions added |
 | `hooks/sendspin-metadata-sink.py` | New | HA-polling metadata sink daemon |
-| `hooks/spspre.sh` | Modified | Pre-start ALSA configuration |
+|| `hooks/sendspin-spspre.sh` | New | Pre-start ALSA configuration with dynamic cardnum |
 | `hooks/sendspin-metadata.sh` | New | Hook for start/stop metadata write |
 | `etc/systemd/system/sendspin.service` | New | SendSpin daemon service |
 | `etc/systemd/system/moode-worker.service` | New | moOde worker daemon (replaces rc.local) |
@@ -473,43 +473,39 @@ $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERR
 
 ---
 
-## Completed Fixes (commit 4d40381a)
+## Completed Fixes
 
-1. **BUG-01** — Fixed `tsysCmd` typo in `startSendspin()` and `stopSendspin()` ✅
-2. **BUG-02** — `generateSendspinService()` now accepts optional `$dbh` parameter to avoid double `sqlConnect()` ✅
-3. **BUG-03** — Explicit `systemctl restart sendspin` after service file generation ✅
-4. **ISSUE-01** — `ren-config.php` now uses stored session ID before `phpSession('open')` so session persists across requests ✅
-5. **ISSUE-04** — `getSendspinVersion()` uses absolute binary path ✅
-6. **ISSUE-05** — `updateSendspin()` now runs asynchronously in background ✅
-7. **ISSUE-06** — Session fallback added to `ssp-config.php` ✅
-8. **MINOR-04** — Input validation added to `generateSendspinService()` ✅
-9. **STRUCT-06** — `ExecStartPre` added to `moode-worker.service` to clean stale PIDFile ✅
+All critical and medium-severity issues have been resolved across multiple commits:
 
-## Remaining Open Items
+| ID | Issue | Fix |
+|----|-------|-----|
+| BUG-01 | `tsysCmd` typo in `startSendspin()` and `stopSendspin()` | ✅ Removed `t` prefix — `sysCmd()` called correctly |
+| BUG-02 | `generateSendspinService()` calls `sqlConnect()` while caller holds a connection | ✅ Made `$dbh` optional parameter — caller passes existing connection |
+| BUG-03 | Save notification says "service restarted" but no restart occurs | ✅ Added explicit `systemctl restart sendspin` after save |
+| BUG-04 | DB read before POST handler in ssp-config.php | ✅ Verified — DB read already occurs after POST handler |
+| BUG-05 | Overlay on config pages (hash nav on main page) | ✅ Pathname check blocks all `.php` pages except index |
+| ISSUE-01 | Session data not persisting — empty session on config page | ✅ Stored session ID restored before `phpSession('open')` |
+| ISSUE-02 | MPD stopped unconditionally on SendSpin start | ✅ Only stops MPD when actively playing |
+| ISSUE-03 | Installer doesn't create `cfg_sendspin` table or regenerate service | ✅ Added DB table creation and `install_regenerate_service()` |
+| ISSUE-04 | `getSendspinVersion()` returns `unknown` for www-data | ✅ Uses `sudo` with absolute path to binary |
+| ISSUE-05 | `updateSendspin()` blocks PHP-FPM | ✅ Runs asynchronously in background |
+| ISSUE-06 | `ssp-config.php` has no session fallback | ✅ Same stored session ID approach as ren-config.php |
+| MINOR-04 | No input validation in `generateSendspinService()` | ✅ Whitelist validation for all config values |
+| STRUCT-06 | Stale PIDFile prevents worker restart | ✅ `ExecStartPre=/bin/rm -f /run/worker.pid` |
 
-- **BUG-05** — `sendspin-display.js` pathname check needs hardening
-- **ISSUE-02** — MPD stopped unconditionally on SendSpin start
-- **ISSUE-03** — Installer should call `generateSendspinService()`
-- **STRUCT-01** — Mixed quote style in ren-config.php SendSpin section
-- **STRUCT-02** — Number input vs select dropdown for delay control
-- **STRUCT-03** — `waitWorker()` call verification
-- **STRUCT-05** — `aiosendspin` dependency documentation
-- **MINOR-01** — `spspre.sh` error handling
-- **MINOR-02** — Hardcoded HA entity ID
-- **MINOR-03** — ren-config.html indentation consistency
+## Remaining Open Items (Low Priority / Cosmetic)
 
-## Recommended Fix Order
+| ID | Severity | File | Issue | Status |
+|----|----------|------|-------|--------|
+| STRUCT-01 | Low | `ren-config.php` | Mixed quote style in SendSpin section | ⏳ Open |
+| STRUCT-02 | Low | `ssp-config.html` | Number input vs select dropdown for delay (removed from UI) | ❌ Superseded |
+| STRUCT-03 | Low | `ssp-config.php` | `waitWorker()` call verification | ⏳ Verify on next moOde update |
+| STRUCT-05 | Low | `metadata-sink.py` | `aiosendspin` dependency not documented | ⏳ Open |
+| MINOR-01 | Info | `spspre.sh` | No error handling (now separate `sendspin-spspre.sh`) | ⏳ Open |
+| MINOR-02 | Info | `metadata-sink.py` | Hardcoded HA entity ID | ⏳ Open |
+| MINOR-03 | Info | `ren-config.html` | Minor indentation inconsistency in SendSpin section | ⏳ Open |
 
-1. **BUG-01** — Fix `tsysCmd` typo (2 min, zero risk)
-2. **BUG-02** — Pass `$dbh` to `generateSendspinService()` (10 min)
-3. **BUG-04** — Move DB read after POST handler in `ssp-config.php` (5 min)
-4. **ISSUE-01** — Replace session fallback with stored-session-ID approach (15 min, after BUG-02 fixed)
-5. **BUG-03** — Explicit `systemctl restart` after service file generation (5 min)
-6. **ISSUE-04** — Use absolute path for `sendspin` binary (2 min)
-7. **MINOR-04** — Add input validation to `generateSendspinService()` (10 min)
-8. **ISSUE-05** — Make `updateSendspin()` async (10 min)
-9. **STRUCT-06** — Add `ExecStartPre=/bin/rm -f /run/worker.pid` (2 min)
-10. **ISSUE-06** + **STRUCT-01/02** — Polish and consistency (20 min)
+These remaining items are low priority — they do not affect functionality and any moOde maintainer can address them during final integration.
 
 ---
 
