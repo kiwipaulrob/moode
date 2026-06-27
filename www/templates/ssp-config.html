@@ -71,17 +71,6 @@
 				</span>
 			</div>
 
-			<div class="config-horiz-rule">Sync tuning</div>
-
-			<label class="control-label" for="static-delay-ms">Static delay (ms)</label>
-			<div class="controls">
-				<input class="config-input-large" type="number" min="0" max="500" step="5" id="static-delay-ms" name="config[static_delay_ms]" value="$_select[static_delay_ms]" required>
-				<a aria-label="Help" class="config-info-toggle" data-cmd="info-static-delay" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
-				<span id="info-static-delay" class="config-help-info">
-					Extra playback delay in milliseconds applied after clock sync. Increase if SendSpin audio is ahead of other rooms. Default: 0.
-				</span>
-			</div>
-
 			<div class="config-horiz-rule">Logging</div>
 
 			<label class="control-label" for="log-level">Log level</label>
@@ -92,19 +81,6 @@
 				<a aria-label="Help" class="config-info-toggle" data-cmd="info-log-level" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
 				<span id="info-log-level" class="config-help-info">
 					Verbosity of the SendSpin daemon log. DEBUG for troubleshooting, INFO for normal operation, WARNING/ERROR to reduce log noise.
-				</span>
-			</div>
-
-			<div class="config-horiz-rule">Volume control</div>
-
-			<label class="control-label" for="volume-mode">Volume mode</label>
-			<div class="controls">
-				<select id="volume-mode" class="config-select-large" name="config[volume_mode]">
-					$_select[volume_mode]
-				</select>
-				<a aria-label="Help" class="config-info-toggle" data-cmd="info-volume-mode" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
-				<span id="info-volume-mode" class="config-help-info">
-					Controls how SendSpin manages audio level. <strong>Software volume</strong> applies attenuation digitally in the SendSpin daemon. <strong>Hardware volume</strong> lets the DAC handle attenuation via its hardware mixer — better quality, but only works if the DAC supports it and is not shared with other audio outputs.
 				</span>
 			</div>
 
