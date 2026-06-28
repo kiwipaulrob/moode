@@ -22,8 +22,9 @@
         msg.classList.add('inpsrc-msg-metadata');
         msg.style.width = '100%';
 
-        // Message area: renderer name + Turn Off button
-        msg.innerHTML = '<span id="inpsrc-msg-text">SendSpin Active</span>' +
+        // Message area: Turn Off button only (metadata shown below)
+        // moOde clears msg-text when metadata is available
+        msg.innerHTML = '<span id="inpsrc-msg-text"></span>' +
             '<button class="btn turnoff-renderer" data-job="sendspinsvc"><i class="fa-regular fa-sharp fa-xmark"></i></button>';
 
         // Cover art image
