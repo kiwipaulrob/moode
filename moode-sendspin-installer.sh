@@ -2,7 +2,7 @@
 #
 # moOde SendSpin Integration Installer v4.1.0
 # Repository: https://github.com/kiwipaulrob/moode
-# Branch: sendspin-integration
+# Branch: sendspin-advanced
 #
 # Usage:
 #   Full Install:   curl -fsSL ... | sudo bash
