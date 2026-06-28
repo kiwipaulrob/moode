@@ -90,7 +90,13 @@
 
 ### Volume Sync with Music Assistant
 - **Status:** Not started
-- **Reason:** `--hardware-volume false` delegates volume to software control in the SendSpin daemon. Music Assistant's volume slider controls the SendSpin output level through this channel. Hardware volume mixers are not supported by the SMSL DAC.
+- **Reason:** moOde's integrated volume management handles audio levels. Passing a separate `--hardware-volume` flag would duplicate or conflict. Volume is delegated to moOde's system-level control.
+- **Removed from backend (v4.1.0):** `--hardware-volume` flag, `volume_mode` from `cfg_sendspin` table, `$_select['volume_mode']` from `ssp-config.php`
+
+### Buffer Tuning for Sync Precision
+- **Status:** Not started
+- **Reason:** Music Assistant handles network-layer synchronisation between endpoints. Passing `--static-delay-ms` would duplicate this functionality and risk desync if configured incorrectly.
+- **Removed from backend (v4.1.0):** `--static-delay-ms` flag, `static_delay_ms` from `cfg_sendspin` table, `$_select['static_delay_ms']` from `ssp-config.php`
 
 ## Future Considerations
 

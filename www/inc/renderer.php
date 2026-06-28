@@ -539,32 +539,28 @@ function generateSendspinService($dbh = null) {
     $codec = in_array($cfg['audio_codec'] ?? '', ['flac', 'pcm']) ? $cfg['audio_codec'] : 'flac';
     $rate = in_array($cfg['audio_rate'] ?? '', ['44100', '48000', '96000']) ? $cfg['audio_rate'] : '48000';
     $depth = in_array($cfg['audio_depth'] ?? '', ['16', '24', '32']) ? $cfg['audio_depth'] : '16';
-    $delay = max(0, min(500, (int)($cfg['static_delay_ms'] ?? 0)));
-    $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
-    $hw_volume = ($cfg['volume_mode'] ?? 'software') === 'hardware' ? 'true' : 'false';
+        $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
 
-    $audio_format = "{$codec}:{$rate}:{$depth}:2";
+        $audio_format = "{$codec}:{$rate}:{$depth}:2";
 
-    $service = <<<SVC
-[Unit]
-Description=SendSpin Audio Receiver
-After=network-online.target sound.target avahi-daemon.service
-Wants=network-online.target
+        $service = <<<SVC
+    [Unit]
+    Description=SendSpin Audio Receiver
+    After=network-online.target sound.target avahi-daemon.service
+    Wants=network-online.target
 
-[Service]
-Type=simple
-ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
-ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device sendspin --audio-format {$audio_format} --name moode-sendspin \
-    --hardware-volume {$hw_volume} \
-    --static-delay-ms {$delay} \
-    --log-level {$log_level} \
-    --hook-start /var/local/www/commandw/sendspin-metadata.sh \
-    --hook-stop /var/local/www/commandw/sendspin-metadata.sh
-ExecStopPost=/var/local/www/commandw/spspost.sh
-Restart=on-failure
-RestartSec=5
-TimeoutStartSec=30
-Environment="HOME=/root"
+    [Service]
+    Type=simple
+    ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
+    ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device sendspin --audio-format {$audio_format} --name moode-sendspin \\
+        --log-level {$log_level} \\
+        --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
+        --hook-stop /var/local/www/commandw/sendspin-metadata.sh
+    ExecStopPost=/var/local/www/commandw/spspost.sh
+    Restart=on-failure
+    RestartSec=5
+    TimeoutStartSec=30
+    Environment="HOME=/root"
 
 LimitRTPRIO=99
 LimitMEMLOCK=8388608

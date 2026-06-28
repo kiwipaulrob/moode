@@ -119,21 +119,12 @@ $_select['audio_depth'] .= "<option value=\"16\" " . (($depth == '16') ? "select
 $_select['audio_depth'] .= "<option value=\"24\" " . (($depth == '24') ? "selected" : "") . ">24 bit</option>\n";
 $_select['audio_depth'] .= "<option value=\"32\" " . (($depth == '32') ? "selected" : "") . ">32 bit</option>\n";
 
-// Static delay
-$_select['static_delay_ms'] = $cfgSendspin['static_delay_ms'] ?? '0';
-
 // Log level
 $log_level = $cfgSendspin['log_level'] ?? 'INFO';
 $_select['log_level'] .= "<option value=\"DEBUG\" " . (($log_level == 'DEBUG') ? "selected" : "") . ">DEBUG</option>\n";
 $_select['log_level'] .= "<option value=\"INFO\" " . (($log_level == 'INFO') ? "selected" : "") . ">INFO (Default)</option>\n";
 $_select['log_level'] .= "<option value=\"WARNING\" " . (($log_level == 'WARNING') ? "selected" : "") . ">WARNING</option>\n";
 $_select['log_level'] .= "<option value=\"ERROR\" " . (($log_level == 'ERROR') ? "selected" : "") . ">ERROR</option>\n";
-
-// Volume mode
-$volume_mode = $cfgSendspin['volume_mode'] ?? 'software';
-$_select['volume_mode'] = '';
-$_select['volume_mode'] .= "<option value=\"software\" " . (($volume_mode == 'software') ? "selected" : "") . ">Software volume</option>\n";
-$_select['volume_mode'] .= "<option value=\"hardware\" " . (($volume_mode == 'hardware') ? "selected" : "") . ">Hardware volume (DAC)</option>\n";
 
 // ALSA card info
 $cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");

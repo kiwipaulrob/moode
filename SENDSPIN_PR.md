@@ -124,7 +124,7 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 
 | Column | Type | Purpose |
 |--------|------|---------|
-| `param` | CHAR(32) | Setting name (`audio_codec`, `audio_rate`, `audio_depth`, `static_delay_ms`, `log_level`, `volume_mode`) |
+| `param` | CHAR(32) | Setting name (`audio_codec`, `audio_rate`, `audio_depth`, `log_level`) |
 | `value` | CHAR(128) | Setting value |
 
 ### Feature Bitmask
@@ -163,15 +163,13 @@ The systemd service file is dynamically generated from the `cfg_sendspin` databa
 | Flag | Source | Default | Description |
 |------|--------|---------|-------------|
 | `--audio-format` | `audio_codec:audio_rate:audio_depth:2` | `flac:48000:16:2` | Codec, sample rate, bit depth, channels |
-| `--hardware-volume` | `volume_mode` → `software`/`hardware` | `false` | `true` for DAC hardware volume control, `false` for software volume |
-| `--static-delay-ms` | `static_delay_ms` (0–500) | `0` | Static sync delay in milliseconds for multi-room alignment |
 | `--log-level` | `log_level` (DEBUG/INFO/WARNING/ERROR) | `INFO` | Daemon log verbosity |
 | `--hook-start` | `/var/local/www/commandw/sendspin-metadata.sh` | — | Writes metadata on stream start |
 | `--hook-stop` | `/var/local/www/commandw/sendspin-metadata.sh` | — | Clears metadata on stream stop |
 | `ExecStartPre` | `sendspin-spspre.sh` | — | Validates ALSA, clears stale state before daemon starts |
 | `ExecStopPost` | `spspost.sh` | — | Cleans up metadata and logs device state after daemon stops |
 
-All six `cfg_sendspin` parameters (`audio_codec`, `audio_rate`, `audio_depth`, `static_delay_ms`, `log_level`, `volume_mode`) are validated before being written to the service file. The ALSA config (`/etc/alsa/conf.d/sendspin.conf`) is also regenerated with the correct card number from the database.
+Volume is managed by moOde's integrated volume system. Multi-room sync delay is handled by Music Assistant's network-layer synchronisation — `static_delay_ms` and `hardware-volume` are not included as they would duplicate or conflict with existing functionality.
 
 ## Dependencies
 

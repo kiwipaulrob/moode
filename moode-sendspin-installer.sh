@@ -431,9 +431,7 @@ CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32)
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_depth', '16');
-INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('static_delay_ms', '0');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('log_level', 'INFO');
-INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('volume_mode', 'software');
 EOF
     
     record_install "database_minimal"
@@ -1169,9 +1167,7 @@ CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32)
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_depth', '16');
-INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('static_delay_ms', '0');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('log_level', 'INFO');
-INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('volume_mode', 'software');
 EOF
     
     # Update feat_bitmask
