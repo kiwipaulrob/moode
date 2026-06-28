@@ -54,10 +54,10 @@
                 }
 
                 var parts = data.split('~~~');
-                var title = parts[0] || '';
-                var artist = parts[1] || '';
-                var album = parts[2] || '';
-                var coverUrl = parts[4] || '';
+                var title = (parts[0] || '').trim();
+                var artist = (parts[1] || '').trim();
+                var album = (parts[2] || '').trim();
+                var coverUrl = (parts[4] || '').trim();
 
                 // No valid track data — hide overlay
                 if (title === '' || title === 'SendSpin') {
@@ -117,6 +117,32 @@
         }
     }
 
+    // Protect overlay elements from moOde's main.js clearing them
+    function protectOverlayElements() {
+        var ids = ['sendspin-title', 'sendspin-artist', 'sendspin-album', 'sendspin-coverart'];
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+                if (m.type === 'childList' && m.target.children.length === 0 && overlayshown) {
+                    // Element was cleared by moOde JS — reapply last value
+                    var el = m.target;
+                    if (el.id === 'sendspin-title' && lastTitle) el.textContent = lastTitle;
+                    else if (el.id === 'sendspin-artist' && lastArtist) el.textContent = lastArtist;
+                    else if (el.id === 'sendspin-album' && lastAlbum) el.textContent = lastAlbum;
+                    else if (el.id === 'sendspin-coverart' && lastCoverUrl) {
+                        el.innerHTML = '<img src="' + lastCoverUrl + '" alt="cover">';
+                    }
+                }
+            });
+        });
+
+        ids.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) {
+                observer.observe(el, {childList: true, subtree: true, characterData: false});
+            }
+        });
+    }
+
     // Turn Off button handler
     document.addEventListener('click', function(e) {
         var target = e.target;
@@ -133,10 +159,15 @@
         }
     });
 
-    // Start when the DOM is ready (script loads before overlay div exists)
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startPolling);
-    } else {
+    // Start when the DOM is ready
+    function init() {
+        protectOverlayElements();
         startPolling();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 })();
