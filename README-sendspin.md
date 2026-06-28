@@ -98,8 +98,7 @@ The `--uninstall` command finds the **most recent** backup and restores all file
 
 ### Related Backup Utilities
 
-- [**kiwipaulrob/memos-backup**](https://github.com/kiwipaulrob/memos-backup) — Automated backup scripts for MemOS (daily cron, Git LFS, encrypted env email)
-- [**kiwipaulrob/hermes-config**](https://github.com/kiwipaulrob/hermes-config) — Hermes Agent configuration, scripts, and nightly backup pipeline
+- [**kiwipaulrob/moode-tools**](https://github.com/kiwipaulrob/moode-tools) — Backup and restore utilities for moOde (includes scripts for database snapshots, config bundling, and system state recovery)
 - **Nightly backup script:** `~/.hermes/scripts/nightly-backup.sh` — Checkout → commit → push to GitHub with LFS
 
 ## What the Installer Does
