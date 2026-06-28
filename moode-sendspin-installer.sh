@@ -1000,26 +1000,22 @@ With SendSpin integration, moOde becomes a multi-room audio endpoint that can:
 REQUIREMENTS
 
 - moOde 9.x or later
-- SendSpin CLI (sendspin) installed
 - Raspberry Pi 3/4/5 or compatible Linux system
 - Network connection to SendSpin server
 
+The installer automatically installs Python 3, uv, and the sendspin CLI — no manual setup needed.
+
 INSTALLATION
 
-Step 1: Install SendSpin CLI
+Run the installer — it automatically installs all prerequisites (Python 3, uv, sendspin CLI):
 
-SSH to your moOde device and install SendSpin:
+    git clone https://github.com/kiwipaulrob/moode.git
+    cd moode && git checkout sendspin-advanced
+    sudo bash moode-sendspin-installer.sh
 
-    # Install uv (Python package manager)
-    pip3 install uv --break-system-packages
+No manual setup is needed.
 
-    # Install sendspin-cli
-    uv tool install sendspin
-
-Verify installation:
-    sendspin --version    # Should show 7.5.0 or later
-
-Step 2: Enable SendSpin in moOde
+Step 1: Enable SendSpin in moOde
 
 1. Open moOde web UI
 2. Go to Configure → Renderers

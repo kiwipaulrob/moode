@@ -16,15 +16,20 @@ REQUIREMENTS
 
 - moOde 9.x or later
 - Raspberry Pi 3/4/5 or compatible Linux system
-- SendSpin CLI installed
 - Network connection to a SendSpin server
 - Home Assistant (optional, for now-playing metadata)
 
+The installer automatically installs Python 3, uv, and the sendspin CLI — no manual setup needed.
+
 INSTALLATION
+
+Run the installer — it automatically installs all prerequisites:
 
     git clone https://github.com/kiwipaulrob/moode.git
     cd moode && git checkout sendspin-advanced
     sudo bash moode-sendspin-installer.sh
+
+No manual setup of Python, uv, or sendspin CLI is needed.
 
 USAGE
 

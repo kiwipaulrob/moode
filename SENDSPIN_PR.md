@@ -174,10 +174,14 @@ SendSpin uses moOde's standard `_audioout` ALSA device — the same device used 
 
 ## Dependencies
 
-**Runtime (installed separately, not bundled with moOde):**
-- `sendspin` CLI (installed via `uv tool install sendspin`)
-- `uv` Python package manager (installed via `pip3 install uv`)
-- Home Assistant (optional — for metadata display via HA polling)
+**Installed automatically by the installer — no manual setup required:**
+
+- Python 3 (via `apt-get`)
+- `uv` Python package manager (via `pip3 install uv`)
+- `sendspin` CLI (via `uv tool install sendspin`)
+
+**Optional:**
+- Home Assistant (for metadata display via HA polling — hook-based metadata works standalone)
 
 **No new PHP extensions or libraries required.** All code uses existing moOde infrastructure.
 

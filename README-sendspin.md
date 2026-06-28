@@ -10,8 +10,7 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 - **Version info** — displays installed version and latest available on PyPI (cached hourly)
 - **Update button** — upgrades SendSpin CLI in the background
 - **Metadata overlay** — shows cover art, title, artist, album using moOde's built-in `#inpsrc-indicator` (same element used by AirPlay/Spotify)
-- **Dynamic ALSA support** — works with any ALSA card number, set in moOde's audio config
-- **Software volume** — applies volume digitally when the DAC has no hardware mixer
+- **Native volume** — uses moOde's `_audioout` ALSA device (same as AirPlay, Spotify, MPD); volume knob works natively
 - **Auto-start on boot** — via systemd service
 - **Status detection** — shows active/inactive/streaming
 
@@ -19,15 +18,17 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 
 - moOde 9.x or later
 - Raspberry Pi 3/4/5 or compatible
-- [SendSpin CLI](https://pypi.org/project/sendspin/) installed via `uv tool install sendspin`
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
+
+The installer automatically installs Python 3, `uv` (Python package manager), and the `sendspin` CLI — no manual prerequisite installation is needed.
 
 ## Key Design Decisions
 
 1. **No custom overlay HTML/CSS** — The metadata display uses moOde's built-in `#inpsrc-indicator` element (already in `header.php`), matching AirPlay/Spotify/Deezer display pattern exactly. Zero additional HTML/CSS footprint.
-2. **No hook scripts on stream start/stop** — The HA polling daemon (`sendspin-metadata-sink.py`) handles all metadata independently, eliminating race conditions. The service file has no `--hook-start`/`--hook-stop` flags.
+2. **Uses moOde's `_audioout` device** — Same ALSA path as AirPlay, Spotify, MPD. No separate ALSA config needed. Volume knob works natively without attenuation hacks.
 3. **No modification to playerlib.js** — `sendspinactive` FECmd is unused. The frontend JS polls the metadata API directly instead.
+4. **Stop/start matches other renderers** — Calls `vol.sh -restore`, CamillaDSP volume sync, and `sendFECmd('sspactive0')` on stop, exactly like AirPlay/Spotify/RoonBridge.
 
 ## Installer
 
@@ -42,7 +43,7 @@ git checkout sendspin-advanced
 sudo bash moode-sendspin-installer.sh
 ```
 
-The installer auto-detects the PHP version, creates all necessary files, configures the database, enables the systemd services, and creates a timestamped backup of all modified files.
+The installer auto-detects the PHP version and automatically installs Python 3, `uv`, and the `sendspin` CLI if not already present. It then creates all necessary files, configures the database, enables systemd services, and creates a timestamped backup of all modified files.
 
 ### Install from URL
 
