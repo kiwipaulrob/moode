@@ -1030,7 +1030,7 @@ INSTALLER COMMAND LINE OPTIONS
 USAGE
 
 After installation, open moOde's web UI and navigate to:
-  Configure → Renderers → SendSpin section
+  Configure -> Renderers -> SendSpin section
 
 RENDERER CONTROLS
 
