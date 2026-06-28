@@ -89,11 +89,11 @@
 			<label class="control-label">Audio device</label>
 			<div class="controls">
 				<span class="config-help-static">
-					sendspin (routes through ALSA plug  ->  plughw:$_select[alsa_cardnum],0  ->  $_select[alsa_devname])
+					_audioout (moOde's shared ALSA device → plughw:$_select[alsa_cardnum],0 → $_select[alsa_devname])
 				</span>
 				<a aria-label="Help" class="config-info-toggle" data-cmd="info-alsa-device" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
 				<span id="info-alsa-device" class="config-help-info">
-					The audio output chain: the SendSpin virtual device <code>sendspin</code> routes through the ALSA plug layer (<code>plughw:$_select[alsa_cardnum],0</code>) to the physical DAC. The plug layer handles format conversion so the DAC receives audio in its native format.
+					The audio output chain: moOde's shared <code>_audioout</code> device routes through the ALSA plug layer (<code>plughw:$_select[alsa_cardnum],0</code>) to the physical DAC. This is the same device used by AirPlay, Spotify, and MPD — volume is controlled by moOde's integrated knob.
 				</span>
 			</div>
 
