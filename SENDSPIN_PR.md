@@ -12,6 +12,63 @@ Unlike earlier iterations that used a custom full-page overlay (extra HTML, CSS,
 
 The frontend JS (`sendspin-display.js`) polls the metadata API and populates the native `#inpsrc-indicator` directly — same visual result as moOde's built-in renderers, zero additional HTML/CSS footprint.
 
+## Installer
+
+There are two installers:
+
+- **`moode-sendspin-installer.sh`** — Full-featured installer (R2) with backup, uninstall, and all features
+- **`moode-sendspin-r2-installer.sh`** — Lightweight installer for targeted updates (hooks, PHP handlers, services)
+
+### Command Line Options
+
+```bash
+# Full install (default) — all features, config page, metadata overlay
+sudo bash moode-sendspin-installer.sh
+
+# Install from URL without downloading first
+curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-advanced/moode-sendspin-installer.sh | sudo bash
+
+# Minimal install — ON/OFF toggle + Resume MPD only (no config page)
+sudo bash moode-sendspin-installer.sh --minimal
+curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-advanced/moode-sendspin-installer.sh | sudo bash -s -- --minimal
+
+# Check current installation status
+sudo bash moode-sendspin-installer.sh --check
+
+# Uninstall — restores original moOde files from backup
+sudo bash moode-sendspin-installer.sh --uninstall
+
+# Skip backup (for testing)
+sudo bash moode-sendspin-installer.sh --no-backup
+```
+
+### Backup System
+
+Before modifying any moOde file, the installer creates a **timestamped backup** at `/var/backups/moode-sendspin-YYYYMMDD-HHMMSS/`. Backed up files include:
+
+- `moode-sqlite3.db` — Database snapshot before schema changes
+- `sendspin.service` — Original systemd unit
+- `constants.php`, `renderer.php` — Original PHP files
+- `ren-config.php`, `ren-config.html` — Original renderers page
+- `worker.php` — Original worker daemon
+- `lib.min.js` — Original JS library
+
+The `--uninstall` command finds the **most recent** backup and restores all original files. This makes uninstallation safe and reversible.
+
+To manually create a backup without installing:
+```bash
+# The backup is created automatically during install.
+# To preserve a specific state, you can also run:
+mkdir -p /var/backups/moode-sendspin-manual/
+cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
+```
+
+### Related Backup Utilities
+
+- [**kiwipaulrob/memos-backup**](https://github.com/kiwipaulrob/memos-backup) — Automated backup scripts for MemOS (daily cron, state.sql via Git LFS, encrypted .env emailed after push)
+- [**kiwipaulrob/hermes-config**](https://github.com/kiwipaulrob/hermes-config) — Hermes Agent configuration, scripts, and the nightly backup pipeline
+- **`~/.hermes/scripts/nightly-backup.sh`** — Nightly Hermes backup script (checkout → commit → push to GitHub with LFS)
+
 ## Files Changed
 
 ### New Files Created
@@ -38,7 +95,7 @@ The frontend JS (`sendspin-display.js`) polls the metadata API and populates the
 | `daemon/worker.php` | Added `sendspinsvc` and `sendspinrestart` job handlers, startup detection, lifecycle logging |
 | `command/renderer.php` | Added `get_sendspinmeta` endpoint (reads `/var/local/www/sendspinmeta.txt`) |
 | `footer.php` | Added `<script src="sendspin-display.js">` before `<?php` — only extra line in moOde HTML |
-| `moode-sendspin-r2-installer.sh` | Service template updated (no hook flags) |
+| `moode-sendspin-installer.sh` | Backup system, uninstall, hook-free service template |
 
 ### Files NOT Modified (uses existing moOde infrastructure)
 
@@ -135,7 +192,27 @@ git checkout sendspin-advanced
 sudo bash moode-sendspin-installer.sh
 ```
 
-The installer auto-detects the PHP version, creates all necessary files, configures the database, and enables the systemd services.
+The installer auto-detects the PHP version, creates all necessary files, configures the database, enables the systemd services, and creates a timestamped backup of all modified files.
+
+### Post-Install: moOde Updates
+
+If you update moOde (via System → Check for Update), core files are replaced with stock versions. Re-run:
+
+```bash
+cd moode && git pull && sudo bash moode-sendspin-installer.sh
+```
+
+Database settings and custom files survive the update. The installer re-applies patches using the new moOde file versions as base.
+
+## Uninstall
+
+The `--uninstall` command restores all original moOde files from the most recent backup at `/var/backups/moode-sendspin-*/`. It also removes systemd service files, ALSA config, and the `cfg_sendspin` database table.
+
+```bash
+sudo bash moode-sendspin-installer.sh --uninstall
+```
+
+Backups are preserved after uninstall so you can re-install later.
 
 ## PR Integration Notes for Maintainer
 
@@ -175,3 +252,4 @@ Minimum required files:
 - Metadata overlay tested with active and stopped streams (browser verified)
 - Cover art download and caching verified
 - No hook warnings in sendspin journal (stream starts/stops clean)
+- Install/uninstall cycle tested with backup and restore
