@@ -1,156 +1,123 @@
-/**
- * SendSpin Metadata Display for moOde
- *
- * Polls the metadata API endpoint directly and shows/hides the SendSpin
- * overlay based on whether valid metadata is present. Caches last known
- * values to avoid unnecessary DOM updates that cause flickering.
- *
- * The overlay shows when a track is playing (valid title found in metadata),
- * and hides when playback stops or metadata is cleared.
- */
 (function() {
     'use strict';
 
-    // Only run on the main playback page, not on config pages
     var path = window.location.pathname;
-    if (path !== '/' && path !== '/index.php' && path.endsWith('.php')) {
-        return;  // Don't show overlay on any .php page except index
+    if (path !== '/' && path !== '/index.php') {
+        return;
     }
 
     var pollTimer = null;
-    var overlayshown = false;
 
-    // Cache last known values to avoid unnecessary DOM updates
-    var lastTitle = '';
-    var lastArtist = '';
-    var lastAlbum = '';
-    var lastCoverUrl = '';
+    function showIndicator(title, artist, album, coverUrl) {
+        var indicator = document.getElementById('inpsrc-indicator');
+        var msg = document.getElementById('inpsrc-msg');
+        var cover = document.getElementById('inpsrc-cover');
+        var metadata = document.getElementById('inpsrc-metadata');
+        var backdrop = document.getElementById('inpsrc-backdrop');
 
-    function showOverlay() {
-        if (overlayshown) return;
-        var overlay = document.getElementById('sendspin-overlay');
-        if (overlay) {
-            overlay.classList.remove('hide');
-            overlayshown = true;
+        if (!indicator || !msg) return;
+
+        // Switch msg class to metadata mode (matching moOde pattern)
+        msg.classList.remove('inpsrc-msg-default');
+        msg.classList.add('inpsrc-msg-metadata');
+        msg.style.width = '100%';
+
+        // Message area: renderer name + Turn Off button
+        msg.innerHTML = '<span id="inpsrc-msg-text">SendSpin Active</span>' +
+            '<button class="btn turnoff-renderer" data-job="sendspinsvc"><i class="fa-regular fa-sharp fa-xmark"></i></button>';
+
+        // Cover art image
+        if (cover) {
+            if (coverUrl) {
+                cover.innerHTML = '<img class="inpsrc-metadata-cover" src="' + coverUrl + '">';
+            } else {
+                cover.innerHTML = '';
+            }
         }
+
+        // Backdrop (blurred background)
+        if (backdrop) {
+            if (coverUrl) {
+                backdrop.innerHTML = '<img class="ss-backdrop" src="' + coverUrl + '">';
+            } else {
+                backdrop.innerHTML = '';
+            }
+        }
+
+        // Metadata text: Artist - Title / Album
+        if (metadata) {
+            if (artist && title) {
+                metadata.innerHTML = '<b>' + artist + ' - ' + title + '</b><br><span>' + (album || '') + '</span>';
+            } else {
+                metadata.innerHTML = '';
+            }
+            metadata.style.display = '';
+        }
+
+        // Style indicator (shows the backdrop color overlay)
+        var styleEl = document.getElementById('inpsrc-style');
+        if (styleEl) styleEl.style.display = 'block';
+
+        // Show the indicator
+        indicator.classList.remove('hide');
+        indicator.style.display = 'block';
     }
 
-    function hideOverlay() {
-        if (!overlayshown) return;
-        var overlay = document.getElementById('sendspin-overlay');
-        if (overlay) {
-            overlay.classList.add('hide');
-            overlayshown = false;
+    function hideIndicator() {
+        var indicator = document.getElementById('inpsrc-indicator');
+        var msg = document.getElementById('inpsrc-msg');
+        var metadata = document.getElementById('inpsrc-metadata');
+        var cover = document.getElementById('inpsrc-cover');
+        var backdrop = document.getElementById('inpsrc-backdrop');
+
+        if (indicator) {
+            indicator.style.display = '';
+            indicator.classList.add('hide');
         }
+        if (msg) {
+            msg.innerHTML = '';
+            msg.classList.remove('inpsrc-msg-metadata');
+            msg.classList.add('inpsrc-msg-default');
+        }
+        if (metadata) {
+            metadata.innerHTML = '';
+            metadata.style.display = 'none';
+        }
+        if (cover) cover.innerHTML = '';
+        if (backdrop) backdrop.innerHTML = '';
     }
 
-    function updateMetadata() {
+    function fetchMetadata() {
         fetch('command/renderer.php?cmd=get_sendspinmeta')
             .then(function(r) { return r.text(); })
             .then(function(data) {
                 if (!data || data === '') {
-                    hideOverlay();
+                    hideIndicator();
                     return;
                 }
-
                 var parts = data.split('~~~');
                 var title = (parts[0] || '').trim();
                 var artist = (parts[1] || '').trim();
                 var album = (parts[2] || '').trim();
                 var coverUrl = (parts[4] || '').trim();
 
-                // No valid track data — hide overlay
                 if (title === '' || title === 'SendSpin') {
-                    hideOverlay();
+                    hideIndicator();
                     return;
                 }
 
-                // Show overlay (guarded — no-op if already shown)
-                showOverlay();
-
-                // Only update DOM elements when content actually changes
-                if (title !== lastTitle) {
-                    var titleEl = document.getElementById('sendspin-title');
-                    if (titleEl) titleEl.textContent = title;
-                    lastTitle = title;
-                }
-
-                if (artist !== lastArtist) {
-                    var artistEl = document.getElementById('sendspin-artist');
-                    if (artistEl) artistEl.textContent = artist;
-                    lastArtist = artist;
-                }
-
-                if (album !== lastAlbum) {
-                    var albumEl = document.getElementById('sendspin-album');
-                    if (albumEl) albumEl.textContent = album;
-                    lastAlbum = album;
-                }
-
-                if (coverUrl !== lastCoverUrl) {
-                    var coverEl = document.getElementById('sendspin-coverart');
-                    if (coverEl) {
-                        if (coverUrl) {
-                            coverEl.innerHTML = '<img src="' + coverUrl + '" alt="cover">';
-                        } else {
-                            coverEl.innerHTML = '<img src="images/default-album-cover.png" alt="cover">';
-                        }
-                    }
-                    lastCoverUrl = coverUrl;
-                }
+                showIndicator(title, artist, album, coverUrl);
             })
-            .catch(function() {
-                // Fetch or parse failed silently — keep current overlay state
-            });
+            .catch(function() {});
     }
 
-    function startPolling() {
-        if (pollTimer) clearInterval(pollTimer);
-        updateMetadata();
-        pollTimer = setInterval(updateMetadata, 2000);
-    }
-
-    function stopPolling() {
-        if (pollTimer) {
-            clearInterval(pollTimer);
-            pollTimer = null;
-        }
-    }
-
-    // Protect overlay elements from moOde's main.js clearing them
-    function protectOverlayElements() {
-        var ids = ['sendspin-title', 'sendspin-artist', 'sendspin-album', 'sendspin-coverart'];
-        var observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(m) {
-                if (m.type === 'childList' && m.target.children.length === 0 && overlayshown) {
-                    // Element was cleared by moOde JS — reapply last value
-                    var el = m.target;
-                    if (el.id === 'sendspin-title' && lastTitle) el.textContent = lastTitle;
-                    else if (el.id === 'sendspin-artist' && lastArtist) el.textContent = lastArtist;
-                    else if (el.id === 'sendspin-album' && lastAlbum) el.textContent = lastAlbum;
-                    else if (el.id === 'sendspin-coverart' && lastCoverUrl) {
-                        el.innerHTML = '<img src="' + lastCoverUrl + '" alt="cover">';
-                    }
-                }
-            });
-        });
-
-        ids.forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) {
-                observer.observe(el, {childList: true, subtree: true, characterData: false});
-            }
-        });
-    }
-
-    // Turn Off button handler
+    // Turn Off button
     document.addEventListener('click', function(e) {
-        var target = e.target;
-        if (target && (target.classList.contains('disconnect-sendspin') ||
-            target.closest('.disconnect-sendspin'))) {
+        var btn = (e.target.closest && e.target.closest('[data-job="sendspinsvc"]'));
+        if (btn || (e.target.classList && e.target.classList.contains('turnoff-renderer') && e.target.getAttribute('data-job') === 'sendspinsvc')) {
             e.preventDefault();
-            hideOverlay();
-            stopPolling();
+            hideIndicator();
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
             fetch('command/renderer.php?cmd=disconnect_renderer', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -159,15 +126,14 @@
         }
     });
 
-    // Start when the DOM is ready
-    function init() {
-        protectOverlayElements();
-        startPolling();
+    function start() {
+        fetchMetadata();
+        pollTimer = setInterval(fetchMetadata, 3000);
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', start);
     } else {
-        init();
+        start();
     }
 })();
