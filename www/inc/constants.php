@@ -39,6 +39,7 @@ const APLMETA_CACHE_FILE = '/var/local/www/aplmeta.json';
 const DEEZMETA_CACHE_FILE = '/var/local/www/deezmeta.json';
 const DEEZ_CREDENTIALS_FILE = '/etc/deezer/deezer.toml';
 const SPOTMETA_CACHE_FILE = '/var/local/www/spotmeta.json';
+const SENDSPINMETA_FILE = '/var/local/www/sendspinmeta.txt';
 const ITUNES_API_BASE_URL = 'https://itunes.apple.com/search';
 // SQLite
 const SQLDB = 'sqlite:/var/local/www/db/moode-sqlite3.db';

@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStartPre=/var/local/www/commandw/spspre.sh
+ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
 ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device sendspin --audio-format flac:48000:16:2 --name moode-sendspin \
     --hardware-volume false \
     --static-delay-ms 0 \

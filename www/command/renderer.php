@@ -52,6 +52,14 @@ switch ($_GET['cmd']) {
 	case 'get_spotmeta':
 		echo trim(file_get_contents(SPOTMETA_CACHE_FILE));
 		break;
+	case 'get_sendspinmeta':
+		$sspFile = '/var/local/www/sendspinmeta.txt';
+		if (file_exists($sspFile)) {
+			echo trim(file_get_contents($sspFile));
+		} else {
+			echo '';
+		}
+		break;
 	default:
 		echo 'Unknown command';
 		break;

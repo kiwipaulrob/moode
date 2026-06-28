@@ -165,6 +165,19 @@
 	</div>
 </div>
 
+<!-- SENDSPIN OVERLAY -->
+<div id="sendspin-overlay" class="hide">
+	<div class="sendspin-backdrop"></div>
+	<div class="sendspin-content">
+		<div id="sendspin-coverart" class="sendspin-coverart"></div>
+		<div id="sendspin-title" class="sendspin-title"></div>
+		<div id="sendspin-artist" class="sendspin-artist"></div>
+		<div id="sendspin-album" class="sendspin-album"></div>
+		<button class="disconnect-sendspin btn btn-primary btn-small">Turn Off</button>
+	</div>
+</div>
+<script src="js/sendspin-display.js"></script>
+
 <?php
 	//workerLog('-- footer.php');
 	$return_val = session_write_close();
