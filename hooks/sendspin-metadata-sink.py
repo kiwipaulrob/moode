@@ -193,8 +193,8 @@ async def poll_ha_metadata(session):
         artwork_url = f"{HA_URL}{artwork_url}"
 
     # Update file if track changed OR if it was cleared externally
-    # (spspost.sh clears the file on sendspin stop, but the same track
-    #  may still be playing when sendspin restarts)
+    # Always write metadata during playing/paused state to recover
+    # from hook script overwrites (sendspin-metadata.sh writes placeholders)
     if title != last_title or artist != last_artist or is_meta_file_cleared():
         logger.info("Track changed: %s by %s (state=%s)", title, artist, state)
         cover_path = download_cover(artwork_url) if state == "playing" else ""
@@ -202,7 +202,13 @@ async def poll_ha_metadata(session):
         cleanup_old_covers()
         last_title = title
         last_artist = artist
-    # else: same track, no need to rewrite the file
+    elif state == "playing":
+        # Track same but file may have been overwritten by hook script.
+        # Re-write every poll to ensure real metadata stays in place.
+        cover_path = download_cover(artwork_url) if state == "playing" else ""
+        write_meta_file(title, artist, album, duration, cover_path)
+        last_title = title
+        last_artist = artist
 
 
 async def ha_poll_loop():

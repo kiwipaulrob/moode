@@ -71,7 +71,18 @@ if [ "${SENDSPIN_EVENT:-}" = "start" ]; then
     fi
 
     # Write metadata file (moOde ~~~ format)
-    echo -e "${TITLE}~~~${ARTIST}~~~${ALBUM}~~~${DURATION}~~~${COVER_PATH}~~~${CODEC}" > "$META_FILE"
+    # Don't overwrite if the file already has valid track data from the HA sink.
+    # SendSpin hooks only pass connection info, not real track metadata.
+    if [ -f "$META_FILE" ]; then
+        EXISTING_CONTENT=$(cat "$META_FILE" 2>/dev/null || echo "")
+        if echo "$EXISTING_CONTENT" | grep -q "~~~SendSpin~~~Stopped~~~" || [ -z "$EXISTING_CONTENT" ]; then
+            echo -e "${TITLE}~~~${ARTIST}~~~${ALBUM}~~~${DURATION}~~~${COVER_PATH}~~~${CODEC}" > "$META_FILE"
+        else
+            log "Skipping hook write - file has real metadata from HA sink"
+        fi
+    else
+        echo -e "${TITLE}~~~${ARTIST}~~~${ALBUM}~~~${DURATION}~~~${COVER_PATH}~~~${CODEC}" > "$META_FILE"
+    fi
 
     # Set permissions so web server can read
     chmod 644 "$META_FILE" 2>/dev/null || true
