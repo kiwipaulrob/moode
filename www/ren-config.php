@@ -217,10 +217,16 @@ if (isset($_POST['update_sendspin_settings'])) {
 	if (isset($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
 		$update = true;
 		phpSession('write', 'sendspinname', $_POST['sendspinname']);
-		sysCmd("sed -i 's/--name .*/--name " . $_POST['sendspinname'] . "/' /etc/systemd/system/sendspin.service");
-		sysCmd('systemctl daemon-reload');
+	}
+	if (isset($_POST['rsmafterss']) && $_POST['rsmafterss'] != $_SESSION['rsmafterss']) {
+		$update = true;
+		phpSession('write', 'rsmafterss', $_POST['rsmafterss']);
 	}
 	if (isset($update)) {
+		// Regenerate service file with all settings from DB
+		require_once __DIR__ . '/inc/renderer.php';
+		$dbh = sqlConnect();
+		generateSendspinService($dbh);
 		submitJob('sendspinsvc');
 	}
 }
@@ -441,6 +447,9 @@ if (($_SESSION['feat_bitmask'] & FEAT_SENDSPIN)) {
 	$_select['sendspinsvc_on']  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION['sendspinsvc'] == '1') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
 	$_select['sendspinsvc_off'] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION['sendspinsvc'] == '0') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
 	$_select['sendspinname'] = $_SESSION['sendspinname'];
+	$autoClick = " onchange=\"autoClick('#btn-set-rsmafterss');\" " . $_sendspin_btn_disable;
+	$_select['rsmafterss_on'] = "<input type=\"radio\" name=\"rsmafterss\" id=\"toggle-rsmafterss-1\" value=\"Yes\" " . (($_SESSION['rsmafterss'] == 'Yes') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
+	$_select['rsmafterss_off'] = "<input type=\"radio\" name=\"rsmafterss\" id=\"toggle-rsmafterss-2\" value=\"No\" " . (($_SESSION['rsmafterss'] == 'No') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 } else {
 	$_feat_sendspin = 'hide';
 }

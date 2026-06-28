@@ -432,6 +432,12 @@ function startSendspin() {
 	// Save MPD state before starting
 	$mpdStatus = sysCmd('mpc status')[0];
 	$mpdWasPlaying = strpos($mpdStatus, 'playing') !== false;
+	
+	// Persist in database (survives PHP-FPM restarts)
+	$dbh = sqlConnect();
+	sqlUpdate('cfg_system', $dbh, 'sendspin_mpd_was_playing', $mpdWasPlaying ? '1' : '0');
+	
+	// Also write to session for immediate access
 	phpSession('write', 'mpd_was_playing', $mpdWasPlaying ? '1' : '0');
 
 	// Stop MPD to release ALSA device
@@ -455,12 +461,29 @@ function stopSendspin() {
 	// Note: Using direct hardware access
 	configureAlsaForSendspin(false);
 
-	// Optionally resume MPD if it was playing
-	if ($_SESSION['mpd_was_playing'] == '1') {
+	// Optionally resume MPD if it was playing AND rsmafterss is enabled
+	$dbh = sqlConnect();
+	$result = sqlQuery("SELECT value FROM cfg_system WHERE param='rsmafterss'", $dbh);
+	$rsmafterss = (!empty($result)) ? $result[0]['value'] : 'No';
+	
+	$mpdWasPlaying = $_SESSION['mpd_was_playing'] ?? '0';
+	// Also check database as fallback
+	if ($mpdWasPlaying == '0') {
+		$result = sqlQuery("SELECT value FROM cfg_system WHERE param='sendspin_mpd_was_playing'", $dbh);
+		$mpdWasPlaying = (!empty($result)) ? $result[0]['value'] : '0';
+	}
+
+	if ($mpdWasPlaying == '1' && $rsmafterss == 'Yes') {
 		sleep(1); // Allow SendSpin to release device
 		sysCmd('mpc play');
 		phpSession('write', 'mpd_was_playing', '0');
-		workerLog('stopSendspin(): MPD playback resumed');
+		sqlUpdate('cfg_system', $dbh, 'sendspin_mpd_was_playing', '0');
+		workerLog('stopSendspin(): MPD playback resumed (rsmafterss=Yes)');
+	} elseif ($mpdWasPlaying == '1') {
+		// Clear the flag even if not resuming
+		phpSession('write', 'mpd_was_playing', '0');
+		sqlUpdate('cfg_system', $dbh, 'sendspin_mpd_was_playing', '0');
+		workerLog('stopSendspin(): MPD was playing but rsmafterss=No, not resuming');
 	}
 
 	workerLog('stopSendspin(): daemon stopped');

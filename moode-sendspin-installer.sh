@@ -19,10 +19,10 @@ set -e
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.0.0"
+SCRIPT_VERSION="4.1.0"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
-BRANCH="sendspin-integration"
+BRANCH="sendspin-advanced"
 BASE_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}"
 
 # File locations on moOde
@@ -54,6 +54,10 @@ FULL_INSTALL_FILES=(
     "${WWW_DIR}/setup_3rdparty_sendspin.txt"
     "${WWW_DIR}/command/queue.php"
     "${WWW_DIR}/worker.php"
+    "${WWW_DIR}/commandw/sendspin-spspre.sh"
+    "${WWW_DIR}/commandw/sendspin-metadata.sh"
+    "${WWW_DIR}/commandw/spspost.sh"
+    "${WWW_DIR}/commandw/sendspin-version-check.sh"
     "${SYSTEMD_DIR}/sendspin.service"
 )
 
@@ -74,6 +78,10 @@ BACKUP_FILES=(
     "setup_3rdparty_sendspin.txt"
     "worker.php"
     "queue.php"
+    "sendspin-spspre.sh"
+    "sendspin-metadata.sh"
+    "spspost.sh"
+    "sendspin-version-check.sh"
 )
 
 # Installation tracking
@@ -235,6 +243,22 @@ detect_alsa_dmix() {
     [[ -f "$ALSA_CONF" ]] && grep -q "type dmix" "$ALSA_CONF"
 }
 
+detect_sendspin_spspre() {
+    [[ -f "${WWW_DIR}/commandw/sendspin-spspre.sh" ]]
+}
+
+detect_sendspin_metadata() {
+    [[ -f "${WWW_DIR}/commandw/sendspin-metadata.sh" ]]
+}
+
+detect_spspost() {
+    [[ -f "${WWW_DIR}/commandw/spspost.sh" ]]
+}
+
+detect_sendspin_version_check() {
+    [[ -f "${WWW_DIR}/commandw/sendspin-version-check.sh" ]]
+}
+
 # ============================================================================
 # CHECK / STATUS FUNCTION
 # ============================================================================
@@ -243,7 +267,7 @@ check_installation() {
     log_section "SendSpin Installation Status"
     
     local installed_count=0
-    local total_checks=11
+    local total_checks=15
     
     check_component() {
         local name="$1"
@@ -269,6 +293,10 @@ check_installation() {
     check_component "sendspin.service - Systemd service" detect_systemd_service
     check_component "Database - Config entries" detect_database_entries
     check_component "feat_bitmask - Feature enabled" detect_feat_bitmask
+    check_component "commandw/sendspin-spspre.sh - Pre-start hook" detect_sendspin_spspre
+    check_component "commandw/sendspin-metadata.sh - Metadata hook" detect_sendspin_metadata
+    check_component "commandw/spspost.sh - Post-stop hook" detect_spspost
+    check_component "commandw/sendspin-version-check.sh - Version check" detect_sendspin_version_check
     
     echo ""
     echo "Result: ${installed_count}/${total_checks} components installed"
@@ -447,6 +475,7 @@ INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinsvc', '0');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspin_installed', 'yes');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinname', 'moode-sendspin');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('rsmafterss', 'No');
+INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspin_mpd_was_playing', '0');
 CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
@@ -942,6 +971,40 @@ install_ssp_config() {
     install_ssp_config_html || return 1
 }
 
+install_commandw_scripts() {
+    log_info "Deploying SendSpin commandw scripts..."
+    
+    local cmdw_dir="${WWW_DIR}/commandw"
+    mkdir -p "$cmdw_dir"
+    
+    local scripts=(
+        "sendspin-spspre.sh"
+        "sendspin-metadata.sh"
+        "spspost.sh"
+        "sendspin-version-check.sh"
+    )
+    
+    local all_ok=true
+    for script in "${scripts[@]}"; do
+        local target="${cmdw_dir}/${script}"
+        if [[ -f "$target" ]]; then
+            log_warn "${script} already exists"
+            continue
+        fi
+        
+        if download_from_github "www/commandw/${script}" "$target"; then
+            chmod 755 "$target"
+            chown www-data:www-data "$target"
+            log_success "${script} deployed"
+        else
+            log_error "Failed to download ${script}"
+            all_ok=false
+        fi
+    done
+    
+    $all_ok
+}
+
 install_setup_txt() {
     log_info "Installing setup documentation..."
     
@@ -1150,6 +1213,7 @@ INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinsvc', '0');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspin_installed', 'yes');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspinname', 'moode-sendspin');
 INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('rsmafterss', 'No');
+INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('sendspin_mpd_was_playing', '0');
 CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
@@ -1333,39 +1397,68 @@ uninstall_sendspin() {
         log_success "Removed documentation"
         
         # Remove ssp-config page
-        rm -f "${WWW_DIR}/ssp-config.php"
-        rm -f "${WWW_DIR}/templates/ssp-config.html"
-        log_success "Removed ssp-config page"
-    else
-        log_warn "No backup found! Attempting manual cleanup..."
+                        rm -f "${WWW_DIR}/ssp-config.php"
+                        rm -f "${WWW_DIR}/templates/ssp-config.html"
+                        log_success "Removed ssp-config page"
         
-        # Manual cleanup attempts
-        sed -i '/FEAT_SENDSPIN/d' "${INC_DIR}/constants.php" 2>/dev/null || true
-        sed -i '/SendSpin Multi-Room Audio/,/^}/d' "${INC_DIR}/renderer.php" 2>/dev/null || true
-        sed -i 's/,FEAT_SENDSPIN=262144//g' "${WWW_DIR}/js/lib.min.js" 2>/dev/null || true
-        sed -i '/\/\/ SendSpin/,/^}$/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
-        sed -i '/_feat_sendspin/,/\/div>/d' "${WWW_DIR}/templates/ren-config.html" 2>/dev/null || true
-        sed -i '/\/\/ SendSpin startup/,/^\t\}$/d' "${WWW_DIR}/worker.php" 2>/dev/null || true
-        sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
-        sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
-        rm -f "${WWW_DIR}/setup_3rdparty_sendspin.txt"
-        rm -f "${WWW_DIR}/ssp-config.php"
-        rm -f "${WWW_DIR}/templates/ssp-config.html"
-    fi
+                        # Remove commandw scripts
+                        rm -f "${WWW_DIR}/commandw/sendspin-spspre.sh"
+                        rm -f "${WWW_DIR}/commandw/sendspin-metadata.sh"
+                        rm -f "${WWW_DIR}/commandw/spspost.sh"
+                        rm -f "${WWW_DIR}/commandw/sendspin-version-check.sh"
+                        rmdir "${WWW_DIR}/commandw" 2>/dev/null || true
+                        log_success "Removed commandw scripts"
+        
+                    # Remove database entries
+                    if [[ -f "$DB_PATH" ]]; then
+                        log_info "Removing database entries..."
+                        sqlite3 "$DB_PATH" "DELETE FROM cfg_system WHERE param LIKE 'sendspin%';" 2>/dev/null || true
+                        sqlite3 "$DB_PATH" "DROP TABLE IF EXISTS cfg_sendspin;" 2>/dev/null || true
+        
+                        # Remove feat_bitmask bit
+                        local current_bitmask
+                        current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null || echo "0")
+                        local new_bitmask=$((current_bitmask & ~262144))
+                        sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');" 2>/dev/null || true
+                        log_success "Database cleaned"
+                    fi
+                else
+                    log_warn "No backup found! Attempting manual cleanup..."
     
-    # Remove database entries
-    if [[ -f "$DB_PATH" ]]; then
-        log_info "Removing database entries..."
-        sqlite3 "$DB_PATH" "DELETE FROM cfg_system WHERE param LIKE 'sendspin%';" 2>/dev/null || true
-        sqlite3 "$DB_PATH" "DROP TABLE IF EXISTS cfg_sendspin;" 2>/dev/null || true
+            # Manual cleanup attempts
+            sed -i '/FEAT_SENDSPIN/d' "${INC_DIR}/constants.php" 2>/dev/null || true
+            sed -i '/SendSpin Multi-Room Audio/,/^}/d' "${INC_DIR}/renderer.php" 2>/dev/null || true
+            sed -i 's/,FEAT_SENDSPIN=262144//g' "${WWW_DIR}/js/lib.min.js" 2>/dev/null || true
+            sed -i '/\/\/ SendSpin/,/^}$/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
+            sed -i '/_feat_sendspin/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
+            sed -i '/_feat_sendspin/,/\/div>/d' "${WWW_DIR}/templates/ren-config.html" 2>/dev/null || true
+            sed -i '/\/\/ SendSpin startup/,/^\t\}$/d' "${WWW_DIR}/worker.php" 2>/dev/null || true
+            sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
+            sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
+            rm -f "${WWW_DIR}/setup_3rdparty_sendspin.txt"
+            rm -f "${WWW_DIR}/ssp-config.php"
+            rm -f "${WWW_DIR}/templates/ssp-config.html"
+            # Remove commandw scripts
+            rm -f "${WWW_DIR}/commandw/sendspin-spspre.sh"
+            rm -f "${WWW_DIR}/commandw/sendspin-metadata.sh"
+            rm -f "${WWW_DIR}/commandw/spspost.sh"
+            rm -f "${WWW_DIR}/commandw/sendspin-version-check.sh"
+            rmdir "${WWW_DIR}/commandw" 2>/dev/null || true
+    
+            # Remove database entries
+            if [[ -f "$DB_PATH" ]]; then
+                log_info "Removing database entries..."
+                sqlite3 "$DB_PATH" "DELETE FROM cfg_system WHERE param LIKE 'sendspin%';" 2>/dev/null || true
+                sqlite3 "$DB_PATH" "DROP TABLE IF EXISTS cfg_sendspin;" 2>/dev/null || true
         
-        # Remove feat_bitmask bit
-        local current_bitmask
-        current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null || echo "0")
-        local new_bitmask=$((current_bitmask & ~262144))
-        sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');" 2>/dev/null || true
-        log_success "Database cleaned"
-    fi
+                # Remove feat_bitmask bit
+                local current_bitmask
+                current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null || echo "0")
+                local new_bitmask=$((current_bitmask & ~262144))
+                sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');" 2>/dev/null || true
+                log_success "Database cleaned"
+            fi
+        fi
     
     # Clear PHP sessions
     log_info "Clearing PHP sessions..."
@@ -1413,6 +1506,26 @@ uninstall_sendspin() {
     
     if detect_ssp_config_html; then
         log_warn "Traces found in ssp-config.html"
+        found_traces=true
+    fi
+    
+    if detect_sendspin_spspre; then
+        log_warn "Traces found in sendspin-spspre.sh"
+        found_traces=true
+    fi
+    
+    if detect_sendspin_metadata; then
+        log_warn "Traces found in sendspin-metadata.sh"
+        found_traces=true
+    fi
+    
+    if detect_spspost; then
+        log_warn "Traces found in spspost.sh"
+        found_traces=true
+    fi
+    
+    if detect_sendspin_version_check; then
+        log_warn "Traces found in sendspin-version-check.sh"
         found_traces=true
     fi
     
@@ -1530,6 +1643,7 @@ run_installation() {
         install_ren_config_php
         install_ren_config_html
         install_ssp_config
+        install_commandw_scripts
         install_setup_txt
         install_database_entries_full
     fi
@@ -1548,6 +1662,10 @@ run_installation() {
         detect_ren_config_html || { log_error "ren-config.html verification failed"; verify_passed=false; }
         detect_ssp_config_php || { log_error "ssp-config.php verification failed"; verify_passed=false; }
         detect_ssp_config_html || { log_error "ssp-config.html verification failed"; verify_passed=false; }
+        detect_sendspin_spspre || { log_error "sendspin-spspre.sh verification failed"; verify_passed=false; }
+        detect_sendspin_metadata || { log_error "sendspin-metadata.sh verification failed"; verify_passed=false; }
+        detect_spspost || { log_error "spspost.sh verification failed"; verify_passed=false; }
+        detect_sendspin_version_check || { log_error "sendspin-version-check.sh verification failed"; verify_passed=false; }
     fi
     
     detect_systemd_service || { log_error "systemd service verification failed"; verify_passed=false; }

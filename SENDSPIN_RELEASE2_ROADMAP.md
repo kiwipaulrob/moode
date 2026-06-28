@@ -2,8 +2,31 @@
 
 **Branch:** `sendspin-advanced`
 **Updated:** 2026-06-28
+**Installer:** v4.1.0
 
-## Completed Features
+## v4.1.0 — Critical Fixes & Service Hardening (2026-06-28)
+
+### Bug Fixes
+- **Deployed missing commandw lifecycle scripts** — `sendspin-spspre.sh`, `sendspin-metadata.sh`, `spspost.sh`, `sendspin-version-check.sh` now included in installer
+- **Fixed HTML nesting in ren-config.html** — SendSpin section is now a proper sibling of RoonBridge (was incorrectly nested inside)
+- **Fixed installer BRANCH reference** — Changed from `sendspin-integration` to `sendspin-advanced` to match git branch
+
+### Improvements
+- **Added Resume MPD toggle** (`rsmafterss`) — User-controlled MPD auto-resume after SendSpin stops, with ON/OFF toggle in ren-config UI
+- **Consolidated service file generation** — `ren-config.php` now calls `generateSendspinService()` instead of brittle `sed` patching
+- **Persisted MPD resume state in database** — `sendspin_mpd_was_playing` stored in `cfg_system` table (survives PHP-FPM restarts)
+- **Dual fallback for MPD resume** — Checks both `$_SESSION` and database for `mpd_was_playing` state
+- **Installer check count** bumped from 11 to 15 (4 new commandw scripts)
+- **Uninstall cleanup** covers commandw scripts and directory removal
+- **Bash syntax validation** passes clean
+
+### Installer Version: 4.1.0
+- Detects all 15 components (was 11)
+- `install_commandw_scripts()` deploys 4 lifecycle scripts from GitHub
+- Verification covers all new files
+- Uninstall (both backup-restore and manual cleanup paths) removes commandw artifacts
+
+## Completed Features (v4.0.0)
 
 ### 1. Metadata Display (formerly Priority 1)
 - **Native moOde indicator** (`sendspin-display.js`) uses moOde's built-in `#inpsrc-indicator` element
