@@ -31,9 +31,7 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 
 ## Installer
 
-There are two installers:
-- **`moode-sendspin-installer.sh`** — Full installer with backup, uninstall, and all features
-- **`moode-sendspin-r2-installer.sh`** — Lightweight installer for targeted updates (hooks, PHP, services)
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 14-component detection, and all features
 
 ### Installation
 
