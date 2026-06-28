@@ -443,9 +443,6 @@ function startSendspin() {
 	// Stop MPD to release ALSA device
 	sysCmd('mpc stop');
 
-	// Note: Using direct hardware access
-	// ALSA config handled by generateSendspinService() via sendspin.conf
-
 	// Start SendSpin daemon
 	sysCmd('systemctl start sendspin');
 	sysCmd('systemctl enable sendspin');
