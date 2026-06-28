@@ -12,7 +12,7 @@ SendSpin is a synchronized multi-room audio protocol. This integration adds
 SendSpin as a first-class renderer in moOde's web UI, allowing your Raspberry Pi
 to act as an audio endpoint in multi-room systems (Music Assistant, etc.).
 
-The installer handles everything automatically — it installs Python 3, uv
+The installer handles everything automatically  --  it installs Python 3, uv
 (Python package manager), and the sendspin CLI, then patches moOde's web
 interface, creates the systemd service, configures the database, and creates
 a backup of all modified files.
@@ -23,7 +23,7 @@ REQUIREMENTS
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional, for now-playing metadata display)
 
-No manual installation of Python, uv, or the sendspin CLI is required —
+No manual installation of Python, uv, or the sendspin CLI is required  -- 
 the installer handles all prerequisites automatically.
 
 INSTALLATION
@@ -55,8 +55,8 @@ After installation, open moOde's web UI and navigate to:
 RENDERER CONTROLS
 
 Service toggle (ON/OFF):
-    ON  — SendSpin is active and appears as an available endpoint in controllers
-    OFF — SendSpin is stopped and does not appear in controllers
+    ON   --  SendSpin is active and appears as an available endpoint in controllers
+    OFF  --  SendSpin is stopped and does not appear in controllers
     Changes take effect immediately on save.
 
 Name:
@@ -65,8 +65,8 @@ Name:
     Change this to identify your device (e.g., "Kitchen Speaker", "Living Room").
 
 Resume MPD:
-    ON  — MPD playback resumes automatically when SendSpin streaming stops
-    OFF — MPD remains stopped after SendSpin disconnects
+    ON   --  MPD playback resumes automatically when SendSpin streaming stops
+    OFF  --  MPD remains stopped after SendSpin disconnects
 
 Restart button:
     Restarts the SendSpin service. Use this if the device disappears from
@@ -101,7 +101,7 @@ VOLUME LEVEL
 
 SendSpin uses moOde's standard _audioout ALSA device, the same device used
 by AirPlay, Spotify, RoonBridge, and MPD. Volume is controlled by moOde's
-integrated volume knob — SendSpin matches the level of all other renderers
+integrated volume knob  --  SendSpin matches the level of all other renderers
 automatically. No manual attenuation adjustment is needed.
 
 MOODE UPDATES

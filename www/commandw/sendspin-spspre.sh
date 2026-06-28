@@ -1,7 +1,7 @@
 #!/bin/bash
 # SendSpin Pre-Start Hook
 # Runs before SendSpin daemon starts via systemd ExecStartPre
-# Validates audio environment — uses moOde's standard _audioout device
+# Validates audio environment  --  uses moOde's standard _audioout device
 
 set -e
 
