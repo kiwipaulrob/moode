@@ -88,7 +88,7 @@
 - **Status:** Complete
 - **Installer v4.1.0** — 14-component detection, backup + uninstall, sed operations guarded with `|| true`, dynamic PHP-FPM version detection, `require_once` patching for `renderer.php` dependency
 - **Reuses existing `$dbh`** connection in `ren-config.php` POST handler (no unnecessary reconnect)
-- **`configureAlsaForSendspin()`** documented as intentional no-op — ALSA config managed statically by `sendspin.conf`
+- **`configureAlsaForSendspin()`** removed — dead code; ALSA config managed statically by `sendspin.conf` via `generateSendspinService()`
 
 ### Volume Sync with Music Assistant
 - **Status:** Not started
