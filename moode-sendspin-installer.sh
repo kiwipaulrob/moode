@@ -423,15 +423,27 @@ EOF
 # ============================================================================
 
 install_moode_worker_service() {
-    log_info "Installing moOde worker systemd service..."
+    log_info "Checking moOde worker systemd service..."
     local service_file="${SYSTEMD_DIR}/moode-worker.service"
     
-    # Backup existing service file
+    # Check if moOde already provides its own worker service
     if [[ -f "$service_file" ]]; then
-        log_info "  Backing up existing moode-worker.service"
+        # If the service file references moOde's worker.php, assume moOde manages it
+        if grep -q 'worker.php' "$service_file"; then
+            log_info "  Existing moode-worker.service detected (moOde-provided), skipping overwrite"
+            # Just ensure it's enabled (no-op if already enabled)
+            systemctl enable moode-worker.service 2>/dev/null || true
+            systemctl daemon-reload 2>/dev/null || true
+            record_install "moode_worker_service"
+            log_success "moOde worker service already present and enabled"
+            return 0
+        fi
+        # Non-moOde service file exists — back it up
+        log_info "  Non-moOde moode-worker.service found, backing up..."
         backup_file "$service_file" "moode-worker.service"
     fi
     
+    log_info "Installing moOde worker systemd service..."
     cat > "$service_file" << 'EOF'
 [Unit]
 Description=moOde Worker Daemon
