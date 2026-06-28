@@ -450,6 +450,11 @@ function startSendspin() {
 	sysCmd('systemctl start sendspin');
 	sysCmd('systemctl enable sendspin');
 
+	// Set active state
+	phpSession('write', 'sspactive', '1');
+	$GLOBALS['sspactive'] = '1';
+	sendFECmd('sspactive1');
+
 	workerLog('startSendspin(): daemon started (MPD was playing: ' . ($mpdWasPlaying ? 'yes' : 'no') . ')');
 }
 
@@ -484,6 +489,17 @@ function stopSendspin() {
 	}
 
 	workerLog('stopSendspin(): daemon stopped');
+
+	// Local: restore volume knob
+	sysCmd('/var/www/util/vol.sh -restore');
+	if (CamillaDSP::isMPD2CamillaDSPVolSyncEnabled()) {
+		sysCmd('systemctl restart mpd2cdspvolume');
+	}
+
+	// Clear active state
+	phpSession('write', 'sspactive', '0');
+	$GLOBALS['sspactive'] = '0';
+	sendFECmd('sspactive0');
 }
 
 // === SendSpin Advanced Functions (Release 2) ===
@@ -540,7 +556,7 @@ function generateSendspinService($dbh = null) {
     [Service]
     Type=simple
     ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
-    ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device sendspin --audio-format {$audio_format} --name moode-sendspin \\
+    ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device _audioout --audio-format {$audio_format} --name moode-sendspin \\
         --log-level {$log_level} \\
         --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
         --hook-stop /var/local/www/commandw/sendspin-metadata.sh
@@ -566,17 +582,7 @@ SVC;
         sysCmd('sudo systemctl daemon-reload');
         @unlink($tmpfile);
 
-        $cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");
-        $cardnum = (!empty($cardResult) && isset($cardResult[0])) ? trim($cardResult[0]) : '0';
-        $alsaConf = "pcm.sendspin {\ntype plug\nslave {\npcm \"plughw:{$cardnum},0\"\n}\n}\n";
-        $alsaTmp = '/tmp/sendspin.alsa.tmp';
-        if (file_put_contents($alsaTmp, $alsaConf) !== false) {
-            chmod($alsaTmp, 0644);
-            sysCmd("sudo cp {$alsaTmp} /etc/alsa/conf.d/sendspin.conf");
-            @unlink($alsaTmp);
-        }
-
-        workerLog('generateSendspinService(): service + alsa conf regenerated from DB config');
+        workerLog('generateSendspinService(): service regenerated from DB config');
         return true;
     }
     workerLog('generateSendspinService(): failed to write temp service file');

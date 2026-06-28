@@ -88,7 +88,9 @@
 - **Status:** Complete
 - **Installer v4.1.0** — 14-component detection, backup + uninstall, sed operations guarded with `|| true`, dynamic PHP-FPM version detection, `require_once` patching for `renderer.php` dependency
 - **Reuses existing `$dbh`** connection in `ren-config.php` POST handler (no unnecessary reconnect)
-- **`configureAlsaForSendspin()`** removed — dead code; ALSA config managed statically by `sendspin.conf` via `generateSendspinService()`
+- **Uses moOde's `_audioout` device** — same ALSA path as AirPlay, Spotify, MPD; volume knob works natively, no attenuation hacks needed
+- **Follows renderer patterns** — `vol.sh -restore`, CDSP volume sync, `sspactive` flag, `sendFECmd('sspactive0')` on stop, matching all other renderers
+- **Removed `configureAlsaForSendspin()`**, `install_alsa_config()`, `sendspin.conf` ALSA device — dead code and unused architecture
 
 ### Volume Sync with Music Assistant
 - **Status:** Not started

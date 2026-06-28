@@ -28,7 +28,6 @@ WWW_DIR="/var/www"
 INC_DIR="${WWW_DIR}/inc"
 SYSTEMD_DIR="/etc/systemd/system"
 DB_PATH="/var/local/www/db/moode-sqlite3.db"
-ALSA_CONF="/etc/alsa/conf.d/_audioout.conf"
 
 # Feature bitmask for SendSpin
 FEAT_SENDSPIN=262144
@@ -238,10 +237,6 @@ detect_worker_php() {
     [[ -f "${WWW_DIR}/daemon/worker.php" ]] && grep -q "sendspinsvc\\|sendspinrestart\\|startSendspin\\|stopSendspin" "${WWW_DIR}/daemon/worker.php"
 }
 
-detect_alsa_dmix() {
-    [[ -f "$ALSA_CONF" ]] && grep -q "type dmix" "$ALSA_CONF"
-}
-
 detect_sendspin_spspre() {
     [[ -f "${WWW_DIR}/commandw/sendspin-spspre.sh" ]]
 }
@@ -343,42 +338,6 @@ install_prerequisites() {
     log_success "Prerequisites installed"
 }
 
-# ============================================================================
-# ALSA CONFIG
-# ============================================================================
-
-install_alsa_config() {
-    log_info "Installing ALSA volume attenuation config..."
-    
-    local alsa_conf="/etc/alsa/conf.d/sendspin.conf"
-    
-    cat > "$alsa_conf" << 'EOF'
-# SendSpin audio output
-# Uses plug plugin for format conversion, direct hardware access for stability
-# The _audioout device has IPC key issues with dmix, so we use hw:0,0 directly
-
-pcm.sendspin {
-    type plug
-    slave {
-        pcm {
-            type hw
-            card 0
-            device 0
-        }
-    }
-}
-
-# Alias for compatibility
-pcm._sendspin {
-    type copy
-    slave.pcm "sendspin"
-}
-EOF
-    
-    record_install "alsa_config"
-    log_success "ALSA configuration installed"
-}
-
 install_systemd_service() {
     log_info "Installing SendSpin systemd service..."
     
@@ -398,7 +357,7 @@ Wants=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device sendspin --audio-format flac:48000:16:2 --name moode-sendspin
+ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device _audioout --audio-format flac:48000:16:2 --name moode-sendspin
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=30
@@ -527,11 +486,14 @@ function startSendspin() {
 	// Stop MPD to release ALSA device
 	sysCmd('mpc stop');
 
-	// ALSA config handled by generateSendspinService() via sendspin.conf
-
 	// Start SendSpin daemon
 	sysCmd('systemctl start sendspin');
 	sysCmd('systemctl enable sendspin');
+
+	// Set active state
+	phpSession('write', 'sspactive', '1');
+	$GLOBALS['sspactive'] = '1';
+	sendFECmd('sspactive1');
 
 	workerLog('startSendspin(): daemon started (MPD was playing: ' . ($mpdWasPlaying ? 'yes' : 'no') . ')');
 }
@@ -567,6 +529,17 @@ function stopSendspin() {
 	}
 
 	workerLog('stopSendspin(): daemon stopped');
+
+	// Local: restore volume knob
+	sysCmd('/var/www/util/vol.sh -restore');
+	if (CamillaDSP::isMPD2CamillaDSPVolSyncEnabled()) {
+		sysCmd('systemctl restart mpd2cdspvolume');
+	}
+
+	// Clear active state
+	phpSession('write', 'sspactive', '0');
+	$GLOBALS['sspactive'] = '0';
+	sendFECmd('sspactive0');
 }
 EOF
     
@@ -1079,14 +1052,10 @@ Restart Button:
 
 VOLUME LEVEL
 
-SendSpin output is attenuated by approximately 3dB to match the level of other
-moOde audio sources. This ensures consistent volume when switching between MPD
-playback and SendSpin streaming.
-
-If you need to adjust this:
-- Edit /etc/alsa/conf.d/sendspin.conf
-- Change the ttable values (0.707 = -3dB, 1.0 = 0dB, 0.5 = -6dB)
-- Restart SendSpin: sudo systemctl restart sendspin
+SendSpin uses moOde's standard `_audioout` ALSA device, the same device used
+by AirPlay, Spotify, RoonBridge, and MPD. Volume is controlled by moOde's
+integrated volume knob — SendSpin matches the level of all other renderers
+automatically. No manual attenuation adjustment is needed.
 
 TROUBLESHOOTING
 
@@ -1156,8 +1125,7 @@ Command Reference
     sudo systemctl restart sendspin
 
     # Check ALSA configuration
-    cat /etc/alsa/conf.d/sendspin.conf
-    aplay -L | grep -A2 sendspin
+    aplay -L | grep _audioout
 
 VERSION HISTORY
 
@@ -1618,11 +1586,9 @@ run_installation() {
     
     # Install based on mode
     if [[ "$INSTALL_MODE" == "minimal" ]]; then
-        install_alsa_config
         install_systemd_service
         install_database_entries_minimal
     else
-        install_alsa_config
         install_systemd_service
         install_constants_php
         install_renderer_php
