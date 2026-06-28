@@ -14,10 +14,7 @@ The frontend JS (`sendspin-display.js`) polls the metadata API and populates the
 
 ## Installer
 
-There are two installers:
-
-- **`moode-sendspin-installer.sh`** — Full-featured installer (R2) with backup, uninstall, and all features
-- **`moode-sendspin-r2-installer.sh`** — Lightweight installer for targeted updates (hooks, PHP handlers, services)
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 14-component detection, and commandw script deployment.
 
 ### Command Line Options
 
@@ -88,23 +85,16 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 | `etc/alsa/conf.d/sendspin.conf` | ALSA plug device configuration (regenerated dynamically with correct card number) |
 | `daemon/sendspin-metadata-sink.py` | HA-polling metadata sink daemon (optional — alternative to hook-based metadata) |
 
-### Files Removed from Installer (v4.1.0)
-
-| File | Reason |
-|------|--------|
-| `etc/systemd/system/moode-worker.service` | Core moOde component — ships with every 9.x install; overwriting it risked PHP-FPM version mismatch |
-| `command/queue.php` | Generic job submission endpoint — no per-renderer modifications needed; SendSpin jobs dispatched by `worker.php` |
-
 ### Modified Files
 
 | File | Changes |
 |------|---------|
 | `ren-config.php` | Added `$_feat_sendspin` visibility check, POST handlers for name/service/rsmafterss, calls `generateSendspinService()` on save, session var init |
-| `templates/ren-config.html` | Added SendSpin section with Name, Service toggle, Resume MPD toggle, Restart, Edit — now a proper sibling of RoonBridge (fixed nesting bug) |
+| `templates/ren-config.html` | Added SendSpin section with Name, Service toggle, Resume MPD toggle, Restart, Edit — proper sibling of RoonBridge |
 | `daemon/worker.php` | Added `sendspinsvc` and `sendspinrestart` job handlers, startup detection, lifecycle logging |
 | `command/renderer.php` | Added `get_sendspinmeta` endpoint (reads `/var/local/www/sendspinmeta.txt`) |
-| `moode-sendspin-installer.sh` | v4.1.0 — Backup system, uninstall, 14-component detection, commandw script deployment, service generation |
-| `commandw/*.sh` (4 files) | Pre-start, metadata, post-stop lifecycle hooks + PyPI version check |
+| `footer.php` | Added `<script src=\"sendspin-display.js\">` before `<?php` — only extra line in moOde HTML |
+| `moode-sendspin-installer.sh` | Backup system, uninstall, 14-component detection, commandw script deployment, service generation |
 
 ### Files NOT Modified (uses existing moOde infrastructure)
 
@@ -160,24 +150,28 @@ Home Assistant → sendspin-metadata-sink.py (polls every 3s)
 ```
 
 Key design decisions:
-1. **No hook scripts** on stream start/stop — HA polling daemon handles independently
+1. **Hook-based metadata** — `--hook-start/--hook-stop` write metadata directly via `sendspin-metadata.sh`; HA sink daemon is an optional alternative
 2. **No custom overlay HTML/CSS** — uses moOde's built-in `#inpsrc-indicator`
 3. **No modification to playerlib.js/main.min.js** — `sendspinactive` FECmd is unused
 4. **Always writes on every poll** — resilient to race conditions from any source
 5. **Only activates on main page** (`/` or `/index.php`) — never affects config pages
 
-### Service File
+### Service File Configuration
 
-The systemd service file is dynamically generated from the `cfg_sendspin` database table on each config save. This means:
-- Audio format, delay, and log level changes take effect on next service restart
-- No manual editing of systemd unit files required
-- The ALSA config (`/etc/alsa/conf.d/sendspin.conf`) is also regenerated with the correct card number
+The systemd service file is dynamically generated from the `cfg_sendspin` database table on each config save. Key flags:
 
-### Remove `--hook-start` / `--hook-stop`
+| Flag | Source | Default | Description |
+|------|--------|---------|-------------|
+| `--audio-format` | `audio_codec:audio_rate:audio_depth:2` | `flac:48000:16:2` | Codec, sample rate, bit depth, channels |
+| `--hardware-volume` | `volume_mode` → `software`/`hardware` | `false` | `true` for DAC hardware volume control, `false` for software volume |
+| `--static-delay-ms` | `static_delay_ms` (0–500) | `0` | Static sync delay in milliseconds for multi-room alignment |
+| `--log-level` | `log_level` (DEBUG/INFO/WARNING/ERROR) | `INFO` | Daemon log verbosity |
+| `--hook-start` | `/var/local/www/commandw/sendspin-metadata.sh` | — | Writes metadata on stream start |
+| `--hook-stop` | `/var/local/www/commandw/sendspin-metadata.sh` | — | Clears metadata on stream stop |
+| `ExecStartPre` | `sendspin-spspre.sh` | — | Validates ALSA, clears stale state before daemon starts |
+| `ExecStopPost` | `spspost.sh` | — | Cleans up metadata and logs device state after daemon stops |
 
-The service file **now includes** `--hook-start` and `--hook-stop` pointing to `sendspin-metadata.sh`. This provides metadata handling directly via SendSpin hooks. The HA metadata-sink daemon (`sendspin-metadata-sink.py`) is an alternative metadata source for users with Home Assistant, but hook-based metadata works standalone without HA.
-
-Both approaches write to `/var/local/www/sendspinmeta.txt`, and `sendspin-display.js` polls `command/renderer.php?cmd=get_sendspinmeta` regardless of which metadata source is active.
+All six `cfg_sendspin` parameters (`audio_codec`, `audio_rate`, `audio_depth`, `static_delay_ms`, `log_level`, `volume_mode`) are validated before being written to the service file. The ALSA config (`/etc/alsa/conf.d/sendspin.conf`) is also regenerated with the correct card number from the database.
 
 ## Dependencies
 
