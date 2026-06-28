@@ -120,6 +120,13 @@ verify_php_syntax() {
     return 1
 }
 
+# Detect active PHP-FPM service name
+detect_php_fpm() {
+    local fpm_service
+    fpm_service=$(systemctl list-units --type=service --state=active 2>/dev/null | grep -oP 'php\d+\.\d+-fpm\.service' | head -1)
+    echo "${fpm_service:-php8.2-fpm.service}"
+}
+
 # Download file from GitHub with retry
 download_from_github() {
     local remote_path="$1"
@@ -455,7 +462,7 @@ install_constants_php() {
     backup_file "$target" "constants.php"
     
     # Add FEAT_SENDSPIN after FEAT_PEPPYDISPLAY
-    sed -i '/const FEAT_PEPPYDISPLAY/a const FEAT_SENDSPIN      = 262144;' "$target"
+    sed -i '/const FEAT_PEPPYDISPLAY/a const FEAT_SENDSPIN      = 262144;' "$target" 2>/dev/null || true
     
     if verify_php_syntax "$target"; then
         record_install "constants_php"
@@ -572,7 +579,7 @@ install_lib_min_js() {
     backup_file "$target" "lib.min.js"
     
     # Add FEAT_SENDSPIN after FEAT_PEPPYDISPLAY
-    sed -i 's/FEAT_PEPPYDISPLAY=131072/FEAT_PEPPYDISPLAY=131072,FEAT_SENDSPIN=262144/g' "$target"
+    sed -i 's/FEAT_PEPPYDISPLAY=131072/FEAT_PEPPYDISPLAY=131072,FEAT_SENDSPIN=262144/g' "$target" 2>/dev/null || true
     
     if grep -q "FEAT_SENDSPIN=262144" "$target"; then
         record_install "lib_min_js"
@@ -686,6 +693,22 @@ install_ren_config_php() {
     backup_file "$target" "ren-config.php"
     
     # ------------------------------------------------------------------
+    # Step 0: Add require_once for renderer.php (needed by generateSendspinService)
+    # Insert after the existing requires, before $dbh = sqlConnect()
+    # ------------------------------------------------------------------
+    
+    local dbh_line=$(grep -n '\$dbh = sqlConnect()' "$target" | head -1 | cut -d: -f1)
+    if [[ -n "$dbh_line" ]]; then
+        head -n $((dbh_line - 1)) "$target" > /tmp/ren-config-new.php
+        echo "require_once __DIR__ . '/inc/renderer.php';" >> /tmp/ren-config-new.php
+        tail -n +$dbh_line "$target" >> /tmp/ren-config-new.php
+        mv /tmp/ren-config-new.php "$target"
+        log_info "  Added renderer.php require to ren-config.php"
+    else
+        log_warn "  Could not insert renderer.php require (no \$dbh line found)"
+    fi
+    
+    # ------------------------------------------------------------------
     # Step 1: Insert the POST handler block BEFORE phpSession('close')
     # This is critical - handlers must run while the session is still open
     # so that phpSession('close') writes the updated session to disk.
@@ -713,10 +736,14 @@ if (isset($_POST['update_sendspin_settings'])) {
     if (isset($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
         $update = true;
         phpSession('write', 'sendspinname', $_POST['sendspinname']);
-        sysCmd("sed -i 's/--name .*/--name " . $_POST['sendspinname'] . "/' /etc/systemd/system/sendspin.service");
-        sysCmd('systemctl daemon-reload');
+    }
+    if (isset($_POST['rsmafterss']) && $_POST['rsmafterss'] != $_SESSION['rsmafterss']) {
+        $update = true;
+        phpSession('write', 'rsmafterss', $_POST['rsmafterss']);
     }
     if (isset($update)) {
+        // Regenerate service file with all settings from DB
+        generateSendspinService($dbh);
         submitJob('sendspinsvc');
     }
 }
@@ -1495,7 +1522,7 @@ uninstall_sendspin() {
     
     echo ""
     log_info "Restart services to complete cleanup:"
-    echo "  sudo systemctl restart php7.4-fpm"
+    echo "  sudo systemctl restart $(detect_php_fpm)"
     echo "  sudo systemctl restart moode-worker"
 }
 
@@ -1638,7 +1665,7 @@ run_installation() {
         echo "  curl -fsSL https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/moode-sendspin-installer.sh | sudo bash"
     else
         echo "1. Restart services:"
-        echo "     sudo systemctl restart php7.4-fpm"
+        echo "     sudo systemctl restart $(detect_php_fpm)"
         echo "     sudo systemctl restart moode-worker"
         echo ""
         echo "2. Open moOde UI and go to: Configure > Renderers"

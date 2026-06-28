@@ -84,9 +84,11 @@
 - **Status:** Deferred
 - **Reason:** Music Assistant handles network-layer synchronisation. SendSpin's `--static-delay-ms` (0–500ms) is available in the service file for manual tuning if needed. The default ALSA buffer settings are sufficient for reliable playback.
 
-### Service Hardening / Non-Root Execution (was Priority 6)
-- **Status:** Not started
-- **Reason:** The service runs as root to access `sendspin` binary in `/root/.local/` and `systemctl` operations. This is consistent with moOde's existing architecture (most services run as root). A dedicated `moodeaudio` user setup would be a separate improvement.
+### Installer Quality
+- **Status:** Complete
+- **Installer v4.1.0** — 14-component detection, backup + uninstall, sed operations guarded with `|| true`, dynamic PHP-FPM version detection, `require_once` patching for `renderer.php` dependency
+- **Reuses existing `$dbh`** connection in `ren-config.php` POST handler (no unnecessary reconnect)
+- **`configureAlsaForSendspin()`** documented as intentional no-op — ALSA config managed statically by `sendspin.conf`
 
 ### Volume Sync with Music Assistant
 - **Status:** Not started

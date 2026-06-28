@@ -89,7 +89,7 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 
 | File | Changes |
 |------|---------|
-| `ren-config.php` | Added `$_feat_sendspin` visibility check, POST handlers for name/service/rsmafterss, calls `generateSendspinService()` on save, session var init |
+| `ren-config.php` | Added `$_feat_sendspin` visibility check, POST handlers for name/service/rsmafterss, calls `generateSendspinService($dbh)` on save (reuses existing `$dbh` connection), `require_once` moved to top |
 | `templates/ren-config.html` | Added SendSpin section with Name, Service toggle, Resume MPD toggle, Restart, Edit — proper sibling of RoonBridge |
 | `daemon/worker.php` | Added `sendspinsvc` and `sendspinrestart` job handlers, startup detection, lifecycle logging |
 | `command/renderer.php` | Added `get_sendspinmeta` endpoint (reads `/var/local/www/sendspinmeta.txt`) |
