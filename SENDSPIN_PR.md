@@ -64,7 +64,6 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 ### Related Backup Utilities
 
 - [**kiwipaulrob/moode-tools**](https://github.com/kiwipaulrob/moode-tools) — Backup and restore utilities for moOde (includes scripts for database snapshots, config bundling, and system state recovery)
-- **Nightly backup script:** `~/.hermes/scripts/nightly-backup.sh` — Checkout → commit → push to GitHub with LFS
 
 ## Files Changed
 

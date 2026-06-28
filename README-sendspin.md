@@ -97,7 +97,6 @@ The `--uninstall` command finds the **most recent** backup and restores all file
 ### Related Backup Utilities
 
 - [**kiwipaulrob/moode-tools**](https://github.com/kiwipaulrob/moode-tools) — Backup and restore utilities for moOde (includes scripts for database snapshots, config bundling, and system state recovery)
-- **Nightly backup script:** `~/.hermes/scripts/nightly-backup.sh` — Checkout → commit → push to GitHub with LFS
 
 ## What the Installer Does
 
