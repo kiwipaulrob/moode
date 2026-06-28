@@ -46,7 +46,7 @@
 
     function updateMetadata() {
         fetch('command/renderer.php?cmd=get_sendspinmeta')
-            .then(function(r) { return r.json(); })
+            .then(function(r) { return r.text(); })
             .then(function(data) {
                 if (!data || data === '') {
                     hideOverlay();
