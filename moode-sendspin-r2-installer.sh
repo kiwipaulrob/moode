@@ -247,11 +247,11 @@ do_check() {
     echo ""
     echo "Systemd hooks:"
     grep -q "hook-start" /etc/systemd/system/sendspin.service 2>/dev/null && \
-        echo "  [x] --hook-start" || echo "  [ ] --hook-start"
+        echo "  [ ] --hook-start (expected: absent)" || echo "  [x] --hook-start removed"
     grep -q "hook-stop" /etc/systemd/system/sendspin.service 2>/dev/null && \
-        echo "  [x] --hook-stop" || echo "  [ ] --hook-stop"
+        echo "  [ ] --hook-stop (expected: absent)" || echo "  [x] --hook-stop removed"
     grep -q "hook-set-volume" /etc/systemd/system/sendspin.service 2>/dev/null && \
-        echo "  [x] --hook-set-volume" || echo "  [ ] --hook-set-volume"
+        echo "  [ ] --hook-set-volume (expected: absent)" || echo "  [x] --hook-set-volume removed"
     grep -q "spspre.sh" /etc/systemd/system/sendspin.service 2>/dev/null && \
         echo "  [x] ExecStartPre (DSP detection)" || echo "  [ ] ExecStartPre"
     grep -q "spspost.sh" /etc/systemd/system/sendspin.service 2>/dev/null && \

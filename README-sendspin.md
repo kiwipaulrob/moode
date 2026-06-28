@@ -9,7 +9,7 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 - **Config page** — configure audio format (codec/sample rate/bit depth), log level
 - **Version info** — displays installed version and latest available on PyPI (cached hourly)
 - **Update button** — upgrades SendSpin CLI in the background
-- **Metadata overlay** — shows cover art, title, artist, album on the main playback page
+- **Metadata overlay** — shows cover art, title, artist, album using moOde's built-in `#inpsrc-indicator` (same element used by AirPlay/Spotify)
 - **Dynamic ALSA support** — works with any ALSA card number, set in moOde's audio config
 - **Software volume** — applies volume digitally when the DAC has no hardware mixer
 - **Auto-start on boot** — via systemd service
@@ -22,6 +22,12 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 - [SendSpin CLI](https://pypi.org/project/sendspin/) installed via `uv tool install sendspin`
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
+
+## Key Design Decisions
+
+1. **No custom overlay HTML/CSS** — The metadata display uses moOde's built-in `#inpsrc-indicator` element (already in `header.php`), matching AirPlay/Spotify/Deezer display pattern exactly. Zero additional HTML/CSS footprint.
+2. **No hook scripts on stream start/stop** — The HA polling daemon (`sendspin-metadata-sink.py`) handles all metadata independently, eliminating race conditions. The service file has no `--hook-start`/`--hook-stop` flags.
+3. **No modification to playerlib.js** — `sendspinactive` FECmd is unused. The frontend JS polls the metadata API directly instead.
 
 ## Quick Install
 
@@ -68,10 +74,9 @@ moOde has a built-in SSH terminal (System → SSH Terminal). You can run the ins
 | Renderers page template | `templates/ren-config.html` — SendSpin section |
 | Dedicated config page | `ssp-config.php` + `templates/ssp-config.html` |
 | Worker job handlers | `daemon/worker.php` — `sendspinsvc`, `sendspinrestart` cases |
-| Metadata overlay | `js/sendspin-display.js` |
+| Metadata overlay | `js/sendspin-display.js` — uses native `#inpsrc-indicator` (no custom HTML/CSS) |
 | Pre-start hook | `commandw/sendspin-spspre.sh` — writes ALSA config dynamically |
 | Systemd service | `/etc/systemd/system/sendspin.service` |
-| MoOde worker service | `/etc/systemd/system/moode-worker.service` (replaces rc.local) |
 | ALSA device config | `/etc/alsa/conf.d/sendspin.conf` — regenerated dynamically |
 | Database | `cfg_sendspin` table (audio format, log level) + session vars |
 
@@ -132,7 +137,7 @@ Restores original moOde files from backup.
 sudo bash moode-sendspin-installer.sh --check
 ```
 
-Shows which components are installed (11 total).
+Shows which components are installed.
 
 ## Files
 
@@ -141,6 +146,5 @@ All integration code is on the `sendspin-advanced` branch of:
 
 Key documents:
 - `SENDSPIN_PR.md` — Design document for moOde maintainer review
-- `SENDSPIN_CODE_REVIEW.md` — Code audit with all identified issues
+- `SENDSPIN_RELEASE2_ROADMAP.md` — Feature status and deferred items
 - `README-sendspin.md` — This file
-- `setup_3rdparty_sendspin.txt` — Setup guide (on-device)

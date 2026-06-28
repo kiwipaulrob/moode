@@ -6,13 +6,18 @@
 ## Completed Features
 
 ### 1. Metadata Display (formerly Priority 1)
-- **JS overlay** (`sendspin-display.js`) polls `/var/local/www/sendspinmeta.txt` every 2 seconds
+- **Native moOde indicator** (`sendspin-display.js`) uses moOde's built-in `#inpsrc-indicator` element
+  - No custom overlay HTML, no custom CSS added to moOde
+  - Matches AirPlay/Spotify/Deezer display pattern exactly
+  - Covers full page with album art backdrop, metadata text, Turn Off button
+- Polls `/command/renderer.php?cmd=get_sendspinmeta` every 3 seconds
 - Shows cover art, title, artist, album on the main playback page
 - Auto-hides when streaming stops
 - Only activates on main page (`/` or `/index.php`) — never on config pages
 - **Data source:** Home Assistant REST API polling via `sendspin-metadata-sink.py` daemon
   - Polls HA every 3 seconds for `media_player.moode_sendspin` state
   - Downloads and caches cover art locally
+  - Always writes metadata on every poll (resilient to race conditions)
   - Workaround for Music Assistant's missing `metadata@v1` server-side implementation
 
 ### 2. Version Check and Update Button (was Priority 5)
@@ -29,11 +34,11 @@
 - Service file regenerated dynamically on save via `generateSendspinService()`
 
 ### 4. Service Lifecycle
-- `moode-worker.service` replaces rc.local for worker daemon
-- `sendspin-spspre.sh` — pre-start hook that writes ALSA config with dynamic cardnum
+- `sendspin-spspre.sh` — pre-start hook that writes ALSA config with dynamic cardnum, sets active state
+- `sendspin.service` — systemd unit with Restart=on-failure, real-time priority
 - Service file regeneration from DB (survives reboot)
-- Restart=on-failure with 5-second delay
-- Real-time priority (LimitRTPRIO=99, LimitMEMLOCK=8388608)
+- **No hook scripts** on stream start/stop — HA metadata-sink handles everything independently
+- `spspost.sh` simplified to stub — metadata cleanup handled by HA sink
 
 ### 5. Session Handling
 - Stored session ID restored before `phpSession('open')` — works in incognito/no-cookie

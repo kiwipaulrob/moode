@@ -6,25 +6,28 @@ SendSpin is an open-source, synchronized multi-room audio receiver. This integra
 
 **What it does:** Allows moOde to appear as an audio endpoint in multi-room systems (Music Assistant, etc.) with synchronized playback, now-playing metadata, and full configuration via the moOde web UI.
 
+## Architecture — Minimal Overlay Approach
+
+Unlike earlier iterations that used a custom full-page overlay (extra HTML, CSS, JS), the current implementation uses **no custom overlay HTML or CSS**. Instead it relies entirely on moOde's built-in `#inpsrc-indicator` element (already present in `header.php`), which is the same element used by AirPlay, Spotify, and Deezer for their renderer-active displays.
+
+The frontend JS (`sendspin-display.js`) polls the metadata API and populates the native `#inpsrc-indicator` directly — same visual result as moOde's built-in renderers, zero additional HTML/CSS footprint.
+
 ## Files Changed
 
 ### New Files Created
 
 | File | Purpose |
 |------|---------|
-| `inc/constants.php` | `FEAT_SENDSPIN` bitmask constant (bit 18 = 262144) |
-| `inc/renderer.php` | `startSendspin()`, `stopSendspin()`, `getSendspinStatus()`, `getSendspinVersion()`, `updateSendspin()`, `generateSendspinService()` |
+| `inc/constants.php` | `FEAT_SENDSPIN` bitmask constant (bit 18 = 262144), `SENDSPINMETA_FILE` constant |
+| `inc/renderer.php` | `startSendspin()`, `stopSendspin()`, `getSendspinStatus()`, `getSendspinVersion()`, `updateSendspin()`, `generateSendspinService()`, `getSendspinMetadata()`, `checkSendspinUpdate()` |
 | `templates/ssp-config.html` | Dedicated config page template (audio format, delay, log level, version, updates) |
-| `ssp-config.php` | Config page controller with save handler, PyPI version check, service regeneration |
-| `commandw/sendspin-spspre.sh` | Pre-start hook — writes ALSA config with dynamic card number from DB (separate from moOde's stock `spspre.sh` to avoid conflicts during updates) |
 | `ssp-config.php` | Config page controller with save handler, PyPI version check (cached 1 hour), service regeneration |
-| `templates/ssp-config.html` | Config page template: version display, audio format (codec/rate/depth), log level, audio output info |
-| `js/sendspin-display.js` | Frontend overlay for now-playing metadata — polls every 2s, only on main page |
-| `setup_3rdparty_sendspin.txt` | Setup guide (v2.0) |
-| `etc/systemd/system/sendspin.service` | SendSpin daemon — restart=on-failure, real-time priority, --hardware-volume false |
-| `etc/systemd/system/moode-worker.service` | Worker daemon (replaces rc.local for renderer lifecycle) |
+| `commandw/sendspin-spspre.sh` | Pre-start hook — writes ALSA config with dynamic card number from DB, sets sendspinactive state |
+| `js/sendspin-display.js` | Frontend JS — polls metadata API every 3s, populates moOde's built-in `#inpsrc-indicator` (no custom overlay) |
+| `etc/systemd/system/sendspin.service` | SendSpin daemon — Restart=on-failure, real-time priority, no hook scripts |
 | `etc/alsa/conf.d/sendspin.conf` | ALSA plug device configuration (regenerated dynamically with correct card number) |
-| Various hooks | `sendspin-metadata.sh`, `sendspin-volume-sync.sh`, `spspost.sh` |
+| `hooks/sendspin-metadata.sh` | Stub (10 lines) — metadata handled by HA polling daemon |
+| `hooks/spspost.sh` | Stub (10 lines) — cleanup handled by HA polling daemon |
 
 ### Modified Files
 
@@ -33,7 +36,18 @@ SendSpin is an open-source, synchronized multi-room audio receiver. This integra
 | `ren-config.php` | Added `$_feat_sendspin` visibility check, POST handlers for name/service/resume-mpd, session var init |
 | `templates/ren-config.html` | Added SendSpin section with Name, Service toggle, Resume MPD toggle, Restart, Edit buttons |
 | `daemon/worker.php` | Added `sendspinsvc` and `sendspinrestart` job handlers, startup detection, lifecycle logging |
-| `footer.min.php` | No changes — sendspin-display.js loaded via existing include mechanism in the SendSpin section |
+| `command/renderer.php` | Added `get_sendspinmeta` endpoint (reads `/var/local/www/sendspinmeta.txt`) |
+| `footer.php` | Added `<script src="sendspin-display.js">` before `<?php` — only extra line in moOde HTML |
+| `moode-sendspin-r2-installer.sh` | Service template updated (no hook flags) |
+
+### Files NOT Modified (uses existing moOde infrastructure)
+
+| Element | Used for |
+|---------|----------|
+| `header.php` | `#inpsrc-indicator` already in every page — no changes needed |
+| `styles.min.css` | All `#inpsrc-*` CSS already present — no changes needed |
+| `footer.min.php` on Pi | Only the `<script>` tag was added — no custom overlay HTML |
+| `main.min.js` (playerlib.js) | Not modified — `sendspinactive` FECmd not needed since our JS polls directly |
 
 ## Database Schema
 
@@ -66,74 +80,62 @@ Stored in `cfg_system.feat_bitmask`. OR'd with existing bitmask. Does not confli
 
 ## Architecture
 
-### Renderer Lifecycle
+### Metadata Display
+
+The metadata pipeline is:
 
 ```
-User toggle ON → ren-config.php POST handler
-                → submitJob('sendspinsvc')
-                → worker.php dispatches
-                → startSendspin()
-                    → save MPD state
-                    → mpc stop (release ALSA)
-                    → systemctl start sendspin
-
-User toggle OFF → ren-config.php POST handler
-                → submitJob('sendspinsvc')
-                → worker.php dispatches
-                → stopSendspin()
-                    → systemctl stop sendspin
-                    → resume MPD if rsmafterss=Yes
+Home Assistant → sendspin-metadata-sink.py (polls every 3s)
+    → writes /var/local/www/sendspinmeta.txt (~~~ delimited format)
+    → command/renderer.php?cmd=get_sendspinmeta (PHP reads file)
+    → sendspin-display.js (polls every 3s)
+    → populates #inpsrc-indicator, #inpsrc-cover, #inpsrc-metadata (native moOde elements)
 ```
 
-### Service File Generation
+Key design decisions:
+1. **No hook scripts** on stream start/stop — HA polling daemon handles independently
+2. **No custom overlay HTML/CSS** — uses moOde's built-in `#inpsrc-indicator`
+3. **No modification to playerlib.js/main.min.js** — `sendspinactive` FECmd is unused
+4. **Always writes on every poll** — resilient to race conditions from any source
+5. **Only activates on main page** (`/` or `/index.php`) — never affects config pages
+
+### Service File
 
 The systemd service file is dynamically generated from the `cfg_sendspin` database table on each config save. This means:
-
 - Audio format, delay, and log level changes take effect on next service restart
 - No manual editing of systemd unit files required
 - The ALSA config (`/etc/alsa/conf.d/sendspin.conf`) is also regenerated with the correct card number
 
-### Metadata Display
+### Remove `--hook-start` / `--hook-stop`
 
-When streaming, a frontend overlay shows cover art, title, artist, and album on the main playback page. The overlay:
-
-- Polls `/var/local/www/sendspinmeta.txt` every 2 seconds
-- Only activates on the main playback page (`/` or `/index.php`)
-- Never displays on config pages
-- Auto-hides when streaming stops
+The service file no longer includes `--hook-start` or `--hook-stop` flags. The HA metadata-sink daemon (`sendspin-metadata-sink.py`) handles all metadata independently via direct HA API polling. This eliminates the race condition where hooks would overwrite real metadata with placeholder "Streaming" text on every stream start.
 
 ## Dependencies
 
 **Runtime (installed separately, not bundled with moOde):**
 - `sendspin` CLI (installed via `uv tool install sendspin`)
 - `uv` Python package manager (installed via `pip3 install uv`)
+- Home Assistant (optional — for metadata display via HA polling)
 
 **No new PHP extensions or libraries required.** All code uses existing moOde infrastructure.
 
 ## Code Quality
 
-- **All 20 identified issues documented and tracked** in `SENDSPIN_CODE_REVIEW.md`
-- **9 critical bugs fixed** including: session handling for incognito/empty sessions, double SQLite connect deadlock, typo `tsysCmd`, service restart on save, ALSA card number dynamic resolution
 - **Input validation** on all config values (codec, rate, depth, delay, log_level whitelisted)
-- **Error handling** — systemd units have `Restart=on-failure`, temp file writes use `@` suppression
+- **Error handling** — systemd units have `Restart=on-failure`
 - **No PHP notices/warnings** in normal operation
 - **Follows moOde conventions** — same template engine (`echoTemplate`), same session pattern (`phpSession`), same UI pattern (config-help-info, toggle-radio, config-btn)
 
 ## Installation
 
 ```bash
+git clone https://github.com/kiwipaulrob/moode.git
+cd moode
+git checkout sendspin-advanced
 sudo bash moode-sendspin-installer.sh
 ```
 
 The installer auto-detects the PHP version, creates all necessary files, configures the database, and enables the systemd services.
-
-## Uninstallation
-
-```bash
-sudo bash moode-sendspin-installer.sh --uninstall
-```
-
-Restores original moOde files from backup.
 
 ## PR Integration Notes for Maintainer
 
@@ -142,12 +144,11 @@ Restores original moOde files from backup.
 If you want the smallest possible integration, you can omit:
 
 1. **`ssp-config.php` and `templates/ssp-config.html`** — The basic SendSpin controls (ON/OFF, Name, Resume MPD, Restart) work without the dedicated config page
-2. **`js/sendspin-display.js`** — The metadata overlay is optional; the renderer works without it
-3. **`sendspin-metadata-sink.py`** — The HA polling daemon is optional; metadata can be provided by the SendSpin protocol directly
-4. **`moode-worker.service`** — The existing `rc.local` mechanism can be used instead
+2. **`sendspin-display.js`** — The metadata overlay is optional; the renderer works without it
+3. **`sendspin-metadata-sink.py` and `.service`** — The HA polling daemon is optional; metadata display uses no custom HTML/CSS
 
 Minimum required files:
-- `inc/constants.php` (one constant line)
+- `inc/constants.php` (one constant line + one file path constant)
 - `inc/renderer.php` (lifecycle functions)
 - `ren-config.php` (handler + session vars)
 - `templates/ren-config.html` (UI section)
@@ -160,6 +161,7 @@ Minimum required files:
 - **No existing moOde features are affected** — SendSpin is registered via its own feature bit (18)
 - **No existing session variables are modified** — all new vars have unique names
 - **No existing database tables are modified** — `cfg_sendspin` is a new table
+- **No moOde core HTML/CSS/JS modified** — only `footer.php` has one extra `<script>` line
 - **Existing renderers continue to work unchanged** — the ALSA device arbitration is handled by the user enabling/disabling renderers
 
 ### Testing Performed
@@ -170,6 +172,6 @@ Minimum required files:
 - Service file regeneration tested with all audio format combinations
 - ALSA config verified with different card numbers
 - MPD coexistence tested (stop/resume cycle)
-- Metadata overlay tested with active and stopped streams
-- PyPI version check tested with cached and uncached states
-- Uninstall/clean removal tested
+- Metadata overlay tested with active and stopped streams (browser verified)
+- Cover art download and caching verified
+- No hook warnings in sendspin journal (stream starts/stops clean)
