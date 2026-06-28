@@ -10,20 +10,21 @@
 - **Deployed missing commandw lifecycle scripts** — `sendspin-spspre.sh`, `sendspin-metadata.sh`, `spspost.sh`, `sendspin-version-check.sh` now included in installer
 - **Fixed HTML nesting in ren-config.html** — SendSpin section is now a proper sibling of RoonBridge (was incorrectly nested inside)
 - **Fixed installer BRANCH reference** — Changed from `sendspin-integration` to `sendspin-advanced` to match git branch
+- **Removed unnecessary `install_moode_worker_service()`** — `moode-worker.service` is a core moOde component that ships with every 9.x install; overwriting it risked PHP-FPM version mismatch
+- **Removed dead `queue.php` references** — SendSpin jobs are dispatched by `worker.php`; `queue.php` is the generic job submission endpoint requiring no per-renderer modifications
 
 ### Improvements
 - **Added Resume MPD toggle** (`rsmafterss`) — User-controlled MPD auto-resume after SendSpin stops, with ON/OFF toggle in ren-config UI
 - **Consolidated service file generation** — `ren-config.php` now calls `generateSendspinService()` instead of brittle `sed` patching
 - **Persisted MPD resume state in database** — `sendspin_mpd_was_playing` stored in `cfg_system` table (survives PHP-FPM restarts)
 - **Dual fallback for MPD resume** — Checks both `$_SESSION` and database for `mpd_was_playing` state
-- **Installer check count** bumped from 11 to 15 (4 new commandw scripts)
 - **Uninstall cleanup** covers commandw scripts and directory removal
 - **Bash syntax validation** passes clean
 
-### Installer Version: 4.1.0
-- Detects all 15 components (was 11)
+### Installer Summary: v4.1.0
+- Detects **14 components** (was 11, then 15 before removing redundancy)
 - `install_commandw_scripts()` deploys 4 lifecycle scripts from GitHub
-- Verification covers all new files
+- Verification covers all legitimately needed files
 - Uninstall (both backup-restore and manual cleanup paths) removes commandw artifacts
 
 ## Completed Features (v4.0.0)

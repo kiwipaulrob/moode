@@ -18,11 +18,12 @@
 | `www/templates/ren-config.html` | Modified | Renderers template — SendSpin section added |
 | `www/js/sendspin-display.js` | New | JS overlay for metadata display |
 | `www/inc/renderer.php` | Modified | SendSpin renderer functions added |
-| `hooks/sendspin-metadata-sink.py` | New | HA-polling metadata sink daemon |
-|| `hooks/sendspin-spspre.sh` | New | Pre-start ALSA configuration with dynamic cardnum |
-| `hooks/sendspin-metadata.sh` | New | Hook for start/stop metadata write |
-| `etc/systemd/system/sendspin.service` | New | SendSpin daemon service |
-| `etc/systemd/system/moode-worker.service` | New | moOde worker daemon (replaces rc.local) |
+| `www/daemon/sendspin-metadata-sink.py` | New | HA-polling metadata sink daemon |
+|| `www/commandw/sendspin-spspre.sh` | New | Pre-start hook — validates ALSA config |
+| `www/commandw/sendspin-metadata.sh` | New | Hook for start/stop metadata write |
+| `www/commandw/spspost.sh` | New | Post-stop cleanup hook |
+| `www/commandw/sendspin-version-check.sh` | New | PyPI version check script |
+| `etc/systemd/system/sendspin.service` | New | SendSpin daemon systemd service |
 | `etc/alsa/conf.d/sendspin.conf` | New | ALSA virtual device definition |
 
 ---
