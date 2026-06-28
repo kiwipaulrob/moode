@@ -159,10 +159,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStartPre=/var/local/www/commandw/spspre.sh
-ExecStart=${CURRENT_EXEC#ExecStart=} \\
-    --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
-    --hook-stop /var/local/www/commandw/sendspin-metadata.sh \\
-    --hook-set-volume /var/local/www/commandw/sendspin-volume-sync.sh
+ExecStart=${CURRENT_EXEC#ExecStart=}
 ExecStopPost=/var/local/www/commandw/spspost.sh
 Restart=on-failure
 RestartSec=5
