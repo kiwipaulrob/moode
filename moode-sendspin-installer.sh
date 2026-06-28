@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# moOde SendSpin Integration Installer v4.0.0
+# moOde SendSpin Integration Installer v4.1.0
 # Repository: https://github.com/kiwipaulrob/moode
 # Branch: sendspin-integration
 #
@@ -12,8 +12,6 @@
 #   No Backup:      curl -fsSL ... | sudo bash -s -- --no-backup
 #
 # This script integrates SendSpin Multi-Room Audio Client into moOde 9.4.2+
-
-set -e
 
 # ============================================================================
 # CONFIGURATION
@@ -52,7 +50,7 @@ FULL_INSTALL_FILES=(
     "${WWW_DIR}/ssp-config.php"
     "${WWW_DIR}/templates/ssp-config.html"
     "${WWW_DIR}/setup_3rdparty_sendspin.txt"
-    "${WWW_DIR}/worker.php"
+    "${WWW_DIR}/daemon/worker.php"
     "${WWW_DIR}/commandw/sendspin-spspre.sh"
     "${WWW_DIR}/commandw/sendspin-metadata.sh"
     "${WWW_DIR}/commandw/spspost.sh"
@@ -222,7 +220,7 @@ detect_database_entries() {
 detect_feat_bitmask() {
     if [[ -f "$DB_PATH" ]]; then
         local bitmask
-        bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null || echo "0")
+        bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null | tr -d '\n' || echo "0")
         [[ $((bitmask & FEAT_SENDSPIN)) -ne 0 ]]
     else
         return 1
@@ -230,7 +228,7 @@ detect_feat_bitmask() {
 }
 
 detect_worker_php() {
-    [[ -f "${WWW_DIR}/worker.php" ]] && grep -q "sendspinsvc\\|sendspinrestart\\|startSendspin\\|stopSendspin" "${WWW_DIR}/worker.php"
+    [[ -f "${WWW_DIR}/daemon/worker.php" ]] && grep -q "sendspinsvc\\|sendspinrestart\\|startSendspin\\|stopSendspin" "${WWW_DIR}/daemon/worker.php"
 }
 
 detect_alsa_dmix() {
@@ -590,7 +588,7 @@ install_lib_min_js() {
 install_worker_php() {
     log_info "Updating worker.php..."
     
-    local target="${WWW_DIR}/worker.php"
+    local target="${WWW_DIR}/daemon/worker.php"
     local tmp_file="/tmp/worker_sendspin_patch.php"
     
     if detect_worker_php; then
@@ -1178,7 +1176,7 @@ EOF
     
     # Update feat_bitmask
     local current_bitmask
-    current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null || echo "0")
+    current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null | tr -d '\n' || echo "0")
     local new_bitmask=$((current_bitmask | 262144))
     sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');"
     
@@ -1314,14 +1312,14 @@ uninstall_sendspin() {
         
         # Restore worker.php
         if [[ -f "${backup_dir}/worker.php" ]]; then
-            cp "${backup_dir}/worker.php" "${WWW_DIR}/worker.php"
-            chown www-data:www-data "${WWW_DIR}/worker.php"
+            cp "${backup_dir}/worker.php" "${WWW_DIR}/daemon/worker.php"
+            chown www-data:www-data "${WWW_DIR}/daemon/worker.php"
             log_success "Restored worker.php"
         else
             # Remove SendSpin startup and job handlers
-            sed -i '/\/\/ SendSpin startup/,/^\t\}$/d' "${WWW_DIR}/worker.php" 2>/dev/null || true
-            sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
-            sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
+            sed -i '/\/\/ SendSpin startup/,/^\t\}$/d' "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
+            sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
+            sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
         fi
         
         # Restore ren-config.php
@@ -1370,7 +1368,7 @@ uninstall_sendspin() {
         
                         # Remove feat_bitmask bit
                         local current_bitmask
-                        current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null || echo "0")
+                        current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null | tr -d '\n' || echo "0")
                         local new_bitmask=$((current_bitmask & ~262144))
                         sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');" 2>/dev/null || true
                         log_success "Database cleaned"
@@ -1385,9 +1383,9 @@ uninstall_sendspin() {
             sed -i '/\/\/ SendSpin/,/^}$/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
             sed -i '/_feat_sendspin/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
             sed -i '/_feat_sendspin/,/\/div>/d' "${WWW_DIR}/templates/ren-config.html" 2>/dev/null || true
-            sed -i '/\/\/ SendSpin startup/,/^\t\}$/d' "${WWW_DIR}/worker.php" 2>/dev/null || true
-            sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
-            sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/worker.php" 2>/dev/null || true
+            sed -i '/\/\/ SendSpin startup/,/^\t\}$/d' "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
+            sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
+            sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
             rm -f "${WWW_DIR}/setup_3rdparty_sendspin.txt"
             rm -f "${WWW_DIR}/ssp-config.php"
             rm -f "${WWW_DIR}/templates/ssp-config.html"
@@ -1406,7 +1404,7 @@ uninstall_sendspin() {
         
                 # Remove feat_bitmask bit
                 local current_bitmask
-                current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null || echo "0")
+                current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null | tr -d '\n' || echo "0")
                 local new_bitmask=$((current_bitmask & ~262144))
                 sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');" 2>/dev/null || true
                 log_success "Database cleaned"
@@ -1575,6 +1573,9 @@ run_installation() {
     
     echo ""
     log_section "Starting Installation"
+    
+    # Enable strict error handling for installation phase
+    set -e
     
     # Install prerequisites (Python, uv, sendspin CLI)
     install_prerequisites
