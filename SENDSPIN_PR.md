@@ -52,6 +52,7 @@ Before modifying any moOde file, the installer creates a **timestamped backup** 
 - `ren-config.php`, `ren-config.html` — Original renderers page
 - `worker.php` — Original worker daemon
 - `lib.min.js` — Original JS library
+- `sendspin-spspre.sh`, `sendspin-metadata.sh`, `spspost.sh`, `sendspin-version-check.sh` — Lifecycle scripts
 
 The `--uninstall` command finds the **most recent** backup and restores all original files. This makes uninstallation safe and reversible.
 
@@ -78,23 +79,32 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 | `inc/renderer.php` | `startSendspin()`, `stopSendspin()`, `getSendspinStatus()`, `getSendspinVersion()`, `updateSendspin()`, `generateSendspinService()`, `getSendspinMetadata()`, `checkSendspinUpdate()` |
 | `templates/ssp-config.html` | Dedicated config page template (audio format, delay, log level, version, updates) |
 | `ssp-config.php` | Config page controller with save handler, PyPI version check (cached 1 hour), service regeneration |
-| `commandw/sendspin-spspre.sh` | Pre-start hook — writes ALSA config with dynamic card number from DB, sets sendspinactive state |
+| `commandw/sendspin-spspre.sh` | Pre-start hook — validates ALSA config, clears stale metadata |
+| `commandw/sendspin-metadata.sh` | Hook for start/stop — writes/clears metadata to `sendspinmeta.txt` |
+| `commandw/spspost.sh` | Post-stop hook — cleanup, clear metadata, log device status |
+| `commandw/sendspin-version-check.sh` | PyPI version check — returns JSON `{installed, latest, update_available}` |
 | `js/sendspin-display.js` | Frontend JS — polls metadata API every 3s, populates moOde's built-in `#inpsrc-indicator` (no custom overlay) |
-| `etc/systemd/system/sendspin.service` | SendSpin daemon — Restart=on-failure, real-time priority, no hook scripts |
+| `etc/systemd/system/sendspin.service` | SendSpin daemon — dynamically generated from `cfg_sendspin` DB, includes hook-start/hook-stop, Restart=on-failure |
 | `etc/alsa/conf.d/sendspin.conf` | ALSA plug device configuration (regenerated dynamically with correct card number) |
-| `hooks/sendspin-metadata.sh` | Stub (10 lines) — metadata handled by HA polling daemon |
-| `hooks/spspost.sh` | Stub (10 lines) — cleanup handled by HA polling daemon |
+| `daemon/sendspin-metadata-sink.py` | HA-polling metadata sink daemon (optional — alternative to hook-based metadata) |
+
+### Files Removed from Installer (v4.1.0)
+
+| File | Reason |
+|------|--------|
+| `etc/systemd/system/moode-worker.service` | Core moOde component — ships with every 9.x install; overwriting it risked PHP-FPM version mismatch |
+| `command/queue.php` | Generic job submission endpoint — no per-renderer modifications needed; SendSpin jobs dispatched by `worker.php` |
 
 ### Modified Files
 
 | File | Changes |
 |------|---------|
-| `ren-config.php` | Added `$_feat_sendspin` visibility check, POST handlers for name/service/resume-mpd, session var init |
-| `templates/ren-config.html` | Added SendSpin section with Name, Service toggle, Resume MPD toggle, Restart, Edit buttons |
+| `ren-config.php` | Added `$_feat_sendspin` visibility check, POST handlers for name/service/rsmafterss, calls `generateSendspinService()` on save, session var init |
+| `templates/ren-config.html` | Added SendSpin section with Name, Service toggle, Resume MPD toggle, Restart, Edit — now a proper sibling of RoonBridge (fixed nesting bug) |
 | `daemon/worker.php` | Added `sendspinsvc` and `sendspinrestart` job handlers, startup detection, lifecycle logging |
 | `command/renderer.php` | Added `get_sendspinmeta` endpoint (reads `/var/local/www/sendspinmeta.txt`) |
-| `footer.php` | Added `<script src="sendspin-display.js">` before `<?php` — only extra line in moOde HTML |
-| `moode-sendspin-installer.sh` | Backup system, uninstall, hook-free service template |
+| `moode-sendspin-installer.sh` | v4.1.0 — Backup system, uninstall, 14-component detection, commandw script deployment, service generation |
+| `commandw/*.sh` (4 files) | Pre-start, metadata, post-stop lifecycle hooks + PyPI version check |
 
 ### Files NOT Modified (uses existing moOde infrastructure)
 
@@ -107,15 +117,16 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 
 ## Database Schema
 
-### New Session Variables
+### New Session Variables / Database Entries
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `sendspinsvc` | `0` | Service ON/OFF toggle |
 | `sendspinname` | `moode-sendspin` | Endpoint name visible in controllers |
 | `sendspin_installed` | `yes` | Installation flag |
-| `mpd_was_playing` | `0` | MPD state before SendSpin start |
-| `rsmafterss` | `No` | Resume MPD after SendSpin disconnect |
+| `rsmafterss` | `No` | Resume MPD after SendSpin disconnect (user-controlled) |
+| `sendspin_mpd_was_playing` | `0` | MPD playback state before SendSpin started (persisted in DB for PHP-FPM restart resilience) |
+| `mpd_was_playing` | `0` | PHP session mirror of above (fast path for normal operation) |
 
 ### New Database Tables
 
@@ -123,7 +134,7 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 
 | Column | Type | Purpose |
 |--------|------|---------|
-| `param` | CHAR(32) | Setting name (`audio_codec`, `audio_rate`, `audio_depth`, `static_delay_ms`, `log_level`) |
+| `param` | CHAR(32) | Setting name (`audio_codec`, `audio_rate`, `audio_depth`, `static_delay_ms`, `log_level`, `volume_mode`) |
 | `value` | CHAR(128) | Setting value |
 
 ### Feature Bitmask
@@ -164,7 +175,9 @@ The systemd service file is dynamically generated from the `cfg_sendspin` databa
 
 ### Remove `--hook-start` / `--hook-stop`
 
-The service file no longer includes `--hook-start` or `--hook-stop` flags. The HA metadata-sink daemon (`sendspin-metadata-sink.py`) handles all metadata independently via direct HA API polling. This eliminates the race condition where hooks would overwrite real metadata with placeholder "Streaming" text on every stream start.
+The service file **now includes** `--hook-start` and `--hook-stop` pointing to `sendspin-metadata.sh`. This provides metadata handling directly via SendSpin hooks. The HA metadata-sink daemon (`sendspin-metadata-sink.py`) is an alternative metadata source for users with Home Assistant, but hook-based metadata works standalone without HA.
+
+Both approaches write to `/var/local/www/sendspinmeta.txt`, and `sendspin-display.js` polls `command/renderer.php?cmd=get_sendspinmeta` regardless of which metadata source is active.
 
 ## Dependencies
 
