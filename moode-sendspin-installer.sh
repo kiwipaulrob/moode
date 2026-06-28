@@ -52,7 +52,6 @@ FULL_INSTALL_FILES=(
     "${WWW_DIR}/ssp-config.php"
     "${WWW_DIR}/templates/ssp-config.html"
     "${WWW_DIR}/setup_3rdparty_sendspin.txt"
-    "${WWW_DIR}/command/queue.php"
     "${WWW_DIR}/worker.php"
     "${WWW_DIR}/commandw/sendspin-spspre.sh"
     "${WWW_DIR}/commandw/sendspin-metadata.sh"
@@ -77,7 +76,6 @@ BACKUP_FILES=(
     "ssp-config.html"
     "setup_3rdparty_sendspin.txt"
     "worker.php"
-    "queue.php"
     "sendspin-spspre.sh"
     "sendspin-metadata.sh"
     "spspost.sh"
@@ -232,11 +230,7 @@ detect_feat_bitmask() {
 }
 
 detect_worker_php() {
-    [[ -f "${WWW_DIR}/worker.php" ]] && grep -q "sendspinsvc\|sendspinrestart\|startSendspin\|stopSendspin" "${WWW_DIR}/worker.php"
-}
-
-detect_queue_php() {
-    [[ -f "${WWW_DIR}/command/queue.php" ]] && grep -q "sendspinsvc\|sendspinrestart" "${WWW_DIR}/command/queue.php"
+    [[ -f "${WWW_DIR}/worker.php" ]] && grep -q "sendspinsvc\\|sendspinrestart\\|startSendspin\\|stopSendspin" "${WWW_DIR}/worker.php"
 }
 
 detect_alsa_dmix() {
@@ -267,7 +261,7 @@ check_installation() {
     log_section "SendSpin Installation Status"
     
     local installed_count=0
-    local total_checks=15
+    local total_checks=14
     
     check_component() {
         local name="$1"
@@ -289,7 +283,6 @@ check_installation() {
     check_component "ren-config.html - UI section" detect_ren_config_html
     check_component "setup_3rdparty_sendspin.txt - Documentation" detect_setup_txt
     check_component "worker.php - Job handlers" detect_worker_php
-    check_component "queue.php - Job queue" detect_queue_php
     check_component "sendspin.service - Systemd service" detect_systemd_service
     check_component "Database - Config entries" detect_database_entries
     check_component "feat_bitmask - Feature enabled" detect_feat_bitmask
@@ -416,58 +409,6 @@ EOF
     systemctl daemon-reload
     record_install "systemd_service"
     log_success "Systemd service installed"
-}
-
-# ============================================================================
-# MOODE WORKER SERVICE
-# ============================================================================
-
-install_moode_worker_service() {
-    log_info "Checking moOde worker systemd service..."
-    local service_file="${SYSTEMD_DIR}/moode-worker.service"
-    
-    # Check if moOde already provides its own worker service
-    if [[ -f "$service_file" ]]; then
-        # If the service file references moOde's worker.php, assume moOde manages it
-        if grep -q 'worker.php' "$service_file"; then
-            log_info "  Existing moode-worker.service detected (moOde-provided), skipping overwrite"
-            # Just ensure it's enabled (no-op if already enabled)
-            systemctl enable moode-worker.service 2>/dev/null || true
-            systemctl daemon-reload 2>/dev/null || true
-            record_install "moode_worker_service"
-            log_success "moOde worker service already present and enabled"
-            return 0
-        fi
-        # Non-moOde service file exists — back it up
-        log_info "  Non-moOde moode-worker.service found, backing up..."
-        backup_file "$service_file" "moode-worker.service"
-    fi
-    
-    log_info "Installing moOde worker systemd service..."
-    cat > "$service_file" << 'EOF'
-[Unit]
-Description=moOde Worker Daemon
-After=network-online.target php8.2-fpm.service
-Wants=network-online.target
-
-[Service]
-Type=forking
-PIDFile=/run/worker.pid
-ExecStartPre=/bin/rm -f /run/worker.pid
-ExecStart=/usr/bin/php /var/www/daemon/worker.php
-Restart=on-failure
-RestartSec=5
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
-    
-    chmod 644 "$service_file"
-    systemctl daemon-reload 2>/dev/null || true
-    systemctl enable moode-worker.service 2>/dev/null || true
-    record_install "moode_worker_service"
-    log_success "moOde worker service installed and enabled"
 }
 
 install_database_entries_minimal() {
@@ -1642,12 +1583,10 @@ run_installation() {
     if [[ "$INSTALL_MODE" == "minimal" ]]; then
         install_alsa_config
         install_systemd_service
-        install_moode_worker_service
         install_database_entries_minimal
     else
         install_alsa_config
         install_systemd_service
-        install_moode_worker_service
         install_constants_php
         install_renderer_php
         install_lib_min_js
