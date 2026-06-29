@@ -56,7 +56,6 @@ curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-advanced
 | Option | Description |
 |--------|-------------|
 | *(no flag)* | Full install — all features, config page, metadata overlay |
-| `--full` | Same as no flag — full install (explicit) |
 | `--minimal` | Minimal install — ON/OFF toggle + Resume MPD only (no config page) |
 | `--check` | Check current installation status of all components |
 | `--uninstall` | Uninstall — restores original moOde files from the most recent backup |
@@ -137,17 +136,19 @@ The `--uninstall` command finds the **most recent** backup and restores all file
 | `audio_codec` | `flac` | flac, pcm |
 | `audio_rate` | `48000` | 44100, 48000, 96000 |
 | `audio_depth` | `16` | 16, 24, 32 |
-| `static_delay_ms` | `0` | 0–500 |
 | `log_level` | `INFO` | DEBUG, INFO, WARNING, ERROR |
 
 ## Usage
 
-1. Open moOde → Configure → Renderers
-2. Find the **SendSpin** section
-3. Set a **Name** (appears in your multi-room controller)
-4. Toggle **Service** ON
-5. (Optional) Toggle **Resume MPD** to restore MPD playback after SendSpin disconnects
-6. Click the **Edit** button for advanced settings (audio format, log level)
+The installer deploys files but does NOT start the SendSpin service automatically.
+After installation:
+
+1. Restart PHP: `sudo systemctl restart php*-fpm`
+2. Open moOde web UI → Configure → Renderers
+3. Find the **SendSpin** section
+4. Toggle **Service** ON and click the save arrow
+5. Toggle **Resume MPD** if desired (restores MPD after SendSpin stops)
+6. Click **Edit** for advanced settings (audio format, log level, updates)
 
 Your SendSpin endpoint appears automatically via mDNS on your network. Controllers like Music Assistant discover it without additional configuration.
 
