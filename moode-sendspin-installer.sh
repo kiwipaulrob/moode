@@ -1212,24 +1212,52 @@ EOF
 
 install_regenerate_service() {
     log_info "Regenerating service file from DB defaults..."
-    local php_script="/tmp/ssp-regenerate.php"
-    cat > "$php_script" << 'PHPEOF'
-<?php
-require_once '/var/www/inc/renderer.php';
-require_once '/var/www/inc/sql.php';
-$dbh = sqlConnect();
-$result = generateSendspinService($dbh);
-echo $result ? "Service file regenerated.\n" : "Failed to regenerate service file.\n";
-PHPEOF
-    local output
-    output=$(php "$php_script" 2>&1) || true
-    rm -f "$php_script"
-    echo "$output"
-    if echo "$output" | grep -q "regenerated"; then
-        log_success "Service file regenerated from DB"
-    else
-        log_warn "Could not regenerate service file (renderer.php may not be deployed yet)"
-    fi
+    local service_file="/etc/systemd/system/sendspin.service"
+    
+    # Get audio config from DB with defaults
+    local codec rate depth log_level
+    codec=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_sendspin WHERE param='audio_codec';" 2>/dev/null || echo "flac")
+    rate=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_sendspin WHERE param='audio_rate';" 2>/dev/null || echo "48000")
+    depth=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_sendspin WHERE param='audio_depth';" 2>/dev/null || echo "16")
+    log_level=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_sendspin WHERE param='log_level';" 2>/dev/null || echo "INFO")
+    
+    # Validate
+    [[ "$codec" =~ ^(flac|pcm)$ ]] || codec="flac"
+    [[ "$rate" =~ ^(44100|48000|96000)$ ]] || rate="48000"
+    [[ "$depth" =~ ^(16|24|32)$ ]] || depth="16"
+    [[ "$log_level" =~ ^(DEBUG|INFO|WARNING|ERROR)$ ]] || log_level="INFO"
+    
+    local audio_format="${codec}:${rate}:${depth}:2"
+    
+    cat > "$service_file" << SVCEOF
+[Unit]
+Description=SendSpin Audio Receiver
+After=network-online.target sound.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
+ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device _audioout --audio-format ${audio_format} --name moode-sendspin \\
+    --log-level ${log_level} \\
+    --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
+    --hook-stop /var/local/www/commandw/sendspin-metadata.sh
+ExecStopPost=/var/local/www/commandw/spspost.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+Environment="HOME=/root"
+
+LimitRTPRIO=99
+LimitMEMLOCK=8388608
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+    
+    chmod 644 "$service_file"
+    systemctl daemon-reload
+    log_success "Service file regenerated from DB defaults"
 }
 
 # ============================================================================
@@ -1522,7 +1550,6 @@ uninstall_sendspin() {
     echo ""
     log_info "Restart services to complete cleanup:"
     echo "  sudo systemctl restart $(detect_php_fpm)"
-    echo "  sudo systemctl restart moode-worker"
 }
 
 # ============================================================================
@@ -1663,7 +1690,6 @@ run_installation() {
     else
         echo "1. Restart services:"
         echo "     sudo systemctl restart $(detect_php_fpm)"
-        echo "     sudo systemctl restart moode-worker"
         echo ""
         echo "2. Open moOde UI and go to: Configure > Renderers"
         echo ""
