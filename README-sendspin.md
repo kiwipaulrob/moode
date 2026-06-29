@@ -111,9 +111,8 @@ The `--uninstall` command finds the **most recent** backup and restores all file
 | Dedicated config page | `ssp-config.php` + `templates/ssp-config.html` |
 | Worker job handlers | `daemon/worker.php` — `sendspinsvc`, `sendspinrestart` cases |
 | Metadata overlay | `js/sendspin-display.js` — uses native `#inpsrc-indicator` (no custom HTML/CSS) |
-| Pre-start hook | `commandw/sendspin-spspre.sh` — writes ALSA config dynamically |
-| Systemd service | `/etc/systemd/system/sendspin.service` |
-| ALSA device config | `/etc/alsa/conf.d/sendspin.conf` — regenerated dynamically |
+| Pre-start hook | `commandw/sendspin-spspre.sh` — validates `_audioout` device |
+| Systemd service | `/etc/systemd/system/sendspin.service` — uses `_audioout`, same device as AirPlay/Spotify/MPD |
 | Database | `cfg_sendspin` table (audio format, log level) + session vars |
 | Backup | `/var/backups/moode-sendspin-*/` — timestamped backup of all modified files |
 

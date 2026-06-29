@@ -57,22 +57,21 @@
 - Config saved to `cfg_sendspin` DB table
 - Service file regenerated dynamically on save via `generateSendspinService()`
 
-### 4. Service Lifecycle
-- `sendspin-spspre.sh` — pre-start hook that writes ALSA config with dynamic cardnum, sets active state
+### 4. Service Lifecycle (v4.0.0 — superseded in v4.1.0)
+- `sendspin-spspre.sh` — pre-start hook (v4.1.0: now validates `_audioout`, no longer writes ALSA config)
 - `sendspin.service` — systemd unit with Restart=on-failure, real-time priority
 - Service file regeneration from DB (survives reboot)
-- **No hook scripts** on stream start/stop — HA metadata-sink handles everything independently
-- `spspost.sh` simplified to stub — metadata cleanup handled by HA sink
+- **Hook scripts added in v4.1.0** — `--hook-start`/`--hook-stop` write metadata directly
+- `spspost.sh` — post-stop cleanup hook
 
 ### 5. Session Handling
 - Stored session ID restored before `phpSession('open')` — works in incognito/no-cookie
 - All session variables have defaults
 - `Resume MPD` toggle (`rsmafterss`) — user-controlled MPD auto-resume
 
-### 6. Dynamic ALSA Device Support
-- ALSA card number read from DB, not hardcoded
-- Works with any USB DAC on any card number
-- ALSA config regenerated on every service start
+### 6. Dynamic ALSA Device Support (v4.0.0 — superseded in v4.1.0)
+- ALSA card number was read from DB (v4.1.0: switched to moOde's static `_audioout` device)
+- No separate ALSA config needed — uses same device as AirPlay/Spotify/MPD
 
 ## Deferred / Not Implemented
 
@@ -81,8 +80,8 @@
 - **Reason:** CamillaDSP operates downstream of the ALSA plug layer. SendSpin audio flows through `sendspin → plughw → DAC`, and CamillaDSP processes audio after that point. It works transparently without any SendSpin-specific code. The only exception is Bluetooth, which has a CDSP maxvol setting due to Bluetooth's unique volume path — SendSpin does not share this issue.
 
 ### Buffer Tuning for Sync Precision (was Priority 4)
-- **Status:** Deferred
-- **Reason:** Music Assistant handles network-layer synchronisation. SendSpin's `--static-delay-ms` (0–500ms) is available in the service file for manual tuning if needed. The default ALSA buffer settings are sufficient for reliable playback.
+- **Status:** Removed (v4.1.0)
+- **Reason:** Music Assistant handles network-layer synchronisation. `--static-delay-ms` would duplicate this. The flag and `static_delay_ms` DB field were removed entirely.
 
 ### Installer Quality
 - **Status:** Complete
@@ -96,11 +95,6 @@
 - **Status:** Not started
 - **Reason:** moOde's integrated volume management handles audio levels. Passing a separate `--hardware-volume` flag would duplicate or conflict. Volume is delegated to moOde's system-level control.
 - **Removed from backend (v4.1.0):** `--hardware-volume` flag, `volume_mode` from `cfg_sendspin` table, `$_select['volume_mode']` from `ssp-config.php`
-
-### Buffer Tuning for Sync Precision
-- **Status:** Not started
-- **Reason:** Music Assistant handles network-layer synchronisation between endpoints. Passing `--static-delay-ms` would duplicate this functionality and risk desync if configured incorrectly.
-- **Removed from backend (v4.1.0):** `--static-delay-ms` flag, `static_delay_ms` from `cfg_sendspin` table, `$_select['static_delay_ms']` from `ssp-config.php`
 
 ## Future Considerations
 
