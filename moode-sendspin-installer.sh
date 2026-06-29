@@ -8,6 +8,8 @@
 #   Full Install:   curl -fsSL ... | sudo bash
 #   Minimal Install: curl -fsSL ... | sudo bash -s -- --minimal
 #   Uninstall:      curl -fsSL ... | sudo bash -s -- --uninstall
+#   Force Install:  curl -fsSL ... | sudo bash -s -- --force
+#   Uninstall Force: curl -fsSL ... | sudo bash -s -- --uninstall --force
 #   Check Status:   curl -fsSL ... | sudo bash -s -- --check
 #   No Backup:      curl -fsSL ... | sudo bash -s -- --no-backup
 #
@@ -35,6 +37,7 @@ FEAT_SENDSPIN=262144
 # Installation modes
 INSTALL_MODE="full"  # "minimal" or "full"
 SKIP_BACKUP=false
+FORCE=false
 
 # Backup directory (set during runtime)
 BACKUP_DIR=""
@@ -1302,11 +1305,11 @@ uninstall_sendspin() {
     fi
     
     # Confirm uninstallation
-    if [[ "${FORCE_UNINSTALL:-}" != "true" ]]; then
+    if [[ "$FORCE" != "true" ]]; then
         echo ""
-        read -p "Are you sure you want to uninstall SendSpin? [y/N] " -n 1 -r
+        read -r -p "Type 'yes' to uninstall, or 'no' to exit: " REPLY
         echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        if [[ ! "$REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
             log_info "Uninstallation cancelled"
             exit 0
         fi
@@ -1596,23 +1599,42 @@ run_installation() {
     
     if [[ $install_status -eq 0 ]]; then
         echo ""
-        log_warn "SendSpin appears to already be fully installed!"
+        log_info "Installation check complete - all 14 components are present and verified."
         echo ""
-        read -p "Do you want to reinstall anyway? [y/N] " -n 1 -r
+        log_info "If you are still experiencing issues with SendSpin, reinstalling"
+        log_info "will overwrite all components with fresh copies from the installer."
         echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            log_info "Installation cancelled"
-            exit 0
+        if [[ "$FORCE" != "true" ]]; then
+            read -r -p "Type 'yes' to reinstall, or 'no' to exit: " REPLY
+            echo ""
+            if [[ ! "$REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+                echo ""
+                log_info "Reinstallation skipped."
+                log_info "If you continue having issues:"
+                log_info "  - Run with --check to verify individual component status"
+                log_info "  - Run with --uninstall for a clean removal before reinstalling"
+                log_info "  - Check SendSpin service logs: journalctl -u sendspin"
+                log_info "  - See README-sendspin.md for troubleshooting"
+                echo ""
+                exit 0
+            fi
+        else
+            echo ""
+            log_info "Skipping confirmation prompt (--force specified)"
         fi
         log_info "Proceeding with reinstallation..."
     elif [[ $install_status -eq 2 ]]; then
         echo ""
-        log_warn "Partial installation detected. Continuing may cause issues."
+        log_warn "Partial installation detected (not all 14 components found)."
+        log_warn "Continuing may cause issues if previous installation is incomplete."
         echo ""
-        read -p "Do you want to continue? [y/N] " -n 1 -r
+        read -r -p "Type 'yes' to continue, or 'no' to exit: " REPLY
         echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            log_info "Installation cancelled. Run with --uninstall first to clean up."
+        if [[ ! "$REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+            echo ""
+            log_info "Installation cancelled."
+            log_info "Run with --uninstall first for a clean removal, then reinstall."
+            echo ""
             exit 0
         fi
     fi
@@ -1716,6 +1738,7 @@ print_help() {
     echo "Usage:"
     echo "  Full Install:     curl -fsSL ... | sudo bash"
     echo "  Minimal Install:  curl -fsSL ... | sudo bash -s -- --minimal"
+    echo "  Force Install:    curl -fsSL ... | sudo bash -s -- --force"
     echo "  Check Status:     curl -fsSL ... | sudo bash -s -- --check"
     echo "  Uninstall:        curl -fsSL ... | sudo bash -s -- --uninstall"
     echo "  Force Uninstall:  curl -fsSL ... | sudo bash -s -- --uninstall --force"
@@ -1726,7 +1749,7 @@ print_help() {
     echo "  --full, -f         Full installation with UI integration (default)"
     echo "  --check, -c        Check installation status"
     echo "  --uninstall, -u    Uninstall SendSpin and restore original files"
-    echo "  --force            Skip confirmation prompts"
+    echo "  --force            Skip all confirmation prompts (install and uninstall)"
     echo "  --no-backup        Skip backup creation"
     echo "  --help, -h         Show this help message"
     echo ""
@@ -1761,8 +1784,7 @@ while [[ $# -gt 0 ]]; do
             exit $?
             ;;
         --force)
-            FORCE_UNINSTALL=true
-            export FORCE_UNINSTALL
+            FORCE=true
             shift
             ;;
         --no-backup)

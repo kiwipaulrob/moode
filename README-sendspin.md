@@ -56,9 +56,11 @@ curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-advanced
 | Option | Description |
 |--------|-------------|
 | *(no flag)* | Full install — all features, config page, metadata overlay |
+| `--full` | Same as no flag — full install (explicit) |
 | `--minimal` | Minimal install — ON/OFF toggle + Resume MPD only (no config page) |
 | `--check` | Check current installation status of all components |
 | `--uninstall` | Uninstall — restores original moOde files from the most recent backup |
+| `--force` | Skip all confirmation prompts (for automated/scripted installs) |
 | `--no-backup` | Skip creating backup (for testing) |
 
 Examples:
