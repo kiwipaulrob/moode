@@ -53,10 +53,10 @@ FULL_INSTALL_FILES=(
     "${WWW_DIR}/templates/ssp-config.html"
     "${WWW_DIR}/setup_3rdparty_sendspin.txt"
     "${WWW_DIR}/daemon/worker.php"
-    "${WWW_DIR}/commandw/sendspin-spspre.sh"
-    "${WWW_DIR}/commandw/sendspin-metadata.sh"
-    "${WWW_DIR}/commandw/spspost.sh"
-    "${WWW_DIR}/commandw/sendspin-version-check.sh"
+    "/var/local/www/commandw/sendspin-spspre.sh"
+    "/var/local/www/commandw/sendspin-metadata.sh"
+    "/var/local/www/commandw/spspost.sh"
+    "/var/local/www/commandw/sendspin-version-check.sh"
     "${SYSTEMD_DIR}/sendspin.service"
 )
 
@@ -241,19 +241,19 @@ detect_worker_php() {
 }
 
 detect_sendspin_spspre() {
-    [[ -f "${WWW_DIR}/commandw/sendspin-spspre.sh" ]]
+    [[ -f "/var/local/www/commandw/sendspin-spspre.sh" ]]
 }
 
 detect_sendspin_metadata() {
-    [[ -f "${WWW_DIR}/commandw/sendspin-metadata.sh" ]]
+    [[ -f "/var/local/www/commandw/sendspin-metadata.sh" ]]
 }
 
 detect_spspost() {
-    [[ -f "${WWW_DIR}/commandw/spspost.sh" ]]
+    [[ -f "/var/local/www/commandw/spspost.sh" ]]
 }
 
 detect_sendspin_version_check() {
-    [[ -f "${WWW_DIR}/commandw/sendspin-version-check.sh" ]]
+    [[ -f "/var/local/www/commandw/sendspin-version-check.sh" ]]
 }
 
 # ============================================================================
@@ -315,6 +315,12 @@ check_installation() {
 
 install_prerequisites() {
     log_info "Checking and installing prerequisites..."
+    
+    # Check/install system dependencies
+    if ! dpkg -l libportaudio2 2>/dev/null | grep -q '^ii'; then
+        log_info "  Installing libportaudio2 (audio library)..."
+        apt-get update -qq && apt-get install -y -qq libportaudio2
+    fi
     
     # Check/install Python 3
     if ! command -v python3 &>/dev/null; then
@@ -678,24 +684,7 @@ install_ren_config_php() {
         log_warn "SendSpin code already exists in ren-config.php"
         return 0
     fi
-    
     backup_file "$target" "ren-config.php"
-    
-    # ------------------------------------------------------------------
-    # Step 0: Add require_once for renderer.php (needed by generateSendspinService)
-    # Insert after the existing requires, before $dbh = sqlConnect()
-    # ------------------------------------------------------------------
-    
-    local dbh_line=$(grep -n '\$dbh = sqlConnect()' "$target" | head -1 | cut -d: -f1)
-    if [[ -n "$dbh_line" ]]; then
-        head -n $((dbh_line - 1)) "$target" > /tmp/ren-config-new.php
-        echo "require_once __DIR__ . '/inc/renderer.php';" >> /tmp/ren-config-new.php
-        tail -n +$dbh_line "$target" >> /tmp/ren-config-new.php
-        mv /tmp/ren-config-new.php "$target"
-        log_info "  Added renderer.php require to ren-config.php"
-    else
-        log_warn "  Could not insert renderer.php require (no \$dbh line found)"
-    fi
     
     # ------------------------------------------------------------------
     # Step 1: Insert the POST handler block BEFORE phpSession('close')
@@ -731,8 +720,7 @@ if (isset($_POST['update_sendspin_settings'])) {
         phpSession('write', 'rsmafterss', $_POST['rsmafterss']);
     }
     if (isset($update)) {
-        // Regenerate service file with all settings from DB
-        generateSendspinService($dbh);
+        // Worker handles service regeneration + start/stop via submitJob
         submitJob('sendspinsvc');
     }
 }
@@ -939,7 +927,7 @@ install_ssp_config() {
 install_commandw_scripts() {
     log_info "Deploying SendSpin commandw scripts..."
     
-    local cmdw_dir="${WWW_DIR}/commandw"
+    local cmdw_dir="/var/local/www/commandw"
     mkdir -p "$cmdw_dir"
     
     local scripts=(
@@ -1406,11 +1394,11 @@ uninstall_sendspin() {
                         log_success "Removed ssp-config page"
         
                         # Remove commandw scripts
-                        rm -f "${WWW_DIR}/commandw/sendspin-spspre.sh"
-                        rm -f "${WWW_DIR}/commandw/sendspin-metadata.sh"
-                        rm -f "${WWW_DIR}/commandw/spspost.sh"
-                        rm -f "${WWW_DIR}/commandw/sendspin-version-check.sh"
-                        rmdir "${WWW_DIR}/commandw" 2>/dev/null || true
+                        rm -f "/var/local/www/commandw/sendspin-spspre.sh"
+                        rm -f "/var/local/www/commandw/sendspin-metadata.sh"
+                        rm -f "/var/local/www/commandw/spspost.sh"
+                        rm -f "/var/local/www/commandw/sendspin-version-check.sh"
+                        rmdir "/var/local/www/commandw" 2>/dev/null || true
                         log_success "Removed commandw scripts"
         
                     # Remove database entries
@@ -1443,11 +1431,11 @@ uninstall_sendspin() {
             rm -f "${WWW_DIR}/ssp-config.php"
             rm -f "${WWW_DIR}/templates/ssp-config.html"
             # Remove commandw scripts
-            rm -f "${WWW_DIR}/commandw/sendspin-spspre.sh"
-            rm -f "${WWW_DIR}/commandw/sendspin-metadata.sh"
-            rm -f "${WWW_DIR}/commandw/spspost.sh"
-            rm -f "${WWW_DIR}/commandw/sendspin-version-check.sh"
-            rmdir "${WWW_DIR}/commandw" 2>/dev/null || true
+            rm -f "/var/local/www/commandw/sendspin-spspre.sh"
+            rm -f "/var/local/www/commandw/sendspin-metadata.sh"
+            rm -f "/var/local/www/commandw/spspost.sh"
+            rm -f "/var/local/www/commandw/sendspin-version-check.sh"
+            rmdir "/var/local/www/commandw" 2>/dev/null || true
     
             # Remove database entries
             if [[ -f "$DB_PATH" ]]; then

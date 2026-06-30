@@ -7,7 +7,6 @@
 require_once __DIR__ . '/inc/alsa.php';
 require_once __DIR__ . '/inc/common.php';
 require_once __DIR__ . '/inc/network.php';
-require_once __DIR__ . '/inc/renderer.php';
 require_once __DIR__ . '/inc/session.php';
 require_once __DIR__ . '/inc/sql.php';
 
@@ -224,8 +223,7 @@ if (isset($_POST['update_sendspin_settings'])) {
 		phpSession('write', 'rsmafterss', $_POST['rsmafterss']);
 	}
 	if (isset($update)) {
-		// Regenerate service file with all settings from DB
-		generateSendspinService($dbh);
+		// Worker handles service regeneration + start/stop via submitJob
 		submitJob('sendspinsvc');
 	}
 }
