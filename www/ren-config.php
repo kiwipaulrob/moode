@@ -12,6 +12,7 @@ require_once __DIR__ . '/inc/sql.php';
 
 $dbh = sqlConnect();
 phpSession('open');
+phpSession('load_system');
 updAlsaVolume($_SESSION['amixname']);
 
 chkVariables($_POST);

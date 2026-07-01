@@ -687,7 +687,18 @@ install_ren_config_php() {
     backup_file "$target" "ren-config.php"
     
     # ------------------------------------------------------------------
-    # Step 1: Insert the POST handler block BEFORE phpSession('close')
+    # Step 1: Add phpSession('load_system') after phpSession('open')
+    # Ensures cfg_system params (feat_bitmask, etc.) are loaded into session
+    # on first page visit — critical for renderer visibility
+    # ------------------------------------------------------------------
+    
+    if ! grep -q "phpSession('load_system')" "$target"; then
+        sed -i "/phpSession('open');/a phpSession('load_system');" "$target" 2>/dev/null || true
+        log_info "  Added phpSession('load_system') to ren-config.php"
+    fi
+    
+    # ------------------------------------------------------------------
+    # Step 2: Insert the POST handler block BEFORE phpSession('close')
     # This is critical - handlers must run while the session is still open
     # so that phpSession('close') writes the updated session to disk.
     # ------------------------------------------------------------------
