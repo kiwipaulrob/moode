@@ -18,6 +18,7 @@ require_once __DIR__ . '/../inc/music-library.php';
 require_once __DIR__ . '/../inc/music-source.php';
 require_once __DIR__ . '/../inc/network.php';
 require_once __DIR__ . '/../inc/peripheral.php';
+require_once __DIR__ . '/../inc/radio-browser.php';
 require_once __DIR__ . '/../inc/renderer.php';
 require_once __DIR__ . '/../inc/session.php';
 require_once __DIR__ . '/../inc/sql.php';
@@ -144,7 +145,9 @@ if (file_exists(BOOT_DIR . '/.fseventsd')) {
 }
 // - Delete session vars that have been removed or renamed
 $sessionVars = array(
-	'mpd_dbupdate_status'
+	'mpd_dbupdate_status',
+	'trackcover_url_cache',
+	'radio_track_covers'
 );
 foreach ($sessionVars as $var) {
 	sysCmd('moodeutl -D ' . $var);
@@ -189,6 +192,8 @@ sysCmd('touch ' . SPSEVENT_LOG);
 sysCmd('touch ' . SLPOWER_LOG);
 sysCmd('truncate ' . MOUNTMON_LOG . ' --size 0');
 sysCmd('mkdir ' . THMCACHE_DIR . ' > /dev/null 2>&1');
+// Radio Browser caches are written synchronously by www-data (php-fpm), so unlike moOde's
+sysCmd('/var/www/util/radio-browser.sh --fix-permissions > /dev/null 2>&1');
 // Delete any tmp files left over from New/Edit station or playlist
 sysCmd('rm /var/local/www/imagesw/radio-logos/' . TMP_IMAGE_PREFIX . '* > /dev/null 2>&1');
 sysCmd('rm /var/local/www/imagesw/radio-logos/thumbs/' . TMP_IMAGE_PREFIX . '* > /dev/null 2>&1');
@@ -1078,10 +1083,6 @@ if (!isset($_SESSION['cdspvolume_max_bt'])) {
 if (!isset($_SESSION['bluez_sbc_quality'])) {
 	$_SESSION['bluez_sbc_quality'] = 'xq+';
 }
-// ALSA output mode
-if (!isset($_SESSION['alsa_output_mode_bt'])) {
-	$_SESSION['alsa_output_mode_bt'] = '_audioout';
-}
 // Controller mode
 if (!isset($_SESSION['bluez_controller_mode'])) {
 	$_SESSION['bluez_controller_mode'] = 'dual';
@@ -1099,7 +1100,6 @@ if ($_SESSION['feat_bitmask'] & FEAT_BLUETOOTH) {
 }
 $status .= ', PIN: ' . (empty($_SESSION['bt_pin_code']) ? 'None' : 'Set');
 $status .= ', ALSA/CDSP max: ' . $_SESSION['alsavolume_max_bt'] . '%/' . $_SESSION['cdspvolume_max_bt'] . 'dB';
-$status .= ', ALSA out: ' . ALSA_OUTPUT_MODE_BT_NAME[$_SESSION['alsa_output_mode_bt']];
 $status .= ', Transport: ' . $_SESSION['bluez_controller_mode'];
 workerLog('worker: Bluetooth:       ' . $status);
 
@@ -1526,9 +1526,9 @@ $validIPAddress = ($_SESSION['ipaddress'] != '0.0.0.0' && $wlan0Ip != explode('/
 // NOTE: updaterAutoCheck() logs status
 $_SESSION['updater_available_update'] = updaterAutoCheck($validIPAddress);
 
-// Radio track covers
-workerLog('worker: Radio track covers:   ' . lcfirst($_SESSION['radio_track_covers']));
-workerLog('worker: iTunes query timeout: ' . $_SESSION['itunes_query_timeout'] . ' sec(s)');
+// Radio cover search provider
+workerLog('worker: Radio covers:         ' . $_SESSION['radio_covers']);
+workerLog('worker: iTunes timeout:       ' . $_SESSION['itunes_query_timeout'] . ' secs');
 
 // Automatic CoverView (Preferences)
 workerLog('worker: Auto-CoverView:       ' . ($_SESSION['auto_coverview'] == '-on' ? 'on' : 'off'));
@@ -1651,13 +1651,6 @@ if (!isset($_SESSION['ready_script'])) {
 if (!isset($_SESSION['lib_fv_only'])) {
 	$_SESSION['lib_fv_only'] = 'off';
 }
-
-// Radio track cover URL cache
-if (!isset($_SESSION['trackcover_url_cache'])) {
-	$_SESSION['trackcover_url_cache'] = '';
-}
-// Empty cache
-$_SESSION['trackcover_url_cache'] = array('' => ''); // trackTitle => URL
 
 // Metadata file
 if (!isset($_SESSION['extmeta'])) {
@@ -3826,7 +3819,7 @@ function runQueuedJob() {
 			setAudioOut($_SESSION['w_queueargs']);
 			break;
 
-		// command jobs
+		// From Prefs > Appearance
 		case 'set_bg_image':
 			$imgdata = base64_decode($_SESSION['w_queueargs'], true);
 			if ($imgdata === false) {
@@ -3837,6 +3830,8 @@ function runQueuedJob() {
 				fclose($fh);
 			}
 			break;
+
+		// Radio and Playlist view cover images
 		case 'set_ralogo_image':
 		case 'set_plcover_image':
 			$job = $_SESSION['w_queue'];
@@ -3935,6 +3930,38 @@ function runQueuedJob() {
 			}
 
 			sysCmd('chmod 0777 "' . $imgDir . $thmDir . TMP_IMAGE_PREFIX . '"*');
+			break;
+
+		// Radio Browser favorite to Radio view
+		case 'set_rblogo_image':
+			$queueArgs = explode(',', $_SESSION['w_queueargs'], 2);
+			$name = $queueArgs[0];
+			$imageData = $queueArgs[1];
+
+			$src = @imagecreatefromstring($imageData);
+			if (!$src) {
+				workerLog('worker: '. $job .' ERROR: imagecreatefromstring() failed for ' . $name);
+				break;
+			}
+
+			$w = imagesx($src);
+			$h = imagesy($src);
+			$ok1 = rbResizeAndSave($src, $w, $h, 400, RADIO_LOGOS_ROOT . $name . '.jpg');
+			$ok2 = rbResizeAndSave($src, $w, $h, 200, RADIO_LOGOS_ROOT . 'thumbs/' . $name . '.jpg');
+			$ok3 = rbResizeAndSave($src, $w, $h, 80, RADIO_LOGOS_ROOT . 'thumbs/' . $name . '_sm.jpg');
+
+			if ($ok1 && $ok2 && $ok3) {
+				if (imagedestroy($src) === false) {
+					workerLog('worker: '. $job .' ERROR: imagedestroy() failed for ' . $name);
+					break;
+				}
+			} else {
+				workerLog('worker: '. $job .' ERROR: rbResizeAndSave() failed for ' . $name);
+				break;
+			}
+
+			sysCmd('chmod 0777 "' . RADIO_LOGOS_ROOT . $name . '"*');
+			sysCmd('chmod 0777 "' . RADIO_LOGOS_ROOT . 'thumbs/' . $name . '"*');
 			break;
 
 		// Other jobs

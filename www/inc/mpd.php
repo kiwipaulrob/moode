@@ -10,6 +10,7 @@ require_once __DIR__ . '/alsa.php';
 require_once __DIR__ . '/audio.php';
 require_once __DIR__ . '/cdsp.php';
 require_once __DIR__ . '/music-library.php';
+require_once __DIR__ . '/radio.php';
 require_once __DIR__ . '/session.php';
 require_once __DIR__ . '/sql.php';
 
@@ -798,14 +799,14 @@ function enhanceMetadata($current, $sock, $caller = '') {
 					// URL logo image
 					$current['coverurl'] = rawurlencode($_SESSION[$song['file']]['logo']);
 				}
-				// Track cover from Apple Music (iTunes API)
+				// Get radio cover
 				if ($current['title'] != DEFAULT_STATION_NAME) {
-					if ($_SESSION['radio_track_covers'] == 'Yes') {
+					if ($_SESSION['radio_covers'] != 'No') {
 						if ($current['state'] == 'play') {
-							// NOTE: This function performs phpSession('open_ro') or phpSession(open) / phpSession(close)
-							$trackCoverUrl = getRadioCoverUrl($current['title']);
-							if (str_contains($trackCoverUrl, 'https://')) {
-								$current['coverurl'] = $trackCoverUrl;
+							// NOTE: getRadioCoverUrl() opens the session
+							$coverUrl = getRadioCoverUrl($current['title'], $current['album']); // title, station
+							if (substr($coverUrl, 0, 4) == 'http') { // URL and not 'None' or ''
+								$current['coverurl'] = $coverUrl;
 							}
 						}
 					}
@@ -900,93 +901,6 @@ function enhanceMetadata($current, $sock, $caller = '') {
 	}
 
 	return $current;
-}
-
-function getRadioCoverUrl($trackTitle, $searchMethod = 'Default') {
-	$trackTitle = html_entity_decode($trackTitle);
-
-	// Check cache first
-	phpSession('open_ro');
-	$coverUrl = $_SESSION['trackcover_url_cache'][$trackTitle];
-	if (!empty($coverUrl)) {
-		// DEBUG: Report cached cover used
-		workerLog('getRadioCoverUrl(): Returned cached cover URL for: ' . $trackTitle);
-		return $coverUrl;
-	}
-
-	// Switch based on search method
-	switch ($searchMethod) {
-		case 'Default':
-			$coverUrl = searchItunes($trackTitle);
-			break;
-		default:
-			$coverUrl = searchItunes($trackTitle);
-	}
-
-	phpSession('open');
-	$_SESSION['trackcover_url_cache'][$trackTitle] = $coverUrl;
-	phpSession('close');
-
-	return $coverUrl;
-}
-function searchItunes($trackTitle) {
-	// DEBUG: Search iTunes database
-	workerLog('getRadioCoverUrl(): Search iTunes for: ' . $trackTitle);
-
-	// Create search query
-	$trackLimit = '10'; // Max number of tracks to return from iTunes query
-	$titleParts = explode(' - ', $trackTitle); // $titleParts[0]: Artist name, $titleParts[1]: Track title
-	$query = '?term=' . urlencode($titleParts[0] . ' ' . $titleParts[1]) .
-		'&media=music&entity=musicTrack&limit=' . $trackLimit;
-	$apiUrl = ITUNES_API_BASE_URL . $query;
-
-	// Get stream timeout, same for both connect and readdata
-	$timeout = $_SESSION['itunes_query_timeout'] . '.0';
-	$options = array(
-		'http' => array(
-			'protocol_version' => (float)'1.1',
-			'timeout' => (float)$timeout
-		)
-	);
-
-	// Submit query to iTunes
-	$result = file_get_contents($apiUrl, false, stream_context_create($options));
-	if ($result === false) {
-		$msg = 'Search failed for: ' . $trackTitle;
-		$coverUrl = '';
-	} else {
-		$resultArray = json_decode($result, true);
-		if ($resultArray['resultCount'] == '0') {
-			$msg = 'Search returned 0 results for: ' . $trackTitle;
-			$coverUrl = '';
-		} else {
-			// DEBUG: Report result count and/or full results
-			workerLog('getRadioCoverUrl(): - Search returned ' . $resultArray['resultCount'] . ' results');
-			//workerLog('Full query results:' . "\n" . print_r($resultArray['results'] ,true));
-			$coverUrl = '';
-			$i = 0;
-			foreach ($resultArray['results'] as $result) {
-				// DEBUG: Find artist match in results
-				workerLog('getRadioCoverUrl(): - Checking result[' . $i . '] album: ' . $result['collectionName']);
-				$itunesArtist = strtolower(str_replace($result['artistName'], ' ', ''));
-				$trackTitleArtist = strtolower(str_replace($titleParts[0], ' ', ''));
-				if ($trackTitleArtist == $itunesArtist) {
-					$coverUrl = str_replace('100x100', '1000x1000', $resultArray['results'][$i]['artworkUrl100']);
-					$msg = 'Search successful for: ' . $trackTitle  . "\n" .
-						'Cover: ' . $coverUrl . "\n" .
-						'Query: ' . $apiUrl;
-					// DEBUG: Report artist match
-					workerLog('getRadioCoverUrl(): - Artist match found');
-					break;
-				}
-			}
-		}
-	}
-
-	// DEBUG: Report result
-	workerLog('getRadioCoverUrl(): ' . $msg);
-
-	return $coverUrl;
 }
 
 function getUpnpCoverUrl() {

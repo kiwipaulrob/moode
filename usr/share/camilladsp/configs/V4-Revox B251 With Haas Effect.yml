@@ -1,0 +1,226 @@
+description: Revox B251 Tone Control With Haas effect. This pipeline is modeled after the hardware circuit topology of the Revox B251 amplifier. It consists of two parametric equalizers with fixed center frequencies and Q-factors, where only the boost/cut level is variable. Its main advantage is that it leaves the midrange completely untouched, which is critical for preserving the definition of the stereo soundstage. To ensure highly accurate emulation of this tone control use the Selective Resampling option in MPD Config to resample the input to either 88.2kHz or 96kHz depending on the input base frequency. Set "Sample rate (kHz)" to 96 and "Selective resampling" to "Resample (adhere to base freq)".
+devices:
+  adjust_period: 10
+  capture:
+    type: Stdin
+    channels: 2
+    format: S32_LE
+  chunksize: 4096
+  enable_rate_adjust: false
+  multithreaded: true
+  playback:
+    type: Alsa
+    channels: 2
+    device: plughw:2,0
+    format: S32_LE
+  queuelimit: 1
+  rate_measure_interval: ~
+  samplerate: 44100
+  silence_threshold: 0
+  silence_timeout: 0
+  stop_on_rate_change: false
+  target_level: 0
+  volume_limit: null
+  volume_ramp_time: 150
+  worker_threads: 2
+filters:
+  haas_high:
+    description: null
+    parameters:
+      freq: 4000
+      q: 0.5
+      type: Lowpass
+    type: Biquad
+  haass_low:
+    description: null
+    parameters:
+      freq: 250
+      q: 0.5
+      type: Highpass
+    type: Biquad
+  hass_delay:
+    description: null
+    parameters:
+      delay: 20
+      subsample: true
+      unit: ms
+    type: Delay
+  hass_wet_gain:
+    description: null
+    parameters:
+      gain: 3
+      inverted: true
+      mute: false
+      scale: dB
+    type: Gain
+  revox-b251_bass:
+    description: null
+    parameters:
+      freq: 33
+      gain: 8
+      q: 0.8
+      type: Peaking
+    type: Biquad
+  revox-b251_trebble:
+    description: null
+    parameters:
+      freq: 13000
+      gain: 6
+      q: 0.35
+      type: Peaking
+    type: Biquad
+mixers:
+  haas_input:
+    channels:
+      in: 2
+      out: 4
+    description: null
+    labels:
+    - left_dry
+    - right_dry
+    - left_wet
+    - right_wet
+    mapping:
+    - dest: 0
+      mute: false
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 1
+      mute: false
+      sources:
+      - channel: 1
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 2
+      mute: false
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 3
+      mute: false
+      sources:
+      - channel: 1
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+  haas_ouput:
+    channels:
+      in: 4
+      out: 2
+    description: null
+    labels:
+    - left
+    - right
+    mapping:
+    - dest: 0
+      mute: false
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+      - channel: 3
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+    - dest: 1
+      mute: false
+      sources:
+      - channel: 1
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+      - channel: 2
+        gain: 0
+        inverted: false
+        mute: false
+        scale: dB
+  stereo:
+    channels:
+      in: 2
+      out: 2
+    description: null
+    labels:
+    - left
+    - right
+    mapping:
+    - dest: 0
+      mute: null
+      sources:
+      - channel: 0
+        gain: 0
+        inverted: false
+        mute: null
+        scale: null
+    - dest: 1
+      mute: null
+      sources:
+      - channel: 1
+        gain: 0
+        inverted: false
+        mute: null
+        scale: null
+pipeline:
+- bypassed: false
+  description: null
+  name: stereo
+  type: Mixer
+- bypassed: null
+  channels:
+  - 0
+  description: null
+  names:
+  - revox-b251_bass
+  - revox-b251_trebble
+  type: Filter
+- bypassed: null
+  channels:
+  - 1
+  description: null
+  names:
+  - revox-b251_bass
+  - revox-b251_trebble
+  type: Filter
+- bypassed: null
+  description: null
+  name: haas_input
+  type: Mixer
+- bypassed: null
+  channels:
+  - 2
+  description: null
+  names:
+  - haass_low
+  - haas_high
+  - hass_delay
+  - hass_wet_gain
+  type: Filter
+- bypassed: null
+  channels:
+  - 3
+  description: null
+  names:
+  - haass_low
+  - haas_high
+  - hass_delay
+  - hass_wet_gain
+  type: Filter
+- bypassed: null
+  description: null
+  name: haas_ouput
+  type: Mixer
+processors: null
+title: Revox B251 With Haas effect

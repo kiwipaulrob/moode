@@ -50,6 +50,8 @@ function notify(title, tag, arg3, arg4 = '') {
 		new_playlist: 'Playlist has been created. ',
 		upd_playlist: 'Playlist has been updated. ',
 		del_playlist: 'Playlist has been deleted. ',
+		import_playlist: 'Playlist has been imported. ',
+		import_playlist_error: 'Import failed. ',
 		// Radio view
 		validation_check: 'Validation check. ',
 		creating_station: 'Creating new station... ',
@@ -58,6 +60,8 @@ function notify(title, tag, arg3, arg4 = '') {
 		upd_station: 'Station has been updated. ',
 		del_station: 'Station has been deleted. ',
 		blank_entries: 'Name or URL is blank. ',
+		// Radio Browser
+		rb_message: '',
 		// Multiroom
 		trx_querying_receivers: 'Querying receivers... ',
 		trx_no_receivers_found: 'No receivers were found. Run receiver Discovery. ',
@@ -130,7 +134,8 @@ function notify(title, tag, arg3, arg4 = '') {
 		// Playback
 		play_here_config_error: 'HTTP streaming must be ON and encoder set to LAME (MP3).',
 		// Playlist view
-		// no_tags
+		import_playlist: 'Playlist has been imported. ',
+		import_playlist_error: 'Import failed. ',
 		// Radio view
 		validation_check: 'Validation check. ',
 		blank_entries: 'Name or URL is blank. ',

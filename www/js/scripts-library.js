@@ -1309,6 +1309,41 @@ $('#database-radio').on('click', 'img', function(e) {
 	}, DEFAULT_TIMEOUT);
 });
 
+// TODO: this should only be a remove?
+// This removes the station from Radio view Favorites and refreshes the list
+// Favorite heart will only be on RB favorite stations
+$('#database-radio').on('click', '.rb-fav-toggle', function(e) {
+    e.stopPropagation();
+    var $toggle = $(this);
+    var url = $toggle.closest('li').data('url');
+    var name = $toggle.closest('li').data('name');
+    if (!url) {return;}
+    var isAdded = $toggle.hasClass('added');
+    var cmd = isAdded ? 'remove' : 'add';
+    $.ajax({
+        url: 'command/radio-browser.php?cmd=' + cmd,
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({url: url, name: name}),
+        dataType: 'json',
+        success: function(data) {
+            if (data && data.success) {
+                $toggle.toggleClass('added', !isAdded);
+                $toggle.find('i').toggleClass('fa-solid', !isAdded).toggleClass('fa-regular', isAdded);
+            }
+            notify(data && data.success ? NOTIFY_TITLE_INFO : NOTIFY_TITLE_ALERT,
+                'mpd_error', data ? data.message : 'Action failed', NOTIFY_DURATION_SHORT);
+            // 'update RADIO' lights the busy-spinner; clear it after it settles (native pattern)
+            setTimeout(function() { $('.busy-spinner').hide(); }, ONE_SEC_TIMEOUT);
+			// Refresh list
+			setTimeout(function() {
+                $('#btn-ra-refresh').click();
+				$('#btn-rb-refresh').click();
+            }, DEFAULT_TIMEOUT);
+        }
+    });
+});
+
 // Radio manager
 $('#btn-ra-manager').click(function(e) {
     var sortGroup = SESSION.json['radioview_sort_group'].split(',');
@@ -1506,6 +1541,28 @@ $('#btn-upd-radio-manager').click(function(e) {
             }, DEFAULT_TIMEOUT);
         }
     );
+});
+
+// Radio Browser manager
+$('#btn-rb-manager').click(function(e) {
+	$('#rb-clear-recents-msg, #rb-clear-caches-msg, #rb-check-servers-msg').text('').hide();
+    $('#radio-browser-manager-modal').modal();
+});
+$('#btn-rb-clear-recents').click(function(e) {
+	$.getJSON('command/radio-browser.php?cmd=clear_recents', function(result) {
+		$('#rb-clear-recents-msg').text(result).show();
+	});
+});
+$('#btn-rb-clear-caches').click(function(e) {
+	$.getJSON('command/radio-browser.php?cmd=clear_caches', function(result) {
+		$('#rb-clear-caches-msg').text(result).show();
+	});
+});
+$('#btn-rb-check-servers').click(function(e) {
+	$('#rb-check-servers-msg').text('Checking...').show();
+	$.getJSON('command/radio-browser.php?cmd=check_servers', function(result) {
+		$('#rb-check-servers-msg').text(result);
+	});
 });
 
 // Click playlist entry

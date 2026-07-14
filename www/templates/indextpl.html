@@ -232,6 +232,8 @@
 				<button aria-label="Home" id="db-home" class="btn"><i class="fa-solid fa-sharp fa-home"></i></button>
 				<button aria-label="Refresh" id="db-refresh" class="btn"><i class="fa-regular fa-sharp fa-redo"></i></button>
 				<button aria-label="Search" id="db-advsearch" class="btn" href="#dbsearch-modal" data-toggle="modal"><i class="fa-regular fa-sharp fa-search"></i></button>
+				<button aria-label="Download Playlist" id="btn-db-import" class="btn"><i class="fa-solid fa-sharp fa-upload"></i></button>
+				<input id="db-import-file" type="file" accept=".m3u,.m3u8" class="hide">
 				<form id="db-fastsearch" onsubmit="return false;">
 					<div class="input-append">
 						<input id="dbfs" type="text" value="" placeholder="search">
@@ -252,23 +254,85 @@
 	<!-- RADIO VIEW -->
 	<div id="radio-panel" class="tab-pane">
 		<div id="container-radio">
-			<div class="btnlist btnlist-top btnlist-top-ra">
-				<button aria-label="Radio Manager" id="btn-ra-manager" class="btn"><i class="fa-solid fa-sharp fa-gear-complex"></i></button>
-				<button aria-label="Refresh" id="btn-ra-refresh" class="btn"><i class="fa-regular fa-sharp fa-redo"></i></button>
-				<button aria-label="New Station" id="btn-ra-new" class="btn"><i class="fa-regular fa-sharp fa-plus"></i></button>
-				<form id="ra-search" class="" method="post" onSubmit="return false;">
-					<div class="input-append">
-						<input id="ra-filter" type="text" value="" placeholder="search">
+			<!-- Radio view native (toggle off) -->
+			<div class="container-radio-native">
+					<div class="btnlist btnlist-top btnlist-top-ra">
+						<button aria-label="Radio Manager" id="btn-ra-manager" class="btn"><i class="fa-solid fa-sharp fa-gear-complex"></i></button>
+						<button aria-label="Refresh" id="btn-ra-refresh" class="btn"><i class="fa-regular fa-sharp fa-redo"></i></button>
+						<button aria-label="New Station" id="btn-ra-new" class="btn"><i class="fa-regular fa-sharp fa-plus"></i></button>
+					<form id="ra-search" class="" method="post" onSubmit="return false;">
+						<div class="input-append">
+							<input id="ra-filter" type="text" value="" placeholder="search">
+						</div>
+						<button aria-label="Reset" id="btn-ra-search-reset" class="btn hide" type="reset" value="reset"><i class="fa-regular fa-sharp fa-times-circle"></i></button>
+					</form>
+					<button aria-label="Radio Browser" class="btn btn-toggle rb-toggle-btn"><i class="fa-solid fa-sharp fa-globe"></i></button>
+				</div>
+
+				<div id="database-radio">
+					<ul id="radio-covers" class="database-radio"></ul>
+				</div>
+				<div id ="index-radio" class="alphabits">
+					<ul><li>#</li><li>a</li><li>b</li><li>c</li><li>d</li><li>e</li><li>f</li><li>g</li><li>h</li><li>i</li><li>j</li><li>k</li><li>l</li><li>m</li><li>n</li><li>o</li><li>p</li><li>q</li><li>r</li><li>s</li><li>t</li><li>u</li><li>v</li><li>w</li><li>x</li><li>y</li><li>z</li></ul>
+				</div>
+			</div>
+			<!-- End Radio view native -->
+
+			<!-- Radio Browser (toggle on) -->
+			<div id="container-radio-browser" class="hide">
+				<div class="btnlist btnlist-top btnlist-top-rb">
+					<button aria-label="Search" id="btn-rb-tab-search" class="btn rb-tab active">Search</button>
+					<button aria-label="Recently played" id="btn-rb-tab-recent" class="btn rb-tab">Recent</button>
+					<button aria-label="Radio Browser Manager" id="btn-rb-manager" class="btn"><i class="fa-solid fa-sharp fa-gear-complex"></i></button>
+					<button aria-label="Refresh" id="btn-rb-refresh" class="btn"><i class="fa-regular fa-sharp fa-redo"></i></button>
+					<form id="rb-search" class="" method="post" onSubmit="return false;">
+						<div class="input-append">
+							<input id="rb-filter" type="text" value="" placeholder="search radio-browser.info">
+						</div>
+						<button aria-label="Reset" id="btn-rb-search-reset" class="btn hide" type="reset" value="reset"><i class="fa-regular fa-sharp fa-times-circle"></i></button>
+					</form>
+					<div class="controls" id="rb-filters">
+						<!-- Countries -->
+						<div class="btn-group bootstrap-select select-large">
+							<button type="button" class="btn btn-inverse dropdown-toggle" data-toggle="dropdown">
+								<div id="rb-country" class="filter-option pull-left">
+									<span>All Countries</span><span class="data-value hide"></span>
+								</div>&nbsp;
+								<div class="caret"></div>
+							</button>
+							<div id="rb-country-menu" class="dropdown-menu open">
+								<ul id="rb-country-list" class="dropdown-menu custom-select inner" role="menu"></ul>
+							</div>
+						</div>
+						<!-- Genres -->
+						<div class="btn-group bootstrap-select select-large">
+							<button type="button" class="btn btn-inverse dropdown-toggle" data-toggle="dropdown">
+								<div id="rb-genre" class="filter-option pull-left">
+									<span>All Genres</span><span class="data-value hide"></span>
+								</div>&nbsp;
+								<div class="caret"></div>
+							</button>
+							<div id="rb-genre-menu" class="dropdown-menu open">
+								<ul id="rb-genre-list" class="dropdown-menu custom-select inner" role="menu"></ul>
+							</div>
+						</div>
 					</div>
-					<button aria-label="Reset" id="btn-ra-search-reset" class="btn hide" type="reset" value="reset"><i class="fa-regular fa-sharp fa-times-circle"></i></button>
-				</form>
+					<button aria-label="Radio Browser" class="btn btn-toggle rb-toggle-btn active"><i class="fa-solid fa-sharp fa-globe"></i></button>
+				</div>
+				<!-- Search tab -->
+				<div id="rb-tab-search" class="rb-tab-pane">
+					<div id="rb-covers-search-container" class="rb-covers-container">
+						<ul id="rb-covers-search" class="database-radio"></ul>
+					</div>
+				</div>
+				<!-- Recently played tab -->
+				<div id="rb-tab-recent" class="rb-tab-pane hide">
+					<div id="rb-covers-recent-container" class="rb-covers-container">
+						<ul id="rb-covers-recent" class="database-radio"></ul>
+					</div>
+				</div>
 			</div>
-			<div id="database-radio">
-				<ul id="radio-covers" class="database-radio"></ul>
-			</div>
-			<div id ="index-radio" class="alphabits">
-				<ul><li>#</li><li>a</li><li>b</li><li>c</li><li>d</li><li>e</li><li>f</li><li>g</li><li>h</li><li>i</li><li>j</li><li>k</li><li>l</li><li>m</li><li>n</li><li>o</li><li>p</li><li>q</li><li>r</li><li>s</li><li>t</li><li>u</li><li>v</li><li>w</li><li>x</li><li>y</li><li>z</li></ul>
-			</div>
+			<!-- End Radio Browser -->
 		</div>
 	</div>
 
@@ -279,6 +343,7 @@
 				<button aria-label="Playlist Manager" id="btn-pl-manager" class="btn"><i class="fa-solid fa-sharp fa-gear-complex"></i></button>
 				<button aria-label="Refresh" id="btn-pl-refresh" class="btn"><i class="fa-regular fa-sharp fa-redo"></i></button>
 				<button aria-label="New Playlist" id="btn-pl-new" class="btn"><i class="fa-regular fa-sharp fa-plus"></i></button>
+				<button aria-label="Download Playlist" id="btn-pl-import" class="btn"><i class="fa-solid fa-sharp fa-upload"></i></button>
 				<form id="pl-search" class="" method="post" onSubmit="return false;">
 					<div class="input-append">
 						<input id="pl-filter" type="text" value="" placeholder="search">
@@ -294,7 +359,9 @@
 			</div>
 		</div>
 	</div>
+
 </div>
+
 
 <!-- ADVANCED SEARCH -->
 <div id="dbsearch-modal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="dbsearch-modal-label" aria-hidden="true">
@@ -523,6 +590,47 @@
 	</div>
 </div>
 
+<!-- IMPORT PLAYLIST -->
+<div id="import-playlist-modal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="import-playlist-modal-label" aria-hidden="true">
+	<div class="modal-header"><button aria-label="Close" type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+		<h3 id="import-playlist-modal-label">Upload playlist</h3>
+	</div>
+	<div class="modal-body">
+		<form id="import-playlist-form" method="post" onsubmit="return false;">
+			<div class="control-group">
+				<label class="control-label" for="import-pl-name">Playlist name</label>
+				<div class="controls">
+					<input id="import-pl-name" type="text" value="">
+				</div>
+			</div>
+			<div class="control-group">
+				<label class="control-label">Unknown paths</label>
+				<div class="controls">
+					<span class="help-block">Some tracks point to folders that don't exist on this player. Map each to a known folder, or leave it to keep the original path.</span>
+				</div>
+			</div>
+				<div id="import-pl-remap"></div>
+			<div class="control-group">
+				<div class="controls">
+					<button id="btn-test-import" type="button" class="btn btn-primary btn-small config-btn-set">Test paths</button>
+					<span id="import-pl-report" class="help-block" style="display:inline-block;margin-left:.6rem;"></span>
+					<div style="margin-top:.5rem;">
+						<div class="toggle">
+							<label class="toggle-radio toggle-import-drop" for="toggle-import-drop-2">ON </label><input type="radio" name="import_drop" id="toggle-import-drop-1" value="on">
+							<label class="toggle-radio toggle-import-drop" for="toggle-import-drop-1">OFF</label><input type="radio" name="import_drop" id="toggle-import-drop-2" value="off" checked="checked">
+						</div>
+						<span class="config-toggle-after">Remove unresolved entries</span>
+					</div>
+				</div>
+			</div>
+		</form>
+	</div>
+	<div class="modal-footer">
+		<button aria-label="Cancel" class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+		<button aria-label="Import" id="btn-import-playlist" class="btn btn-primary" data-dismiss="modal">Import</button>
+	</div>
+</div>
+
 <!-- SET FAVORITES PLAYLIST -->
 <div id="set-favorites-playlist-modal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="newpl-modal-label" aria-hidden="true">
 	<div class="modal-header"><button aria-label="Close" type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
@@ -577,7 +685,7 @@
 				<div class="control-group">
 	               <label class="control-label" for="theme-name">Theme</label>
 		            <div class="controls">
-							<div class="btn-group bootstrap-select select-large">
+						<div class="btn-group bootstrap-select select-large">
 							<button type="button" class="btn btn-inverse dropdown-toggle" data-toggle="dropdown">
 								<div id="theme-name" class="filter-option pull-left">
 									<span></span>
@@ -755,27 +863,6 @@
 		                    	Increases the size of the cover backdrop.
 		                    </span>
 		                </div>
-					</div>
-					<label class="control-label" for="renderer-backdrop">Renderer backdrop</label>
-					<div class="controls">
-						<div class="btn-group bootstrap-select select-large">
-							<button type="button" class="btn btn-inverse dropdown-toggle" data-toggle="dropdown">
-								<div id="renderer-backdrop" class="filter-option pull-left">
-									<span></span>
-								</div>&nbsp;
-								<div class="caret"></div>
-							</button>
-							<div class="dropdown-menu open">
-								<ul class="dropdown-menu custom-select inner" role="menu">
-									<li class="modal-dropdown-text"><a href="#notarget" data-cmd="renderer-backdrop-sel"><span class="text">Yes</span></a></li>
-									<li class="modal-dropdown-text"><a href="#notarget" data-cmd="renderer-backdrop-sel"><span class="text">No</span></a></li>
-								</ul>
-							</div>
-						</div>
-						<a aria-label="Help" class="info-toggle" data-cmd="info-renderer-backdrop" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
-						<span id="info-renderer-backdrop" class="help-block hide">
-							Display the image or cover backdrop instead of the semi-transparent dark overlay when a renderer is playing.
-						</span>
 					</div>
 					<label class="control-label" for="font-size">Font size</label>
 					<div class="controls">
@@ -1044,31 +1131,33 @@
  	                    </span>
  	                </div>
 
-					<label class="control-label" for="show-radio-track-covers">Radio track covers</label>
+					<label class="control-label" for="show-radio-covers">Radio covers</label>
  	                <div class="controls">
 						<div class="btn-group bootstrap-select select-large">
 							<button type="button" class="btn btn-inverse dropdown-toggle" data-toggle="dropdown">
-								<div id="show-radio-track-covers" class="filter-option pull-left">
+								<div id="show-radio-covers" class="filter-option pull-left">
 									<span></span>
 								</div>&nbsp;
 								<div class="caret"></div>
 							</button>
 							<div class="dropdown-menu open">
 								<ul class="dropdown-menu custom-select inner" role="menu">
-									<li class="modal-dropdown-text"><a href="#notarget" data-cmd="show-radio-track-covers-sel"><span class="text">Yes</span></a></li>
-									<li class="modal-dropdown-text"><a href="#notarget" data-cmd="show-radio-track-covers-sel"><span class="text">No</span></a></li>
+									<li class="modal-dropdown-text"><a href="#notarget" data-cmd="show-radio-covers-sel"><span class="text">Radio Cover+</span></a></li>
+									<li class="modal-dropdown-text"><a href="#notarget" data-cmd="show-radio-covers-sel"><span class="text">iTunes</span></a></li>
+									<li class="modal-dropdown-text"><a href="#notarget" data-cmd="show-radio-covers-sel"><span class="text">No</span></a></li>
 								</ul>
 							</div>
  						</div>
- 						<a aria-label="Help" class="info-toggle" data-cmd="info-show-radio-track-covers" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
- 						<span id="info-show-radio-track-covers" class="help-block hide">
-							Specify whether cover art is displayed for Radio Station tracks.
-							Covers are obtained via the free Apple iTunes query API which requires a fast, reliable Internet connection.
-							A slow, unreliable connection will cause WebUI performance issues.
+ 						<a aria-label="Help" class="info-toggle" data-cmd="info-show-radio-covers" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+ 						<span id="info-show-radio-covers" class="help-block hide">
+							Specify whether cover art is displayed for Radio Station tracks and choose a
+							provider. Radio Cover+ is an advanced multi-provider search utility based on
+							the moOde-Radio-Plus (MR+) project. Note that changing providers will clear
+							the Radio Cover URL cache.
  	                    </span>
 					</div>
 
-					<label class="control-label" for="itunes-query-timeout">iTunes query timeout</label>
+					<label class="control-label" for="itunes-query-timeout">iTunes timeout</label>
  	                <div class="controls">
 						<div class="btn-group bootstrap-select select-large">
 							<button type="button" class="btn btn-inverse dropdown-toggle" data-toggle="dropdown">
@@ -1087,7 +1176,7 @@
  						</div>
  						<a aria-label="Help" class="info-toggle" data-cmd="info-itunes-query-timeout" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
  						<span id="info-itunes-query-timeout" class="help-block hide">
-							Terminates the Radio track cover query if the connection fails or no data is received within the specified number of seconds (timeout period).
+							Terminates the iTunes cover query if the connection fails or no data is received within the specified number of seconds (timeout period).
 						</span>
  	                </div>
 				</div>
@@ -2080,6 +2169,7 @@
 							<ul class="dropdown-menu custom-select inner" role="menu">
 								<li class="modal-dropdown-text"><a href="#notarget" data-cmd="edit-station-type-sel"><span class="text">Regular</span></a></li>
 								<li class="modal-dropdown-text"><a href="#notarget" data-cmd="edit-station-type-sel"><span class="text">Favorite</span></a></li>
+								<li id="edit-station-type-fb" class="modal-dropdown-text"><a href="#notarget" data-cmd="edit-station-type-sel"><span class="text">Favorite (Radio Browser)</span></a></li>
 								<li class="modal-dropdown-text"><a href="#notarget" data-cmd="edit-station-type-sel"><span class="text">Hidden</span></a></li>
 							</ul>
 						</div>
@@ -2243,6 +2333,7 @@
 					<div class="dropdown-menu open">
 						<ul class="dropdown-menu custom-select inner" role="menu">
 							<li class="modal-dropdown-text"><a href="#notarget" data-cmd="radioview-group-method-sel"><span class="text">Favorites first</span></a></li>
+							<li class="modal-dropdown-text"><a href="#notarget" data-cmd="radioview-group-method-sel"><span class="text">Favorites first (group remaining)</span></a></li>
 							<li class="modal-dropdown-text"><a href="#notarget" data-cmd="radioview-group-method-sel"><span class="text">Sort tag</span></a></li>
 							<li class="modal-dropdown-text"><a href="#notarget" data-cmd="radioview-group-method-sel"><span class="text">No grouping</span></a></li>
 						</ul>
@@ -2550,6 +2641,47 @@
 	</div>
 </div>
 
+<!-- RADIO BROWSER MANAGER-->
+<div id="radio-browser-manager-modal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="radio-browser-manager-modal-label" aria-hidden="true">
+	<div class="modal-header"><button aria-label="Close" type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+		<h3 id="radio-browser-manager-modal-label">Radio Browser Manager</h3>
+	</div>
+	<div class="modal-body">
+		<div class="control-group">
+			<label class="control-label" for="btn-rb-clear-recents">Recents</label>
+			<div class="controls">
+				<label id="btn-rb-clear-recents" class="btn btn-primary btn-small modal-button-style">Clear</label>
+				<a aria-label="Help" class="info-toggle" data-cmd="info-rb-clear-recents" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<div id="rb-clear-recents-msg" class="help-block hide"></div>
+				<div id="info-rb-clear-recents" class="help-block hide">
+					Clears items listed in the "Recent" (recently played) tab.
+				</div>
+			</div>
+			<label class="control-label" for="btn-rb-clear-caches">Caches</label>
+			<div class="controls">
+				<label id="btn-rb-clear-caches" class="btn btn-primary btn-small modal-button-style">Clear</label>
+				<a aria-label="Help" class="info-toggle" data-cmd="info-rb-clear-caches" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<div id="rb-clear-caches-msg" class="help-block hide"></div>
+				<div id="info-rb-clear-caches" class="help-block hide">
+					Clears the cached searched results and station logos.
+				</div>
+			</div>
+			<label class="control-label" for="btn-rb-check-servers">RB servers</label>
+			<div class="controls">
+				<label id="btn-rb-check-servers" class="btn btn-primary btn-small modal-button-style">Check</label>
+				<a aria-label="Help" class="info-toggle" data-cmd="info-rb-check-servers" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<div id="rb-check-servers-msg" class="help-block hide"></div>
+				<div id="info-rb-check-servers" class="help-block hide">
+					Checks whether the radio-browser.info servers are online.
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="modal-footer">
+		<button aria-label="Close" class="btn singleton" data-dismiss="modal" aria-hidden="true">Close</button>
+	</div>
+</div>
+
 <!-- PLAYLIST NEW/EDIT/DELETE -->
 <div id="new-playlist-modal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="new-playlist-modal-label" aria-hidden="true">
 	<div class="modal-header"><button aria-label="Close" type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
@@ -2626,7 +2758,7 @@
 				<div id="preview-edit-plcoverimage" class="modal-cover-preview"></div>
 				<a aria-label="Help" class="info-toggle" id="info-toggle-edit-plcoverimage" data-cmd="info-edit-plcoverimage" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
 				<div id="error-edit-plcoverimage"></div>
-				<div id="info-edit-plcoverimage" class="help-block hide">
+				<div id="info-edit-plcoverimage" class="help-block hide" style="margin-top:1em;"> <!-- So help clears the thumbnail -->
 					Add a JPEG image for the playlist. Max size is 1MB.
 					After updating an image refresh the Browser to help expire the old image.
 				</div>
@@ -2827,7 +2959,9 @@
 			<li><a href="#notarget" data-cmd="add_item"><i class="fa-regular fa-sharp fa-plus sx"></i> Add</a></li>
 			<li><a href="#notarget" data-cmd="play_item"><i class="fa-regular fa-sharp fa-play sx"></i> Play</a></li>
 			<!--li><a href="#notarget" data-cmd="clear_add_item"><i class="fa-regular fa-sharp fa-plus-square sx"></i> Clear/Add</a></li-->
-			<li class="menu-separator"><a href="#notarget" data-cmd="clear_play_item"><i class="fa-regular fa-sharp fa-chevron-square-right sx"></i> Clear/Play</a></li>
+			<li><a href="#notarget" data-cmd="clear_play_item"><i class="fa-regular fa-sharp fa-chevron-square-right sx"></i> Clear/Play</a></li>
+			<li class="menu-separator"><a href="#notarget" data-cmd="export_playlist"><i class="fa-solid fa-sharp fa-download sx"></i> Download</a></li>
+			<li><a href="#notarget" data-cmd="delete_playlist"><i class="fa-regular fa-sharp fa-trash sx"></i> Delete</a></li>
 		</ul>
 	</div>
 
@@ -2908,8 +3042,20 @@
 			<li><a href="#notarget" data-cmd="play_item_next"><i class="fa-regular fa-sharp fa-play-circle sx"></i> Play next</a></li>
 			<!--li><a href="#notarget" data-cmd="clear_add_item"><i class="fa-regular fa-sharp fa-plus-square sx"></i> Clear/Add</a></li-->
 			<li class="menu-separator"><a href="#notarget" data-cmd="get_playlist_names"><i class="fa-regular fa-sharp fa-list-music sx"></i> Add to playlist</a></li>
-			<li><a href="#notarget" data-cmd="edit_station"><i class="fa-regular fa-sharp fa-edit sx"></i> Edit station</a></li>
-			<li><a href="#notarget" data-cmd="delete_station"><i class="fa-regular fa-sharp fa-trash sx"></i> Delete station</a></li>
+			<li><a href="#notarget" data-cmd="edit_station"><i class="fa-regular fa-sharp fa-edit sx"></i> Edit</a></li>
+			<li><a href="#notarget" data-cmd="delete_station"><i class="fa-regular fa-sharp fa-trash sx"></i> Delete</a></li>
+		</ul>
+	</div>
+
+	<div id="context-menu-radio-browser-item" class="context-menu">
+		<ul class="dropdown-menu" role="menu">
+			<li><a href="#notarget" data-cmd="add_item"><i class="fa-regular fa-sharp fa-plus sx"></i> Add</a></li>
+			<li><a href="#notarget" data-cmd="play_item"><i class="fa-regular fa-sharp fa-play sx"></i> Play</a></li>
+			<li><a href="#notarget" data-cmd="clear_play_item"><i class="fa-regular fa-sharp fa-chevron-square-right sx"></i> Clear/Play</a></li>
+			<li><a href="#notarget" data-cmd="add_item_next"><i class="fa-regular fa-sharp fa-plus-circle sx"></i> Add next</a></li>
+			<li><a href="#notarget" data-cmd="play_item_next"><i class="fa-regular fa-sharp fa-play-circle sx"></i> Play next</a></li>
+			<li class="menu-separator"><a href="#notarget" data-cmd="get_playlist_names"><i class="fa-regular fa-sharp fa-list-music sx"></i> Add to playlist</a></li>
+			<li id="rb-ctx-remove-recent" class="menu-separator hide"><a href="#notarget" data-cmd="rb_remove_recent"><i class="fa-regular fa-sharp fa-circle-xmark sx"></i> Remove from recent</a></li>
 		</ul>
 	</div>
 
@@ -2921,8 +3067,9 @@
 			<li><a href="#notarget" data-cmd="add_item_next"><i class="fa-regular fa-sharp fa-plus-circle sx"></i> Add next</a></li>
 			<li class="menu-separator"><a href="#notarget" data-cmd="play_item_next"><i class="fa-regular fa-sharp fa-play-circle sx"></i> Play next</a></li>
 			<!--li><a href="#notarget" data-cmd="clear_add_item"><i class="fa-regular fa-sharp fa-plus-square sx"></i> Clear/Add</a></li-->
-			<li><a href="#notarget" data-cmd="edit_playlist"><i class="fa-regular fa-sharp fa-edit sx"></i> Edit playlist</a></li>
-			<li><a href="#notarget" data-cmd="delete_playlist"><i class="fa-regular fa-sharp fa-trash sx"></i> Delete playlist</a></li>
+			<li><a href="#notarget" data-cmd="edit_playlist"><i class="fa-regular fa-sharp fa-edit sx"></i> Edit</a></li>
+			<li><a href="#notarget" data-cmd="export_playlist"><i class="fa-solid fa-sharp fa-download sx"></i> Download</a></li>
+			<li><a href="#notarget" data-cmd="delete_playlist"><i class="fa-regular fa-sharp fa-trash sx"></i> Delete</a></li>
 		</ul>
 	</div>
 

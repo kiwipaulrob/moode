@@ -11,18 +11,27 @@
 
 ################################################################################
 #
-# 2026-MM-DD moOde 10.2.5 (Trixie)
+# 2026-07-14 moOde 10.3.0 (Trixie)
 #
 ################################################################################
 
 New features
-- NEW: 
+- NEW: Radio Cover+ adv cover search (based on MR+ by Ivo Scagliola & Marco Mosca)
+- NEW: Radio Browser view (based on RadioBrowser by @rubatron, integrated by @Gjuju)
 
 Updates
+- UPD: Add Playlist upload/download: both Playlist and Folder view (PR #755 by @Gjuju)
+- UPD: Populate CPU governor list from the kernel (PR #757 by @Gjuju)
+- UPD: Add "Revox B251 With Haas Effect" to CamillaDSP sample configs (New image)
 - UPD: Improve iTunes cover art lookup
 
 Bug fixes
-- FIX: Spotify Connect missing cover and metadata
+- FIX: Volume knob responsiveness: freeze/jump, drag flooding (PR #753 by @Gjuju)
+- FIX: Pirev.py crashes on unrecognized revision codes (PR #754 by @Gjuju)
+- FIX: Bluetooth no sound when ALSA output mode is not "Default" (PR #758 by @Gjuju)
+- FIX: Spotify Connect missing covers and metadata
+- FIX: Spotify and AirPlay cover backdrop not being reset after renderer ends
+- FIX: Text/button visibility with Renderer backdrop (revert to no-cover backdrop)
 
 ################################################################################
 #

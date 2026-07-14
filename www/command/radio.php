@@ -6,10 +6,11 @@
 
 require_once __DIR__ . '/../inc/common.php';
 require_once __DIR__ . '/../inc/mpd.php';
+require_once __DIR__ . '/../inc/radio.php';
 require_once __DIR__ . '/../inc/session.php';
 require_once __DIR__ . '/../inc/sql.php';
 
-chkVariables($_GET, array('track_title'));
+chkVariables($_GET, array('title', 'station'));
 chkVariables($_POST, array('path'));
 
 switch ($_GET['cmd']) {
@@ -62,9 +63,11 @@ switch ($_GET['cmd']) {
 			sysCmd('/var/www/daemon/mpdmon.php "' . $_POST['opt'] . '" > /dev/null 2>&1 &');
 		}
 		break;
-	case 'get_track_cover_url':
-		//workerLog('get_track_cover_url: track_title: (' . $_GET['track_title'] . ')');
-		echo json_encode(getRadioCoverUrl($_GET['track_title']));
+	case 'get_radiocover_url':
+		echo json_encode(getRadioCoverUrl($_GET['title'], $_GET['station']));
+		break;
+	case 'clear_radiocover_url_cache':
+		clearRadioCoverUrlCache();
 		break;
 	default:
 		echo 'Unknown command';

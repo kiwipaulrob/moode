@@ -26,6 +26,8 @@ const FEAT_PEPPYDISPLAY = 131072;	// y Peppy display
 //						-------
 //						  228279
 
+const VOL_KNOB_DEBOUNCE = 150; // ms, coalesce a knob drag's intermediate values
+
 // Notifications
 const NOTIFY_TITLE_INFO = '<i class="fa fa-solid fa-sharp fa-circle-check" style="color:#27ae60;"></i> Info';
 const NOTIFY_TITLE_ALERT = '<i class="fa fa-solid fa-sharp fa-circle-xmark" style="color:#e74c3c;"></i> Alert';
@@ -88,12 +90,12 @@ const LIB_MOUNT_TYPE_NVME = 'nvme';
 
 // Default titles and covers
 const DEFAULT_STATION_NAME = 'Radio station';
-const DEFAULT_RADIO_COVER = 'images/default-album-cover.png';
-const DEFAULT_ALBUM_COVER = 'images/default-album-cover.png';
+const DEFAULT_ALBUM_COVER = 'images/default-album-cover.jpg';
+const DEFAULT_RADIO_COVER = 'images/default-radio-cover.jpg';
+const DEFAULT_PLAYLIST_COVER = 'images/default-playlist-cover.jpg';
+const DEFAULT_NOTFOUND_COVER = 'images/default-notfound-cover.jpg';
 const DEFAULT_UPNP_COVER = 'images/default-upnp-cover.jpg';
-const DEFAULT_RX_COVER = 'images/default-rx-cover.jpg';
-const DEFAULT_PLAYLIST_COVER = '/var/www/images/default-playlist-cover.jpg';
-const DEFAULT_NOTFOUND_COVER = '/var/www/images/default-notfound-cover.jpg';
+const DEFAULT_RX_COVER = 'images/default-rx-cover.jpg'; // DEPRECATED
 
 var UI = {
     knob: null,
@@ -348,6 +350,10 @@ function engineMpd() {
     				else {
     					if (MPD.json['date']) MPD.json['date'] = MPD.json['date'].slice(0,4); // should fix in php but...
     					renderUI();
+    				}
+
+    				if (MPD.json['idle_mixer_changed'] == '1' && MPD.json['idle_timeout_event'] != 'changed: mixer') {
+    					renderUIVol();
     				}
                 }
 
@@ -791,29 +797,16 @@ function engineCmdLite() {
 function inpSrcIndicator(cmd, msgText) {
 	// DEBUG:
 	//console.log('inpSrcIndicator(): ' + cmd + ' | ' + msgText);
+
+	// Reset
 	UI.currentFile = 'blank';
     $('#inpsrc-msg').removeClass('inpsrc-msg-metadata');
     $('#inpsrc-msg').addClass('inpsrc-msg-default');
     $('#inpsrc-msg').css({width:'100%', top:'50%', bottom:'unset'});
     $('#inpsrc-metadata').hide();
 	$('#inpsrc-cover').html('');
-
-    // Set custom backdrop (if any)
-    if (cmd == 'rxactive1') {
-        $('#inpsrc-backdrop').html('<img class="ss-backdrop" ' + 'src="' + DEFAULT_RX_COVER + '">');
-        $('#inpsrc-backdrop').css('filter', 'blur(1.25px)');
-        $('#inpsrc-backdrop').css('transform', 'scale(1.0)');
-    } else if (SESSION.json['renderer_backdrop'] == 'Yes') {
-        if (SESSION.json['cover_backdrop'] == 'Yes' && MPD.json['coverurl'].indexOf(DEFAULT_ALBUM_COVER) === -1) {
-            $('#inpsrc-backdrop').html('<img class="ss-backdrop" ' + 'src="' + MPD.json['coverurl'] + '">');
-            $('#inpsrc-backdrop').css('filter', 'blur(' + SESSION.json['cover_blur'] + ')');
-            $('#inpsrc-backdrop').css('transform', 'scale(' + SESSION.json['cover_scale'] + ')');
-        } else if (SESSION.json['bgimage'] != '') {
-            $('#inpsrc-backdrop').html('<img class="ss-backdrop" ' + 'src="' + SESSION.json['bgimage'] + '">');
-            $('#inpsrc-backdrop').css('filter', 'blur(0px)');
-            $('#inpsrc-backdrop').css('transform', 'scale(1.0)');
-        }
-    }
+    $('#inpsrc-backdrop').html('');
+    $('#inpsrc-style').css('display', 'none');
 
     // Set the button and preamp volume
     // NOTE: Preamp volume #id will only exist if audioin != Local
@@ -1081,10 +1074,16 @@ function renderUIVol() {
 
 	// Load session vars (required for multi-client)
     $.getJSON('command/cfg-table.php?cmd=get_cfg_system', function(data) {
+        var localVol = SESSION.json['volknob'];
+        var localMute = SESSION.json['volmute'];
     	if (data === false) {
             console.log('renderUIVol(): No data returned from get_cfg_system');
     	} else {
             SESSION.json = data;
+        }
+        if (Date.now() - (GLOBAL.volLastChange || 0) < 1500) {
+            SESSION.json['volknob'] = localVol;
+            SESSION.json['volmute'] = localMute;
         }
 
         // Volume type
@@ -1137,10 +1136,16 @@ function renderUI() {
 
     // Load session vars (required for multi-client)
     $.getJSON('command/cfg-table.php?cmd=get_cfg_system', function(data) {
+        var localVol = SESSION.json['volknob'];
+        var localMute = SESSION.json['volmute'];
         if (data === false) {
             console.log('renderUI(): No data returned from get_cfg_system');
     	} else {
             SESSION.json = data;
+        }
+        if (Date.now() - (GLOBAL.volLastChange || 0) < 1500) {
+            SESSION.json['volknob'] = localVol;
+            SESSION.json['volmute'] = localMute;
         }
 
         // Debug notification (appears above cover art)
@@ -1218,7 +1223,7 @@ function renderUI() {
             // Thumbnail cover for Playbar
             if (MPD.json['file'] && MPD.json['coverurl']) {
 				if (MPD.json['artist'] == DEFAULT_STATION_NAME) {
-					if (MPD.json['coverurl'].includes('https://')) {
+					if (MPD.json['coverurl'].substring(0, 4) == 'http') { // Use substr for 'http'
 						 // Track cover
 						var image_url = MPD.json['coverurl'];
 					} else {
@@ -1719,9 +1724,9 @@ function updateActivePlayqueueItem() {
                             $('#pq-' + (parseInt(MPD.json['song']) + 1).toString() + ' .pll1').html(data[i].Title);
                             // Update in case MPD did not get Title tag at initial play
 							$('#currentsong').html(data[i].Title);
-							if (SESSION.json['radio_track_covers'] == 'Yes' && MPD.json['state'] == 'play') {
+							if (SESSION.json['radio_covers'] != 'No' && MPD.json['state'] == 'play') {
 								if (!data[i].Title.toLowerCase().includes('advert')) {
-									updateTrackCover(data[i].Title);
+									updateRadioCover(data[i].Title, data[i].Name);
 								}
 							}
                             // Add search URL, see corresponding code in renderUI()
@@ -1763,7 +1768,7 @@ function renderPlayqueue(state) {
         //console.log('renderPlayqueue(' + seqNum++ + '): GLOBAL.playQueueLength: ' + GLOBAL.playQueueLength);
 		var showPlayqueueThumb = SESSION.json['playlist_art'] == 'Yes' ? true : false;
 
-		// Format playlist items
+		// Format Queue items
         if (data) {
             for (i = 0; i < data.length; i++) {
 	            // Item highlight
@@ -1810,9 +1815,9 @@ function renderPlayqueue(state) {
 						if (i == parseInt(MPD.json['song'])) { // active
                             // Update in case MPD did not get Title tag at initial play
 							$('#currentsong').html(data[i].Title);
-							if (SESSION.json['radio_track_covers'] == 'Yes' && MPD.json['state'] == 'play') {
+							if (SESSION.json['radio_covers'] != 'No' && MPD.json['state'] == 'play') {
 								if (!data[i].Title.toLowerCase().includes('advert')) {
-									updateTrackCover(data[i].Title);
+									updateRadioCover(data[i].Title, data[i].Name);
 								}
 							}
 							// Add search URL, see corresponding code in renderUI()
@@ -1903,15 +1908,15 @@ function renderPlayqueue(state) {
     });
 }
 
-// Update track cover
-function updateTrackCover(trackTitle) {
-	$.getJSON('command/radio.php?cmd=get_track_cover_url', {'track_title': trackTitle}, function(coverURL) {
+// Update radio cover
+function updateRadioCover(title, station) {
+	$.getJSON('command/radio.php?cmd=get_radiocover_url', {'title': title, 'station': station}, function(coverURL) {
 		// DEBUG:
-		//console.log('updateTrackCover(): ' + trackTitle);
+		//console.log('updateRadioCover(): ' + title + '|' + station);
 		//console.log(coverURL);
-		if (coverURL.includes('https://') && MPD.json['coverurl'] != coverURL) {
+		if (coverURL.substring(0, 4) == 'http' && MPD.json['coverurl'] != coverURL) {
 			MPD.json['coverurl'] = coverURL;
-			MPD.json['title'] = trackTitle;
+			MPD.json['title'] = title;
 			// Playback/Playbar cover
 			$('#coverart-url').html('<img class="coverart" ' + 'src="' + MPD.json['coverurl'] + '" ' + 'alt="Cover art not found"' + '>');
 			$('#playbar-cover').html('<img src="' + MPD.json['coverurl'] + '">');
@@ -1944,6 +1949,8 @@ function sendQueueCmd(cmd, path) {
 function renderFolderView(data, path, searchstr) {
 	UI.path = path;
     $('#db-path').text(path);
+    // Import targets the playlists at the root, so only offer it there
+    $('#btn-db-import').toggle(path == '');
 
 	// Separate out dirs, playlists, files, exclude the RADIO folder
 	var dirs = [];
@@ -2179,7 +2186,7 @@ function renderRadioView(lazyLoad = true) {
         if (showHideOtherStations == 'Hide all' || showHideOtherStations == 'Un-hide all') {
             var newStationType = showHideOtherStations == 'Hide all' ? 'h' : 'r';
             for (var i = 0; i < data.length; i++) {
-                if (parseInt(data[i].id) > 499 && data[i].type != 'f') {
+                if (parseInt(data[i].id) > 499 && data[i].type.substring(0, 1) != 'f') { // f or fb
                     data[i].type = newStationType;
                 }
             }
@@ -2206,6 +2213,7 @@ function renderRadioView(lazyLoad = true) {
                     k = k + 1;
                     break;
                 case 'f':
+				case 'fb':
                     allNonHiddenStations[j] = data[i];
                     j = j + 1;
                     favoriteStations[l] = data[i];
@@ -2275,7 +2283,7 @@ function renderRadioView(lazyLoad = true) {
 			data = allNonHiddenStations;
         } else if (showHideOtherStations == 'Edit hidden') {
             data = hiddenOtherStations;
-        } else if (groupMethod == 'Favorites first') {
+        } else if (groupMethod.includes('Favorites')) {
             data = favoriteStations.concat(regularStations);
         } else if (groupMethod == 'Sort tag' || groupMethod == 'No grouping') {
             data =  allNonHiddenStations;
@@ -2293,7 +2301,7 @@ function renderRadioView(lazyLoad = true) {
         // Favorites header (if any) and end flag
         var output = '';
         var endOfFavs = true;
-        if (groupMethod == 'Favorites first' && favoriteStations.length > 0) {
+        if (groupMethod.includes('Favorites') && favoriteStations.length > 0) {
             output = '<li class="horiz-rule-radioview">Favorites</li>';
             endOfFavs = false;
         }
@@ -2330,19 +2338,22 @@ function renderRadioView(lazyLoad = true) {
             var genreDiv = sortTag == 'genre' ? '<div class="radioview-metadata-text">' + data[i].genre + '</div>' : '';
 
             // Output Favorites first
-            if (groupMethod == 'Favorites first' && data[i].type == 'f') {
+            if (groupMethod.includes('Favorites') && data[i].type.substring(0, 1) == 'f') {
                 //NOP
             }
-            // Change to Sort tag grouping unless method is No grouping
-            else if (groupMethod != 'No grouping') {
+            // Change to Sort tag grouping unless method is No grouping or Favorites first
+            else if (groupMethod != 'No grouping' && groupMethod != 'Favorites first') {
                 groupMethod = 'Sort tag';
             }
 
             // Mark the end of Favorites
-            if (configuredGroupMethod == 'Favorites first') {
-                if (endOfFavs === false && data[i].type != 'f' && lastSortTagValue != '') {
+            if (configuredGroupMethod.includes('Favorites')) {
+                if (endOfFavs === false && data[i].type.substring(0, 1) != 'f' && lastSortTagValue != '') {
                     lastSortTagValue = '';
                     endOfFavs = true;
+					if (configuredGroupMethod == 'Favorites first') { // no group remaining
+						output += '<li class="horiz-rule-radioview"></li>';
+					}
                 }
             }
 
@@ -2369,8 +2380,14 @@ function renderRadioView(lazyLoad = true) {
 
             // Construct station entries
             var imgUrl = data[i].logo == 'local' ? 'imagesw/radio-logos/thumbs/' + data[i].name + '.jpg' : data[i].logo;
-    		output += '<li id="ra-' + (i + 1) + '" data-path="' + 'RADIO/' + data[i].name + '.pls';
-    		output += '"><div class="db-icon db-song db-browse db-action">' + radioViewLazy + encodeURIComponent(imgUrl) + '"></div><div class="cover-menu" data-toggle="context" data-target="#context-menu-radio-item"></div></div><div class="db-entry db-song db-browse"></div>';
+            // Favorite heart (mirrors the Radio Browser explorer tile) — toggles cfg_radio type f<->r ??
+			if (data[i].type == 'fb') {
+				var favToggle = '<div class="rb-fav-toggle added"><i class="fa-solid fa-sharp fa-heart"></i></div>';
+			} else {
+				var favToggle = '';
+			}
+    		output += '<li id="ra-' + (i + 1) + '" data-path="' + 'RADIO/' + data[i].name + '.pls" data-url="' + rbEscapeHtml(data[i].station) + '" data-name="' + rbEscapeHtml(data[i].name);
+    		output += '"><div class="db-icon db-song db-browse db-action">' + radioViewLazy + encodeURIComponent(imgUrl) + '">' + favToggle + '</div><div class="cover-menu" data-toggle="context" data-target="#context-menu-radio-item"></div></div><div class="db-entry db-song db-browse"></div>';
             output += radioViewHdDiv;
 			output += radioViewBgDiv;
             output += '<span class="station-name">' + data[i].name + '</span>';
@@ -2403,7 +2420,6 @@ function renderRadioView(lazyLoad = true) {
 function renderPlaylistView () {
     var playlists = '';
     $.getJSON('command/playlist.php?cmd=get_playlists', function(playlists) {
-        //console.log(playlists);
         // Lazyload method
         var plViewLazy = GLOBAL.nativeLazyLoad ? '<div class="thumbHW"><img loading="lazy" src="' : '<div class="thumbHW"><img class="lazy-playlistview" data-original="';
 
@@ -2467,10 +2483,15 @@ function renderPlaylistView () {
             }
 
             // Construct playlist entries
-            var imgUrl = playlists[i].cover == 'local' || playlists[i].cover == 'default' ? 'imagesw/playlist-covers/' + playlists[i].name + '.jpg' : playlists[i].cover;
+			if (playlists[i].cover == 'local') {
+				var imgUrl = 'imagesw/playlist-covers/' + playlists[i].name + '.jpg';
+			} else if (playlists[i].cover == 'default') {
+				var imgUrl = DEFAULT_PLAYLIST_COVER;
+			} else { // Manually entered URL for #EXTIMG tag (rare)
+				var imgUrl = playlists[i].cover;
+			}
     		output += '<li id="pl-entry-' + (i + 1) + '" data-path="' + playlists[i].name + '">';
-    		output += '<div class="db-icon db-song db-browse db-action">' + plViewLazy + encodeURIComponent(imgUrl) + '">';
-            output += playlists[i].cover == 'default' ? '<div class="plview-text-cover-div"><span class="plview-text-cover">' + playlists[i].name + '</span></div>' : '';
+			output += '<div class="db-icon db-song db-browse db-action">' + plViewLazy + encodeURIComponent(imgUrl) + '">';
             output += '</div><div class="cover-menu" data-toggle="context" data-target="#context-menu-playlist-item"></div></div><div class="db-entry db-song db-browse"></div>';
             output += '<span class="playlist-name">' + playlists[i].name + '</span>';
             output += genreDiv;
@@ -2711,6 +2732,8 @@ function setVolume(level, event) {
 	level = level > GLOBAL.mpdMaxVolume ? GLOBAL.mpdMaxVolume : level;
 	level = level < 0 ? 0 : level;
 
+	GLOBAL.volLastChange = Date.now();
+
     var async = true;
 
     /*console.log('setVolume(): ' +
@@ -2723,7 +2746,19 @@ function setVolume(level, event) {
 	if (SESSION.json['volmute'] == '0') {
         //console.log('sendVolCmd(): unmute (volknob ' + SESSION.json['volknob'] + ')');
 		SESSION.json['volknob'] = level.toString();
-		sendVolCmd('POST', 'upd_volume', {'volknob': SESSION.json['volknob'], 'event': event}, async);
+		if (event != 'knob_change') {
+			$('#volume, #volume-2').val(level).trigger('change');
+		}
+		$('.volume-display div, .mpd-volume-level').text(level);
+		if (event == 'knob_change') {
+			clearTimeout(GLOBAL.volKnobTimer);
+			GLOBAL.volKnobTimer = setTimeout(function() {
+				sendVolCmd('POST', 'upd_volume', {'volknob': SESSION.json['volknob'], 'event': event}, async);
+			}, VOL_KNOB_DEBOUNCE);
+		} else {
+			clearTimeout(GLOBAL.volKnobTimer);
+			sendVolCmd('POST', 'upd_volume', {'volknob': SESSION.json['volknob'], 'event': event}, async);
+		}
     } else {
         // Muted
 		if (level == 0 && event == 'mute')	{
@@ -2889,6 +2924,9 @@ $(document).on('click', '.context-menu a', function(e) {
         //
         // Context menu items
         //
+        case 'export_playlist':
+            window.location = 'command/playlist.php?cmd=export_playlist&name=' + encodeURIComponent(path);
+            break;
         case 'add_item':
         case 'play_item':
         case 'clear_play_item':
@@ -3073,6 +3111,7 @@ $(document).on('click', '.context-menu a', function(e) {
                 $('#preview-edit-logoimage').html('<img src="../imagesw/radio-logos/thumbs/' + data['name'] + '.jpg">');
                 $('#edit-station-tags').css('margin-top', '20px');
                 $('#edit-station-type span').text(getKeyOrValue('key', data['type']));
+				data['type'] == 'fb' ? $('#edit-station-type-fb').show() : $('#edit-station-type-fb').hide();
                 $('#edit-station-genre').val(data['genre']);
                 $('#edit-station-broadcaster').val(data['broadcaster']);
                 $('#edit-station-home-page').val(data['home_page']);
@@ -3100,7 +3139,15 @@ $(document).on('click', '.context-menu a', function(e) {
                 $('#edit-playlist-name').val(path);
                 $('#edit-plcoverimage').val('');
                 $('#info-toggle-edit-plcoverimage').css('margin-left','60px');
-                $('#preview-edit-plcoverimage').html('<img src="../imagesw/playlist-covers/' + path + '.jpg">');
+				var icon = '';
+				if (data.cover == 'local') {
+					var imgUrl = '../imagesw/playlist-covers/' + path + '.jpg';
+				} else if (data.cover == 'default') {
+					var imgUrl = DEFAULT_PLAYLIST_COVER;
+				} else { // Manually entered URL for #EXTIMG tag (rare)
+					var imgUrl = data.cover;
+				}
+				$('#preview-edit-plcoverimage').html('<img src="' + imgUrl + '">');
                 $('#edit-playlist-tags').css('margin-top', '20px');
                 $('#edit-playlist-genre').val(data['genre']);
 
@@ -3405,7 +3452,6 @@ $(document).on('click', '.context-menu a', function(e) {
         		$('#cover-backdrop-enabled span').text(SESSION.json['cover_backdrop']);
         		$('#cover-blur span').text(SESSION.json['cover_blur']);
         		$('#cover-scale span').text(SESSION.json['cover_scale']);
-                $('#renderer-backdrop span').text(SESSION.json['renderer_backdrop']);
                 $('#font-size span').text(SESSION.json['font_size']);
                 $('#native-lazyload span').text(SESSION.json['native_lazyload']);
 
@@ -3421,7 +3467,7 @@ $(document).on('click', '.context-menu a', function(e) {
                 $('#hires-thumbnails span').text(getKeyOrValue('key', SESSION.json['library_hiresthm']));
                 $('#playqueue-art-enabled span').text(SESSION.json['playlist_art']);
                 $('#show-tagview-covers span').text(SESSION.json['library_tagview_covers']);
-				$('#show-radio-track-covers span').text(SESSION.json['radio_track_covers']);
+				$('#show-radio-covers span').text(SESSION.json['radio_covers']);
 				$('#itunes-query-timeout span').text(SESSION.json['itunes_query_timeout']);
 
                 // Library
@@ -3598,7 +3644,7 @@ $('#btn-preferences-update').click(function(e){
 	var fontSizeChange = false;
     var lazyLoadChange = false;
     var playqueueArtChange = false;
-	var radioTrackCoversChange = false;
+	var radioCoversChange = false;
     var showNpIconChange = false;
 	var thumbSizeChange = false;
 
@@ -3637,7 +3683,7 @@ $('#btn-preferences-update').click(function(e){
     if (SESSION.json['library_hiresthm'] != getKeyOrValue('value', $('#hires-thumbnails span').text())) {regenThumbsReqd = true;}
     if (SESSION.json['playlist_art'] != $('#playqueue-art-enabled span').text()) {playqueueArtChange = true;}
     if (SESSION.json['library_tagview_covers'] != $('#show-tagview-covers span').text()) {libraryOptionsChange = true;}
-	if (SESSION.json['radio_track_covers'] != $('#show-radio-track-covers span').text()) {radioTrackCoversChange = true;}
+	if (SESSION.json['radio_covers'] != $('#show-radio-covers span').text()) {radioCoversChange = true;}
 
     // Library
 	// One-touch actions
@@ -3684,7 +3730,6 @@ $('#btn-preferences-update').click(function(e){
 	SESSION.json['cover_backdrop'] = $('#cover-backdrop-enabled span').text();
 	SESSION.json['cover_blur'] = $('#cover-blur span').text();
 	SESSION.json['cover_scale'] = $('#cover-scale span').text();
-    SESSION.json['renderer_backdrop'] = $('#renderer-backdrop span').text();
     SESSION.json['font_size'] = $('#font-size span').text();
     SESSION.json['native_lazyload'] = $('#native-lazyload span').text();
 
@@ -3700,9 +3745,8 @@ $('#btn-preferences-update').click(function(e){
     SESSION.json['library_hiresthm'] = getKeyOrValue('value', $('#hires-thumbnails span').text());
     SESSION.json['playlist_art'] = $('#playqueue-art-enabled span').text();
     SESSION.json['library_tagview_covers'] = $('#show-tagview-covers span').text();
-	SESSION.json['radio_track_covers'] = $('#show-radio-track-covers span').text();
+	SESSION.json['radio_covers'] = $('#show-radio-covers span').text();
 	SESSION.json['itunes_query_timeout'] = $('#itunes-query-timeout span').text();
-
     // Library
 	// One-touch actions
     SESSION.json['library_onetouch_album'] = $('#onetouch_album span').text();
@@ -3756,6 +3800,10 @@ $('#btn-preferences-update').click(function(e){
         $.post('command/music-library.php?cmd=clear_libcache_all');
 	}
 
+	if (radioCoversChange == true) {
+        $.post('command/radio.php?cmd=clear_radiocover_url_cache');
+	}
+
 	if (accentColorChange == true) {
 		accentColor = themeToColors(SESSION.json['accent_color']);
 		$('.playbackknob').trigger('configure',{"fgColor":accentColor});
@@ -3807,7 +3855,6 @@ $('#btn-preferences-update').click(function(e){
             'cover_backdrop': SESSION.json['cover_backdrop'],
             'cover_blur': SESSION.json['cover_blur'],
             'cover_scale': SESSION.json['cover_scale'],
-            'renderer_backdrop': SESSION.json['renderer_backdrop'],
             'font_size': SESSION.json['font_size'],
             'native_lazyload': SESSION.json['native_lazyload'],
 
@@ -3823,7 +3870,7 @@ $('#btn-preferences-update').click(function(e){
             'library_hiresthm': SESSION.json['library_hiresthm'],
             'playlist_art': SESSION.json['playlist_art'],
             'library_tagview_covers': SESSION.json['library_tagview_covers'],
-			'radio_track_covers': SESSION.json['radio_track_covers'],
+			'radio_covers': SESSION.json['radio_covers'],
 			'itunes_query_timeout': SESSION.json['itunes_query_timeout'],
 
             // Library
@@ -3865,8 +3912,8 @@ $('#btn-preferences-update').click(function(e){
         function() {
             if (extraTagsChange || scnSaverStyleChange || scnSaverModeChange || scnSaverLayoutChange ||
                 playHistoryChange || libraryOptionsChange || clearLibcacheAllReqd || lazyLoadChange ||
-				radioTrackCoversChange ||
-                (SESSION.json['bgimage'] != '' && SESSION.json['cover_backdrop'] == 'No') || UI.bgImgChange == true) {
+                (SESSION.json['bgimage'] != '' && SESSION.json['cover_backdrop'] == 'No') || UI.bgImgChange == true
+			) {
                 notify(NOTIFY_TITLE_INFO, 'settings_updated_with_msg', ' The page will automatically refresh to make the settings effective.');
                 setTimeout(function() {
                     location.reload(true);
@@ -4046,8 +4093,14 @@ function setClkRadioCtls(ctlValue) {
 // Custom select controls
 $('body').on('click', '.dropdown-menu .custom-select a', function(e) {
     var selector = '#' + $(this).data('cmd').substr(0, $(this).data('cmd').indexOf('-sel'));
-    $(selector + ' span').text($(this).text());
+	// Default: update the main span element
+    $(selector + ' span:not(.data-value)').text($(this).text());
 
+	// Radio Browser
+	if ($(this).data('cmd') == 'rb-country-sel' || $(this).data('cmd') == 'rb-genre-sel') {
+		$(selector + ' span.data-value').text($(this).data('value'));
+	}
+	// Clock radio
     if ($(this).data('cmd') == 'clockradio-mode-sel') {
         setClkRadioCtls($(this).text());
     }
@@ -5366,7 +5419,7 @@ function getKeyOrValue (type, item) {
         // Font size factors
         ['Smaller',.35],['Small',.40],['Normal',.45],['Large',.55],['Larger',.65],['X-Large',.75],
         // Radioview station types
-        ['Regular','r'],['Favorite','f'],['Hidden','h'],
+        ['Regular','r'],['Favorite','f'],['Favorite (Radio Browser)','fb'],['Hidden','h'],
         // Thumbnail resolutions
         ['Auto','Auto'],['400px','400px,75'],['500px','500px,60'],['600px','600px,60'],
         // Dashboard commands
