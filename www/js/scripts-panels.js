@@ -1192,10 +1192,13 @@ jQuery(document).ready(function($) { 'use strict';
         var path = $(this).parents('li').data('path');
         // DEBUG:
         //console.log('click .cover-menu: pos|path: ' + pos + '|' + path);
+		//console.log('click .cover-menu: ul: ' + $(this).parents('ul').attr('id'));
 
         UI.dbEntry[0] = path;
-        UI.radioPos = pos;
-		storeRadioPos(UI.radioPos)
+		if ($(this).parents('ul').attr('id') != 'rb-covers-search') { // dont store for Radio Browser view
+			UI.radioPos = pos;
+			storeRadioPos(UI.radioPos)
+		}
 
         $('#' + UI.dbEntry[3]).removeClass('active');
         UI.dbEntry[3] = $(this).parents('li').attr('id');

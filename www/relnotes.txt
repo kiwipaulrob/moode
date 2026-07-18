@@ -11,13 +11,34 @@
 
 ################################################################################
 #
+# 2026-MM-DD moOde 10.3.1 (Trixie)
+#
+################################################################################
+
+Updates
+- UPD: Provide dB values for MPD software volume (PR #770 @Gjuju)
+
+Radio Browser
+- FIX: Image create in radio-logos/ directory fails
+- FIX: Queue thumb not showing up due to timing issue
+- FIX: List position in Radio view being updated by Radio Browser
+- FIX: Highlight is missing when tile is clicked
+- FIX: Duplicate station URL's can be added
+- FIX: Countries sorted by country code instead of name
+
+Bug fixes
+- FIX: dB volume/attenuation when Peppy is in the audio chain (PR #769 @Gjuju)
+- FIX: Typo in Library Config help for the Analyze button
+
+################################################################################
+#
 # 2026-07-14 moOde 10.3.0 (Trixie)
 #
 ################################################################################
 
 New features
 - NEW: Radio Cover+ adv cover search (based on MR+ by Ivo Scagliola & Marco Mosca)
-- NEW: Radio Browser view (based on RadioBrowser by @rubatron, integrated by @Gjuju)
+- NEW: view (based on RadioBrowser by @rubatron, integrated by @Gjuju)
 
 Updates
 - UPD: Add Playlist upload/download: both Playlist and Folder view (PR #755 by @Gjuju)

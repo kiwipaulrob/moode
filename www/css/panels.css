@@ -591,7 +591,7 @@ img.lib-artistart {
 #lib-content #lib-file li:nth-child(odd) {background:rgba(128,128,128,0.1);}
 #lib-content #lib-file li:nth-child(odd).active {background:var(--accentxta);}
 #lib-content li div.active {color:var(--accentxts);}
-#lib-content li.active, .albumslist .active, #radio-covers li.active, #playlist-covers li.active {background-color:var(--accentxta);color:#eee;}
+#lib-content li.active, .albumslist .active, #radio-covers li.active, #rb-covers-search li.active, #playlist-covers li.active {background-color:var(--accentxta);color:#eee;}
 .lib-entry {padding:0 .5em;margin:0 .1rem;}
 .lib-entry-song {margin-left:4px;padding-top:4px;line-height:normal;margin-right:26px;}
 .lib-track {cursor:pointer;}

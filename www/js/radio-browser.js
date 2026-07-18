@@ -213,7 +213,7 @@ function rbPlay(li) {
         dataType: 'json',
         success: function(data) {
             notify(data && data.success ? NOTIFY_TITLE_INFO : NOTIFY_TITLE_ALERT,
-                'mpd_error', data ? data.message : 'Play failed', NOTIFY_DURATION_SHORT);
+                'rb_message', data ? data.message : 'Play failed', NOTIFY_DURATION_SHORT);
             rbMarkRecentStale(); // the play was recorded server-side; refresh the Recent tab
         }
     });
@@ -227,7 +227,7 @@ function rbToggleFavorite(li) {
     var cmd = isAdded ? 'remove' : 'add';
 
 	if (cmd == 'add') {
-		// Because the add is via submitJob() to worker.php daemon which gets processed up in its polling loop
+		// Notify user because the add is via submitJob() to worker.php which gets processed in its polling loop
 		notify(NOTIFY_TITLE_INFO, 'rb_message', 'Adding station to Favorites... ', NOTIFY_DURATION_INFINITE);
 	}
 
@@ -243,7 +243,7 @@ function rbToggleFavorite(li) {
                 RB.favoritesDirty = true; // refresh the native Radio grid when we return to it
             }
             notify(data && data.success ? NOTIFY_TITLE_INFO : NOTIFY_TITLE_ALERT,
-                'mpd_error', data ? data.message : 'Action failed',
+                'rb_message', data ? data.message : 'Action failed',
 				NOTIFY_DURATION_SHORT);
             // 'update RADIO' lights the busy-spinner; clear it after it settles (native pattern)
             setTimeout(function() { $('.busy-spinner').hide(); }, ONE_SEC_TIMEOUT);
@@ -379,37 +379,91 @@ $(document).ready(function() {
 
     // Tile interactions (event delegation across the search/recent tabs)
     $('#container-radio-browser').on('click', '.database-radio img', function() {
-        rbPlay($(this).closest('li'));
-    });
-    $('#container-radio-browser').on('click', '.rb-fav-toggle', function(e) {
-        e.stopPropagation();
-        rbToggleFavorite($(this).closest('li'));
-    });
-    // Register the station for now-playing; the native .cover-menu handler queues data-path
-    $('#container-radio-browser').on('click', '.cover-menu', function() {
-        // 'Remove from recent' only makes sense on the Recent tab
-        $('#rb-ctx-remove-recent').toggleClass('hide', RB.tab !== 'recent');
-        var station = rbStationFromTile($(this).closest('li'));
-        if (!station.url) return;
-        RB.menuUrl = station.url; // target for the Remove-from-recent action
-        rbRegisterInRadioJson(station);
-        $.ajax({ url: RB_API + '?cmd=register', type: 'POST',
-                 contentType: 'application/json', data: JSON.stringify(station) });
+		li = $(this).closest('li');
+		$('#container-radio-browser .database-radio li').removeClass('active');
+		$(li).addClass('active');
+
+		// NOTE: Disable instant play
+		// Lacks registration checks and time delay needed to ensure Queue thumb shows up
+        //rbPlay(li);
     });
 
+    $('#container-radio-browser').on('click', '.rb-fav-toggle', function(e) {
+        e.stopPropagation();
+		var station = rbStationFromTile($(this).closest('li'));
+		if (!station.url) {
+			notify(NOTIFY_TITLE_ALERT,'rb_message', 'Action failed: URL missing', NOTIFY_DURATION_SHORT);
+			return false;
+		} else {
+			var li = $(this).closest('li')
+			$.getJSON(RB_API + '?cmd=check_registered', {'url': station.url}, function(data) {
+				if (data.success && data.message == 'Station exists in Radio view') {
+					notify(NOTIFY_TITLE_INFO,'rb_message', 'Station already exists in Radio view', NOTIFY_DURATION_SHORT);
+				} else {
+					rbToggleFavorite(li);
+				}
+			});
+		}
+    });
+
+	// Register the station for now-playing; the native .cover-menu handler queues data-path
+	$('#container-radio-browser').on('click', '.cover-menu', function() {
+		// 'Remove from recent' only makes sense on the Recent tab
+		$('#rb-ctx-remove-recent').toggleClass('hide', RB.tab !== 'recent');
+		var station = rbStationFromTile($(this).closest('li'));
+		if (!station.url) {
+			notify(NOTIFY_TITLE_ALERT,'rb_message', 'Action failed: URL missing', NOTIFY_DURATION_SHORT);
+			return false;
+		} else {
+			RB.menuUrl = station.url; // target for the Remove-from-recent action
+			$.getJSON(RB_API + '?cmd=check_registered', {'url': station.url}, function(data) {
+				//console.log(data.message);
+				if (data.success) {
+					if (data.message == 'Station exists in Radio view') {
+						notify(NOTIFY_TITLE_INFO,'rb_message', 'Station already exists in Radio view', NOTIFY_DURATION_SHORT);
+					}
+					$('#context-menu-radio-browser-item').show();
+				} else {
+					 // not in cfg_radio, pruned due to being removed from the Queue
+					rbRegisterInRadioJson(station);
+					notify(NOTIFY_TITLE_INFO,'rb_message', 'Registering station for playback...', NOTIFY_DURATION_INFINITE);
+					$.ajax({
+			            url: RB_API + '?cmd=register',
+			            type: 'POST',
+			            contentType: 'application/json',
+			            data: JSON.stringify(station),
+			            dataType: 'json',
+			            success: function(data) {
+							if (data.success) {
+								$('.ui-pnotify-closer').click();
+								$('#context-menu-radio-browser-item').show();
+							} else {
+								notify(NOTIFY_TITLE_ALERT, 'rb_message', 'Action failed', NOTIFY_DURATION_SHORT);
+							}
+						}
+					});
+				}
+			});
+		}
+	});
+
     $('#context-menu-radio-browser-item a[data-cmd="rb_remove_recent"]').click(function() {
-        if (!RB.menuUrl) return;
-        $.ajax({
-            url: RB_API + '?cmd=remove_recent',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({url: RB.menuUrl}),
-            dataType: 'json',
-            success: function(data) {
-                if (data && data.success) { rbLoadRecent(); }
-                notify(data && data.success ? NOTIFY_TITLE_INFO : NOTIFY_TITLE_ALERT,
-                    'mpd_error', data ? data.message : 'Action failed', NOTIFY_DURATION_SHORT);
-            }
-        });
+        if (!RB.menuUrl) {
+			notify(NOTIFY_TITLE_ALERT,'rb_message', 'Action failed: URL missing', NOTIFY_DURATION_SHORT);
+			return false;
+		} else {
+			$.ajax({
+	            url: RB_API + '?cmd=remove_recent',
+	            type: 'POST',
+	            contentType: 'application/json',
+	            data: JSON.stringify({url: RB.menuUrl}),
+	            dataType: 'json',
+	            success: function(data) {
+	                if (data && data.success) { rbLoadRecent(); }
+	                notify(data && data.success ? NOTIFY_TITLE_INFO : NOTIFY_TITLE_ALERT,
+	                    'rb_message', data ? data.message : 'Action failed', NOTIFY_DURATION_SHORT);
+	            }
+	        });
+		}
     });
 });

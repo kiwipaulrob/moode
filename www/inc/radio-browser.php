@@ -182,7 +182,7 @@ function rbResizeAndSave($src, $srcW, $srcH, $size, $outPath, $quality = 85) {
 function rbSaveLogo($name, $imageData) {
 	// The RADIO_LOGOS_ROOT dirs are owned by root so use worker.php job processor which runs as root
 	phpSession('open');
-	submitJob('set_rblogo_image', $name . ',' . $imageData);
+	submitJob('set_rblogo_image', $name . '~~~' . $imageData);
 	phpSession('close');
 	waitWorker('rbSaveLogo');
 	return true;
@@ -443,7 +443,7 @@ function rbPruneOrphanStations($keepUrl = '') {
 		sysCmd('rm -f "' . RADIO_LOGOS_ROOT . $name . '.jpg"');
 		sysCmd('rm -f "' . RADIO_LOGOS_ROOT . 'thumbs/' . $name . '.jpg"');
 		sysCmd('rm -f "' . RADIO_LOGOS_ROOT . 'thumbs/' . $name . '_sm.jpg"');
-		// A demoted favorite (f -> u) keeps its RADIO/<name>.pls; remove it too so it doesn't
+		// A demoted favorite (fb -> rb) keeps its RADIO/<name>.pls; remove it too so it doesn't
 		// orphan in the RADIO folder. A play-only 'rb' has none (rm -f is then a harmless no-op).
 		sysCmd('rm -f "' . MPD_MUSICROOT . 'RADIO/' . $name . '.pls"');
 	}
@@ -502,8 +502,7 @@ function rbRegisterStation($station) {
 	$format = trim($station['codec'] ?? '');
 	$homepage = trim($station['homepage'] ?? '');
 
-	rbEnsureLogo($name, $favicon);
-
+	// Update cfg_radio
 	$dbh = sqlConnect();
 	$exists = sqlQuery("SELECT id FROM cfg_radio WHERE station='" . SQLite3::escapeString($url) . "' LIMIT 1", $dbh);
 	if (!is_array($exists)) {
@@ -523,7 +522,7 @@ function rbRegisterStation($station) {
 			"'No'";
 		sqlQuery('INSERT INTO cfg_radio VALUES (' . $vals . ')', $dbh);
 	}
-
+	// Update session
 	phpSession('open');
 	$_SESSION[$url] = array(
 		'name' => $name, 'type' => 'rb', 'logo' => 'local',
@@ -531,6 +530,9 @@ function rbRegisterStation($station) {
 		'home_page' => $homepage, 'monitor' => 'No'
 	);
 	phpSession('close');
+
+	// For new logo 'set_rblogo_image' job is submitted to worker
+	rbEnsureLogo($name, $favicon);
 
 	return array('name' => $name, 'format' => $format, 'bitrate' => $bitrate, 'homepage' => $homepage);
 }

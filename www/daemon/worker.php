@@ -745,6 +745,13 @@ workerLog('worker: ALSA mode:     ' . ALSA_OUTPUT_MODE_NAME[$_SESSION['alsa_outp
 // ALSA mixer
 phpSession('write', 'amixname', getAlsaMixerName($_SESSION['adevname']));
 workerLog('worker: ALSA mixer:    ' . ($_SESSION['amixname'] == 'none' ? 'none exists' : $_SESSION['amixname']));
+// Drop a stray softvol control left under the simple mixer name by an earlier release.
+// ALSA restores it at boot, where it shadows the hardware control. Only application
+// created controls are removed, so a hardware element is never touched.
+if ($_SESSION['amixname'] != 'none') {
+	sysCmd('alsactl clean ' . $_SESSION['cardnum'] . ' "name=\'' . $_SESSION['amixname'] . '\'"');
+	sysCmd('alsactl store ' . $_SESSION['cardnum']);
+}
 // HDMI mixer initialize (after first boot a test signal needs to be sent to "register" the mixer with ALSA)
 if ($_SESSION['alsa_output_mode'] == 'iec958') {
 	$result = getAlsaVolume($_SESSION['amixname']);
@@ -3934,24 +3941,24 @@ function runQueuedJob() {
 
 		// Radio Browser favorite to Radio view
 		case 'set_rblogo_image':
-			$queueArgs = explode(',', $_SESSION['w_queueargs'], 2);
+			$queueArgs = explode('~~~', $_SESSION['w_queueargs'], 2);
 			$name = $queueArgs[0];
 			$imageData = $queueArgs[1];
 
-			$src = @imagecreatefromstring($imageData);
-			if (!$src) {
+			$image = @imagecreatefromstring($imageData);
+			if (!$image) {
 				workerLog('worker: '. $job .' ERROR: imagecreatefromstring() failed for ' . $name);
 				break;
 			}
 
-			$w = imagesx($src);
-			$h = imagesy($src);
-			$ok1 = rbResizeAndSave($src, $w, $h, 400, RADIO_LOGOS_ROOT . $name . '.jpg');
-			$ok2 = rbResizeAndSave($src, $w, $h, 200, RADIO_LOGOS_ROOT . 'thumbs/' . $name . '.jpg');
-			$ok3 = rbResizeAndSave($src, $w, $h, 80, RADIO_LOGOS_ROOT . 'thumbs/' . $name . '_sm.jpg');
+			$w = imagesx($image);
+			$h = imagesy($image);
+			$ok1 = rbResizeAndSave($image, $w, $h, 400, RADIO_LOGOS_ROOT . $name . '.jpg');
+			$ok2 = rbResizeAndSave($image, $w, $h, 200, RADIO_LOGOS_ROOT . 'thumbs/' . $name . '.jpg');
+			$ok3 = rbResizeAndSave($image, $w, $h, 80, RADIO_LOGOS_ROOT . 'thumbs/' . $name . '_sm.jpg');
 
 			if ($ok1 && $ok2 && $ok3) {
-				if (imagedestroy($src) === false) {
+				if (imagedestroy($image) === false) {
 					workerLog('worker: '. $job .' ERROR: imagedestroy() failed for ' . $name);
 					break;
 				}

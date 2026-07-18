@@ -49,7 +49,7 @@ switch ($_GET['cmd']) {
 		$resp = readMpdResp($sock);
 		// A transient radio-browser station (cfg_radio type='rb') exists only while its
 		// stream is queued; once removed from the queue, prune its row from the DB.
-		// Favorites (type='f') and native stations (type='r') are kept untouched.
+		// Favorites (type='f' or type='fb') and native stations (type='r') are kept untouched.
 		rbPruneOrphanStations();
 		break;
 	case 'move_playqueue_item':
