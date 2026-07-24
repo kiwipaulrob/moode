@@ -1203,8 +1203,7 @@ ExecStart=/root/.local/share/uv/tools/sendspin/bin/python /var/local/www/command
 Restart=on-failure
 RestartSec=10
 Environment="HOME=/root"
-Environment="HA_URL=http://192.168.214.159:8123"
-Environment="HA_TOKEN="
+Environment="MA_URL=http://192.168.214.30:8095"
 
 [Install]
 WantedBy=multi-user.target
@@ -1214,7 +1213,7 @@ SINKEOF
     systemctl daemon-reload
     record_install "sendspin_metadata_sink_service"
     log_success "sendspin-metadata-sink.service installed"
-    log_info "  To enable HA metadata, edit $target and set HA_TOKEN + HA_URL"
+    log_info "  Configured MA_URL=${MA_URL:-http://192.168.214.30:8095}. Edit $target to change."
 }
 
 install_setup_txt() {

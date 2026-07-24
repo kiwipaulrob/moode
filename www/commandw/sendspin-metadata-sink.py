@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
 """
-SendSpin Metadata Sink for moOde Audio Player (HA Polling Edition)
+SendSpin Metadata Sink for moOde Audio Player (Multi-Source Edition)
 
-Music Assistant does not populate the SendSpin metadata@v1 role fields.
-This daemon polls Home Assistant's REST API for the media_player.moode_sendspin
-entity state and writes track metadata to moOde's metadata file format.
+Metadata sources in priority order:
+  1. SendSpin protocol metadata@v1 role — works with any sender that populates it
+  2. Music Assistant REST API — works when MA is the sender (no auth needed)
+  3. Streaming status fallback — marks "SendSpin" when a stream is active
 
-The SendSpin listener is kept for connection monitoring (so we know when
-a server connects/disconnects), but actual track data comes from HA.
-
-Requires:
-  - Home Assistant accessible at HA_URL with a long-lived access token
-  - SendSpin CLI venv Python (for aiosendspin dependency)
-
-Systemd service: sendspin-metadata-sink.service
+No external dependencies beyond sendspin CLI + MA network access.
 """
 
 import asyncio
@@ -26,7 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-# Use the aiosendspin library from sendspin-cli's venv (for connection monitoring)
+# Use the aiosendspin library from sendspin-cli's venv
 VENV_SITE = "/root/.local/share/uv/tools/sendspin/lib/python3.12/site-packages"
 sys.path.insert(0, VENV_SITE)
 
@@ -42,11 +36,9 @@ LISTEN_PORT = 8929  # Different from audio daemon (8928)
 CLIENT_NAME = "moOde Metadata"
 CLIENT_ID = "sendspin-metadata-moOde"
 
-# Home Assistant configuration
-HA_URL = "http://192.168.214.159:8123"
-HA_TOKEN = os.environ.get("HA_TOKEN", "")
-HA_ENTITY = "media_player.moode_sendspin"
-HA_POLL_INTERVAL = 3  # seconds between HA API polls
+# Music Assistant configuration (fallback source)
+MA_URL = os.environ.get("MA_URL", "http://192.168.214.30:8095")
+MA_POLL_INTERVAL = 5  # seconds between MA API polls (less frequent than protocol)
 
 # moOde metadata format: Title~~~Artist~~~Album~~~Duration~~~CoverPath~~~Codec
 CLEARED_META = "~~~SendSpin~~~Stopped~~~0~~~~~~"
@@ -73,7 +65,6 @@ def write_meta_file(title, artist, album, duration_s, cover_path, codec="SendSpi
     title = sanitise(title) or "Unknown"
     artist = sanitise(artist) or "SendSpin"
     album = sanitise(album)
-    # moOde expects duration in seconds
     duration = str(int(duration_s)) if duration_s else "0"
     line = f"{title}~~~{artist}~~~{album}~~~{duration}~~~{cover_path}~~~{codec}"
     try:
@@ -83,6 +74,17 @@ def write_meta_file(title, artist, album, duration_s, cover_path, codec="SendSpi
         logger.info("Metadata: %s by %s", title, artist)
     except Exception as e:
         logger.error("Write metadata failed: %s", e)
+
+
+def write_streaming_status():
+    """Write minimal metadata when streaming but no source has track info."""
+    try:
+        with open(META_FILE, "w") as f:
+            f.write("SendSpin~~~Streaming~~~ ~~~0~~~~~~\n")
+        os.chmod(META_FILE, 0o644)
+        logger.debug("Streaming status written (no track metadata available)")
+    except Exception as e:
+        logger.error("Write status failed: %s", e)
 
 
 def clear_meta_file():
@@ -126,6 +128,48 @@ def cleanup_old_covers(max_keep=50):
         pass
 
 
+# --- Global state ---
+last_title = None
+last_artist = None
+is_streaming = False
+protocol_meta_active = False  # True when protocol metadata was received
+
+
+# ============================================================================
+# Source 1: SendSpin protocol metadata@v1 (primary, real-time)
+# ============================================================================
+
+def on_metadata(payload):
+    """Called when SendSpin server pushes metadata via the protocol."""
+    global last_title, last_artist, protocol_meta_active
+
+    meta = getattr(payload, "metadata", None)
+    if meta is None:
+        return
+
+    title = getattr(meta, "title", None) or getattr(meta, "name", None)
+    artist = getattr(meta, "artist", None) or ",".join(getattr(meta, "artists", []))
+    album = getattr(meta, "album", None)
+    duration = getattr(meta, "duration", 0)
+    cover_url = getattr(meta, "image_url", None) or getattr(meta, "artwork_url", None) or getattr(meta, "cover_url", None)
+
+    if not title:
+        logger.debug("Protocol metadata received but no title — falling back")
+        return
+
+    logger.info("Protocol metadata: %s by %s", title, artist)
+    protocol_meta_active = True
+
+    cover_path = download_cover(cover_url) if cover_url else ""
+    write_meta_file(title, artist, album, duration, cover_path, "SendSpin")
+    last_title = title
+    last_artist = artist
+
+
+# ============================================================================
+# Source 2: Music Assistant REST API (fallback, polled)
+# ============================================================================
+
 def is_meta_file_cleared():
     """Check if metadata file was externally cleared (e.g., by spspost.sh)."""
     try:
@@ -136,103 +180,73 @@ def is_meta_file_cleared():
         return True
 
 
-# --- HA Polling State ---
-last_title = None
-last_artist = None
-is_streaming = False
+async def poll_ma_metadata(session):
+    """Poll Music Assistant for currently playing track on any player."""
+    global last_title, last_artist, protocol_meta_active
 
-
-async def poll_ha_metadata(session):
-    """Poll Home Assistant for media_player.moode_sendspin state."""
-    global last_title, last_artist
-
-    if not HA_TOKEN:
-        logger.error("HA_TOKEN not set - cannot poll Home Assistant")
+    # If protocol metadata is active, no need to poll MA
+    if protocol_meta_active:
         return
-
-    url = f"{HA_URL}/api/states/{HA_ENTITY}"
-    headers = {
-        "Authorization": f"Bearer {HA_TOKEN}",
-        "Content-Type": "application/json",
-    }
 
     try:
-        async with session.get(url, headers=headers, timeout=ClientTimeout(total=5)) as resp:
+        async with session.get(
+            f"{MA_URL}/api/players",
+            timeout=ClientTimeout(total=5)
+        ) as resp:
             if resp.status != 200:
-                logger.warning("HA API returned status %d", resp.status)
+                logger.debug("MA API returned %d", resp.status)
                 return
-            data = await resp.json()
+            players = await resp.json()
     except Exception as e:
-        logger.warning("HA poll failed: %s", e)
+        logger.debug("MA poll failed: %s", e)
         return
 
-    state = data.get("state", "idle")
-    attrs = data.get("attributes", {})
+    # Find a player that is actively playing
+    for player in players:
+        if player.get("active") and player.get("state") == "playing":
+            item = player.get("current_item") or {}
+            title = item.get("name", "")
+            artists = item.get("artists", [])
+            artist = artists[0] if artists else ""
+            album_name = (item.get("album") or {}).get("name", "")
+            duration = item.get("duration", 0)
+            image_url = item.get("image_url", "")
 
-    if state not in ("playing", "paused"):
-        # Not playing - clear metadata if we had something
-        if last_title is not None:
-            logger.info("HA state: %s - clearing metadata", state)
-            clear_meta_file()
-            last_title = None
-            last_artist = None
-        return
+            if not title:
+                continue
 
-    title = attrs.get("media_title")
-    artist = attrs.get("media_artist")
-    album = attrs.get("media_album_name")
-    duration = attrs.get("media_duration", 0)
+            if title != last_title or artist != last_artist or is_meta_file_cleared():
+                logger.info("MA metadata: %s by %s", title, artist)
+                cover_path = download_cover(image_url) if image_url else ""
+                write_meta_file(title, artist, album_name, duration, cover_path, "SendSpin")
+                cleanup_old_covers()
+                last_title = title
+                last_artist = artist
+            return  # Found a playing player, done
 
-    # Get artwork URL - try entity_picture first, fall back to HA proxy
-    artwork_url = attrs.get("entity_picture")
-    # entity_picture_local is the HA proxy URL (more reliable)
-    artwork_url_local = attrs.get("entity_picture_local")
-    if artwork_url_local:
-        artwork_url = f"{HA_URL}{artwork_url_local}"
-    elif artwork_url and not artwork_url.startswith("http"):
-        artwork_url = f"{HA_URL}{artwork_url}"
-
-    # Update file if track changed OR if it was cleared externally
-    # Always write metadata during playing/paused state to recover
-    # from hook script overwrites (sendspin-metadata.sh writes placeholders)
-    if title != last_title or artist != last_artist or is_meta_file_cleared():
-        logger.info("Track changed: %s by %s (state=%s)", title, artist, state)
-        cover_path = download_cover(artwork_url) if state == "playing" else ""
-        write_meta_file(title, artist, album, duration, cover_path)
-        cleanup_old_covers()
-        last_title = title
-        last_artist = artist
-    elif state == "playing":
-        # Track same but file may have been overwritten by hook script.
-        # Re-write every poll to ensure real metadata stays in place.
-        cover_path = download_cover(artwork_url) if state == "playing" else ""
-        write_meta_file(title, artist, album, duration, cover_path)
-        last_title = title
-        last_artist = artist
+    # No playing player found — if still streaming, write status
+    if is_streaming and is_meta_file_cleared():
+        write_streaming_status()
 
 
-async def ha_poll_loop():
-    """Continuously poll HA for metadata - always running, not gated on stream state."""
+async def ma_poll_loop():
+    """Continuously poll MA for metadata when protocol metadata isn't active."""
     async with ClientSession() as session:
         while True:
-            await poll_ha_metadata(session)
-            await asyncio.sleep(HA_POLL_INTERVAL)
+            await poll_ma_metadata(session)
+            await asyncio.sleep(MA_POLL_INTERVAL)
 
 
-# --- SendSpin connection monitoring (for stream start/stop detection) ---
-def on_metadata(payload):
-    """Called when server sends metadata updates - logged but not used for display."""
-    meta = getattr(payload, "metadata", None)
-    if meta is not None:
-        logger.debug("SendSpin metadata (unused): title=%s artist=%s",
-                     getattr(meta, "title", None), getattr(meta, "artist", None))
-
+# ============================================================================
+# Stream state monitoring (connection lifecycle)
+# ============================================================================
 
 def on_disconnect():
     """Called when server disconnects."""
-    global is_streaming, last_title, last_artist
+    global is_streaming, last_title, last_artist, protocol_meta_active
     logger.info("Server disconnected")
     is_streaming = False
+    protocol_meta_active = False
     clear_meta_file()
     last_title = None
     last_artist = None
@@ -240,16 +254,18 @@ def on_disconnect():
 
 def on_stream_start(message):
     """Called when audio stream starts."""
-    global is_streaming
+    global is_streaming, protocol_meta_active
     is_streaming = True
-    logger.info("Stream started - HA polling active")
+    protocol_meta_active = False  # Reset — new stream may not send protocol metadata
+    logger.info("Stream started")
 
 
 def on_stream_end(roles):
     """Called when audio stream ends."""
-    global is_streaming, last_title, last_artist
+    global is_streaming, last_title, last_artist, protocol_meta_active
     is_streaming = False
-    logger.info("Stream ended - clearing metadata")
+    protocol_meta_active = False
+    logger.info("Stream ended — clearing metadata")
     clear_meta_file()
     last_title = None
     last_artist = None
@@ -282,17 +298,18 @@ async def handle_connection(ws: web.WebSocketResponse) -> None:
         clear_meta_file()
 
 
+# ============================================================================
+# Main — starts without requiring any external tokens
+# ============================================================================
+
 async def main():
     ensure_dirs()
     clear_meta_file()
 
-    if not HA_TOKEN:
-        logger.error("HA_TOKEN environment variable not set!")
-        logger.error("Set it in the systemd service file: Environment=\"HA_TOKEN=your_token\"")
-        sys.exit(1)
-
-    logger.info("Starting SendSpin Metadata Sink (HA polling mode) on port %d", LISTEN_PORT)
-    logger.info("HA URL: %s, Entity: %s", HA_URL, HA_ENTITY)
+    logger.info("Starting SendSpin Metadata Sink (multi-source mode)")
+    logger.info("  Primary:  SendSpin protocol metadata@v1")
+    logger.info("  Fallback: Music Assistant API (%s)", MA_URL)
+    logger.info("  Listener: port %d", LISTEN_PORT)
 
     listener = ClientListener(
         client_id=CLIENT_ID,
@@ -313,8 +330,8 @@ async def main():
     await listener.start()
     logger.info("Listening on port %d, advertising as '%s'", LISTEN_PORT, CLIENT_NAME)
 
-    # Start HA polling loop
-    poll_task = asyncio.create_task(ha_poll_loop())
+    # Start MA polling loop (only polls when protocol metadata isn't active)
+    poll_task = asyncio.create_task(ma_poll_loop())
 
     await stop_event.wait()
 
