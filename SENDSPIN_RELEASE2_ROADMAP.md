@@ -1,8 +1,16 @@
 # SendSpin for moOde — Feature Status
 
 **Branch:** `sendspin-advanced`
-**Updated:** 2026-06-28
+**Updated:** 2026-07-25
 **Installer:** v4.1.0
+**Merged:** moOde r1031 (upstream/develop)
+
+## Latest (2026-07-25) — moOde r1031 Compatibility
+
+- **Merged with upstream moOde r1031** — 23 commits behind → 0
+- **JS file detection** — supports `playerlib.js` (r1031+) and `lib.min.js` (older moOde)
+- **`feat_bitmask` dedup fix** — changed `INSERT OR REPLACE` to `UPDATE` to prevent duplicate rows
+- **`FEAT_SENDSPIN` re-added to constants.php** — restored after merge overwrite
 
 ## v4.1.0 — Critical Fixes & Service Hardening (2026-06-28)
 

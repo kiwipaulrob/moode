@@ -16,8 +16,8 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 
 ## Requirements
 
-- moOde 9.x or later
-- Raspberry Pi 3/4/5 or compatible
+- moOde 9.x or later (tested through r1031 on moOde 10.x)
+- Raspberry Pi 3/4/5
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
 
