@@ -551,6 +551,93 @@ function stopSendspin() {
 	$GLOBALS['sspactive'] = '0';
 	sendFECmd('sspactive0');
 }
+
+// === SendSpin Advanced Functions ===
+
+function getSendspinVersion() {
+    $result = sysCmd('sudo /root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
+    $version = (!empty($result) && isset($result[0])) ? trim($result[0]) : 'unknown';
+    return $version;
+}
+
+function getSendspinMetadata() {
+    if (file_exists(SENDSPINMETA_FILE)) {
+        $meta = file_get_contents(SENDSPINMETA_FILE);
+        return $meta;
+    }
+    return '';
+}
+
+function checkSendspinUpdate() {
+    $result = sysCmd('sendspin-version-check.sh 2>/dev/null');
+    $json = (!empty($result) && isset($result[0])) ? $result[0] : '{}';
+    return $json;
+}
+
+function updateSendspin() {
+    sysCmd('sudo -u root bash -c \"/root/.local/share/uv/tools/sendspin/bin/python -m uv tool upgrade sendspin 2>&1 && systemctl restart sendspin\" > /tmp/sendspin-update.log 2>&1 &');
+    workerLog('updateSendspin(): upgrade launched in background');
+    return true;
+}
+
+function generateSendspinService($dbh = null) {
+    if ($dbh === null) {
+        $dbh = sqlConnect();
+    }
+    $result = sqlRead('cfg_sendspin', $dbh);
+    $cfg = array();
+    foreach ($result as $row) {
+        $cfg[$row['param']] = $row['value'];
+    }
+
+    $codec = in_array($cfg['audio_codec'] ?? '', ['flac', 'pcm']) ? $cfg['audio_codec'] : 'flac';
+    $rate = in_array($cfg['audio_rate'] ?? '', ['44100', '48000', '96000']) ? $cfg['audio_rate'] : '48000';
+    $depth = in_array($cfg['audio_depth'] ?? '', ['16', '24', '32']) ? $cfg['audio_depth'] : '16';
+    $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
+
+    $audio_format = \"{$codec}:{$rate}:{$depth}:2\";
+
+    $service = <<<SVC
+[Unit]
+Description=SendSpin Audio Receiver
+After=network-online.target sound.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
+ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device _audioout --audio-format {$audio_format} --name moode-sendspin \\
+    --log-level {$log_level} \\
+    --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
+    --hook-stop /var/local/www/commandw/sendspin-metadata.sh
+ExecStopPost=/var/local/www/commandw/spspost.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+Environment=\"HOME=/root\"
+
+LimitRTPRIO=99
+LimitMEMLOCK=8388608
+
+[Install]
+WantedBy=multi-user.target
+SVC;
+
+    $file = '/etc/systemd/system/sendspin.service';
+    $tmpfile = '/tmp/sendspin.service.tmp';
+    $result = file_put_contents($tmpfile, $service);
+    if ($result !== false) {
+        chmod($tmpfile, 0644);
+        sysCmd(\"sudo cp {$tmpfile} {$file}\");
+        sysCmd('sudo systemctl daemon-reload');
+        @unlink($tmpfile);
+
+        workerLog('generateSendspinService(): service regenerated from DB config');
+        return true;
+    }
+    workerLog('generateSendspinService(): failed to write temp service file');
+    return false;
+}
 EOF
     
     if verify_php_syntax "$target"; then
