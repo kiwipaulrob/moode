@@ -195,7 +195,8 @@ detect_renderer_php() {
 }
 
 detect_playerlib_js() {
-    [[ -f "${WWW_DIR}/js/playerlib.js" ]] && grep -q "FEAT_SENDSPIN=262144" "${WWW_DIR}/js/playerlib.js"
+    [[ -f "${WWW_DIR}/js/playerlib.js" ]] && grep -q "FEAT_SENDSPIN" "${WWW_DIR}/js/playerlib.js" || 
+    [[ -f "${WWW_DIR}/js/lib.min.js" ]] && grep -q "FEAT_SENDSPIN" "${WWW_DIR}/js/lib.min.js"
 }
 
 detect_ren_config_php() {
@@ -562,25 +563,35 @@ EOF
 }
 
 install_playerlib_js() {
-    log_info "Updating playerlib.js..."
+    log_info "Updating JS feature flags..."
     
-    local target="${WWW_DIR}/js/playerlib.js"
+    # Detect which JS file moOde uses (playerlib.js in newer, lib.min.js in older)
+    local target
+    if [[ -f "${WWW_DIR}/js/playerlib.js" ]]; then
+        target="${WWW_DIR}/js/playerlib.js"
+    elif [[ -f "${WWW_DIR}/js/lib.min.js" ]]; then
+        target="${WWW_DIR}/js/lib.min.js"
+    else
+        log_error "Could not find playerlib.js or lib.min.js"
+        return 1
+    fi
+    local js_name=$(basename "$target")
     
-    if detect_playerlib_js; then
-        log_warn "FEAT_SENDSPIN already exists in playerlib.js"
+    if grep -q "FEAT_SENDSPIN" "$target"; then
+        log_warn "FEAT_SENDSPIN already exists in ${js_name}"
         return 0
     fi
     
-    backup_file "$target" "playerlib.js"
+    backup_file "$target" "$js_name"
     
     # Add FEAT_SENDSPIN after FEAT_PEPPYDISPLAY
-    sed -i "/const FEAT_PEPPYDISPLAY = 131072;/a const FEAT_SENDSPIN      = 262144; // x SendSpin multi-room audio" "$target" 2>/dev/null || true
+    sed -i "/FEAT_PEPPYDISPLAY/a const FEAT_SENDSPIN      = 262144; // x SendSpin multi-room audio" "$target" 2>/dev/null || true
     
     if grep -q "FEAT_SENDSPIN" "$target"; then
         record_install "playerlib_js"
-        log_success "playerlib.js updated"
+        log_success "${js_name} updated"
     else
-        log_error "Failed to update playerlib.js"
+        log_error "Failed to update ${js_name}"
         return 1
     fi
 }
@@ -1360,6 +1371,7 @@ uninstall_sendspin() {
             log_success "Restored playerlib.js"
         else
             sed -i '/FEAT_SENDSPIN/d' "${WWW_DIR}/js/playerlib.js" 2>/dev/null || true
+                sed -i '/FEAT_SENDSPIN/d' "${WWW_DIR}/js/lib.min.js" 2>/dev/null || true
         fi
         
         # Restore worker.php
@@ -1432,6 +1444,7 @@ uninstall_sendspin() {
             sed -i '/FEAT_SENDSPIN/d' "${INC_DIR}/constants.php" 2>/dev/null || true
             sed -i '/SendSpin Multi-Room Audio/,/^}/d' "${INC_DIR}/renderer.php" 2>/dev/null || true
             sed -i '/FEAT_SENDSPIN/d' "${WWW_DIR}/js/playerlib.js" 2>/dev/null || true
+                sed -i '/FEAT_SENDSPIN/d' "${WWW_DIR}/js/lib.min.js" 2>/dev/null || true
             sed -i '/\/\/ SendSpin/,/^}$/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
             sed -i '/_feat_sendspin/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
             sed -i '/_feat_sendspin/,/\/div>/d' "${WWW_DIR}/templates/ren-config.html" 2>/dev/null || true
