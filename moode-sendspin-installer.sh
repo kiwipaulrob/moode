@@ -1213,7 +1213,7 @@ EOF
     local current_bitmask
     current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null | tr -d '\n' || echo "0")
     local new_bitmask=$((current_bitmask | 262144))
-    sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');"
+    sqlite3 "$DB_PATH" "UPDATE cfg_system SET value='${new_bitmask}' WHERE param='feat_bitmask';"
     
     record_install "database_full"
     log_success "Database configured (full)"
@@ -1434,7 +1434,7 @@ uninstall_sendspin() {
                         local current_bitmask
                         current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null | tr -d '\n' || echo "0")
                         local new_bitmask=$((current_bitmask & ~262144))
-                        sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');" 2>/dev/null || true
+                        sqlite3 "$DB_PATH" "UPDATE cfg_system SET value='${new_bitmask}' WHERE param='feat_bitmask';" 2>/dev/null || true
                         log_success "Database cleaned"
                     fi
                 else
@@ -1471,7 +1471,7 @@ uninstall_sendspin() {
                 local current_bitmask
                 current_bitmask=$(sqlite3 "$DB_PATH" "SELECT value FROM cfg_system WHERE param='feat_bitmask';" 2>/dev/null | tr -d '\n' || echo "0")
                 local new_bitmask=$((current_bitmask & ~262144))
-                sqlite3 "$DB_PATH" "INSERT OR REPLACE INTO cfg_system (param, value) VALUES ('feat_bitmask', '${new_bitmask}');" 2>/dev/null || true
+                sqlite3 "$DB_PATH" "UPDATE cfg_system SET value='${new_bitmask}' WHERE param='feat_bitmask';" 2>/dev/null || true
                 log_success "Database cleaned"
             fi
         fi
