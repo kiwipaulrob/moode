@@ -259,6 +259,14 @@ detect_sendspin_version_check() {
     [[ -f "/var/local/www/commandw/sendspin-version-check.sh" ]]
 }
 
+detect_sendspin_metadata_sink() {
+    [[ -f "/var/local/www/commandw/sendspin-metadata-sink.py" ]]
+}
+
+detect_sendspin_metadata_sink_service() {
+    [[ -f "${SYSTEMD_DIR}/sendspin-metadata-sink.service" ]]
+}
+
 detect_sendspin_meta_php() {
     [[ -f "${WWW_DIR}/command/sendspin-meta.php" ]] && grep -q "sendspinmeta" "${WWW_DIR}/command/sendspin-meta.php"
 }
@@ -279,7 +287,7 @@ check_installation() {
     log_section "SendSpin Installation Status"
     
     local installed_count=0
-    local total_checks=17
+    local total_checks=19
     
     check_component() {
         local name="$1"
@@ -311,6 +319,8 @@ check_installation() {
     check_component "command/sendspin-meta.php - Metadata endpoint" detect_sendspin_meta_php
     check_component "js/sendspin-display.js - Display JS" detect_sendspin_display_js
     check_component "header.php - JS include" detect_header_php_meta
+    check_component "commandw/sendspin-metadata-sink.py - HA metadata sink" detect_sendspin_metadata_sink
+    check_component "sendspin-metadata-sink.service - Systemd service" detect_sendspin_metadata_sink_service
     
     echo ""
     echo "Result: ${installed_count}/${total_checks} components installed"
@@ -1150,6 +1160,63 @@ install_header_php_meta() {
     fi
 }
 
+install_sendspin_metadata_sink() {
+    log_info "Deploying SendSpin metadata sink daemon..."
+    
+    local target="/var/local/www/commandw/sendspin-metadata-sink.py"
+    
+    if detect_sendspin_metadata_sink; then
+        log_warn "sendspin-metadata-sink.py already exists"
+        return 0
+    fi
+    
+    if download_from_github "www/commandw/sendspin-metadata-sink.py" "$target"; then
+        chmod 755 "$target"
+        chown www-data:www-data "$target"
+        record_install "sendspin_metadata_sink"
+        log_success "sendspin-metadata-sink.py deployed"
+    else
+        log_error "Failed to download sendspin-metadata-sink.py"
+        return 1
+    fi
+}
+
+install_sendspin_metadata_sink_service() {
+    log_info "Installing SendSpin metadata sink systemd service..."
+    
+    local target="${SYSTEMD_DIR}/sendspin-metadata-sink.service"
+    
+    if detect_sendspin_metadata_sink_service; then
+        log_warn "sendspin-metadata-sink.service already exists"
+        return 0
+    fi
+    
+    cat > "$target" << 'SINKEOF'
+[Unit]
+Description=SendSpin Metadata Sink for moOde
+After=network-online.target sendspin.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/root/.local/share/uv/tools/sendspin/bin/python /var/local/www/commandw/sendspin-metadata-sink.py
+Restart=on-failure
+RestartSec=10
+Environment="HOME=/root"
+Environment="HA_URL=http://192.168.214.159:8123"
+Environment="HA_TOKEN="
+
+[Install]
+WantedBy=multi-user.target
+SINKEOF
+    
+    chmod 644 "$target"
+    systemctl daemon-reload
+    record_install "sendspin_metadata_sink_service"
+    log_success "sendspin-metadata-sink.service installed"
+    log_info "  To enable HA metadata, edit $target and set HA_TOKEN + HA_URL"
+}
+
 install_setup_txt() {
     log_info "Installing setup documentation..."
     
@@ -1850,6 +1917,8 @@ run_installation() {
         install_sendspin_meta_php
         install_sendspin_display_js
         install_header_php_meta
+        install_sendspin_metadata_sink
+        install_sendspin_metadata_sink_service
         install_setup_txt
         install_database_entries_full
     fi
@@ -1875,6 +1944,8 @@ run_installation() {
         detect_sendspin_meta_php || { log_error "sendspin-meta.php verification failed"; verify_passed=false; }
         detect_sendspin_display_js || { log_error "sendspin-display.js verification failed"; verify_passed=false; }
         detect_header_php_meta || { log_warn "header.php JS include may be missing"; }
+        detect_sendspin_metadata_sink || { log_warn "sendspin-metadata-sink.py not deployed (HA metadata requires it)"; }
+        detect_sendspin_metadata_sink_service || { log_warn "sendspin-metadata-sink.service not installed"; }
     fi
     
     detect_systemd_service || { log_error "systemd service verification failed"; verify_passed=false; }

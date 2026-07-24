@@ -55,7 +55,21 @@ switch ($_GET['cmd']) {
 	case 'get_sendspinmeta':
 		$sspFile = '/var/local/www/sendspinmeta.txt';
 		if (file_exists($sspFile)) {
-			echo trim(file_get_contents($sspFile));
+			$raw = trim(file_get_contents($sspFile));
+			// Try JSON format (from metadata sink/hook)
+			$json = json_decode($raw, true);
+			if ($json && isset($json['title'])) {
+				echo implode('~~~', [
+					$json['title'] ?? '',
+					$json['artist'] ?? '',
+					$json['album'] ?? '',
+					'', // track number placeholder
+					$json['artwork_url'] ?? ''
+				]);
+			} else {
+				// Plain text fallback (~~~ separated)
+				echo $raw;
+			}
 		} else {
 			echo '';
 		}
