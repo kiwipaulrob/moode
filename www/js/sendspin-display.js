@@ -89,7 +89,7 @@
     }
 
     function fetchMetadata() {
-        fetch('command/renderer.php?cmd=get_sendspinmeta')
+        fetch('command/sendspin-meta.php')
             .then(function(r) { return r.text(); })
             .then(function(data) {
                 if (!data || data === '') {

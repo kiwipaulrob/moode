@@ -57,6 +57,8 @@ FULL_INSTALL_FILES=(
     "/var/local/www/commandw/sendspin-metadata.sh"
     "/var/local/www/commandw/spspost.sh"
     "/var/local/www/commandw/sendspin-version-check.sh"
+    "${WWW_DIR}/command/sendspin-meta.php"
+    "${WWW_DIR}/js/sendspin-display.js"
     "${SYSTEMD_DIR}/sendspin.service"
 )
 
@@ -257,6 +259,18 @@ detect_sendspin_version_check() {
     [[ -f "/var/local/www/commandw/sendspin-version-check.sh" ]]
 }
 
+detect_sendspin_meta_php() {
+    [[ -f "${WWW_DIR}/command/sendspin-meta.php" ]] && grep -q "sendspinmeta" "${WWW_DIR}/command/sendspin-meta.php"
+}
+
+detect_sendspin_display_js() {
+    [[ -f "${WWW_DIR}/js/sendspin-display.js" ]]
+}
+
+detect_header_php_meta() {
+    [[ -f "${WWW_DIR}/header.php" ]] && grep -q "sendspin-display.js" "${WWW_DIR}/header.php"
+}
+
 # ============================================================================
 # CHECK / STATUS FUNCTION
 # ============================================================================
@@ -265,7 +279,7 @@ check_installation() {
     log_section "SendSpin Installation Status"
     
     local installed_count=0
-    local total_checks=14
+    local total_checks=17
     
     check_component() {
         local name="$1"
@@ -294,6 +308,9 @@ check_installation() {
     check_component "commandw/sendspin-metadata.sh - Metadata hook" detect_sendspin_metadata
     check_component "commandw/spspost.sh - Post-stop hook" detect_spspost
     check_component "commandw/sendspin-version-check.sh - Version check" detect_sendspin_version_check
+    check_component "command/sendspin-meta.php - Metadata endpoint" detect_sendspin_meta_php
+    check_component "js/sendspin-display.js - Display JS" detect_sendspin_display_js
+    check_component "header.php - JS include" detect_header_php_meta
     
     echo ""
     echo "Result: ${installed_count}/${total_checks} components installed"
@@ -1067,6 +1084,72 @@ install_commandw_scripts() {
     $all_ok
 }
 
+install_sendspin_meta_php() {
+    log_info "Deploying SendSpin metadata endpoint..."
+    
+    local target="${WWW_DIR}/command/sendspin-meta.php"
+    
+    if detect_sendspin_meta_php; then
+        log_warn "sendspin-meta.php already exists"
+        return 0
+    fi
+    
+    if download_from_github "www/command/sendspin-meta.php" "$target"; then
+        chmod 644 "$target"
+        chown www-data:www-data "$target"
+        record_install "sendspin_meta_php"
+        log_success "sendspin-meta.php deployed"
+    else
+        log_error "Failed to download sendspin-meta.php"
+        return 1
+    fi
+}
+
+install_sendspin_display_js() {
+    log_info "Deploying SendSpin display JS..."
+    
+    local target="${WWW_DIR}/js/sendspin-display.js"
+    
+    if detect_sendspin_display_js; then
+        log_warn "sendspin-display.js already exists"
+        return 0
+    fi
+    
+    if download_from_github "www/js/sendspin-display.js" "$target"; then
+        chmod 644 "$target"
+        chown www-data:www-data "$target"
+        record_install "sendspin_display_js"
+        log_success "sendspin-display.js deployed"
+    else
+        log_error "Failed to download sendspin-display.js"
+        return 1
+    fi
+}
+
+install_header_php_meta() {
+    log_info "Adding SendSpin JS to header.php..."
+    
+    local target="${WWW_DIR}/header.php"
+    
+    if detect_header_php_meta; then
+        log_warn "sendspin-display.js already in header.php"
+        return 0
+    fi
+    
+    backup_file "$target" "header.php"
+    
+    # Add script tag before closing </head> tag
+    sed -i '/<\/head>/i \    <script src=\"js/sendspin-display.js\" defer></script>' "$target" 2>/dev/null || true
+    
+    if grep -q "sendspin-display.js" "$target"; then
+        record_install "header_php_meta"
+        log_success "header.php updated with SendSpin JS"
+    else
+        log_error "Failed to update header.php"
+        return 1
+    fi
+}
+
 install_setup_txt() {
     log_info "Installing setup documentation..."
     
@@ -1764,6 +1847,9 @@ run_installation() {
         install_ren_config_html
         install_ssp_config
         install_commandw_scripts
+        install_sendspin_meta_php
+        install_sendspin_display_js
+        install_header_php_meta
         install_setup_txt
         install_database_entries_full
     fi
@@ -1786,6 +1872,9 @@ run_installation() {
         detect_sendspin_metadata || { log_error "sendspin-metadata.sh verification failed"; verify_passed=false; }
         detect_spspost || { log_error "spspost.sh verification failed"; verify_passed=false; }
         detect_sendspin_version_check || { log_error "sendspin-version-check.sh verification failed"; verify_passed=false; }
+        detect_sendspin_meta_php || { log_error "sendspin-meta.php verification failed"; verify_passed=false; }
+        detect_sendspin_display_js || { log_error "sendspin-display.js verification failed"; verify_passed=false; }
+        detect_header_php_meta || { log_warn "header.php JS include may be missing"; }
     fi
     
     detect_systemd_service || { log_error "systemd service verification failed"; verify_passed=false; }
