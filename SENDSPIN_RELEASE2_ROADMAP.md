@@ -5,10 +5,12 @@
 **Installer:** v4.1.0
 **Merged:** moOde r1031 (upstream/develop)
 
-### Latest (2026-07-25) — Metadata Display + r1031 Compatibility
+### Latest (2026-07-25) — Multi-Source Metadata + Hook/Daemon Coexistence
 
-- **Metadata display** — `sendspin-meta.php` endpoint, `sendspin-display.js` poller, `<script>` tag auto-added to `header.php`
-- **Installer now 17 components** — added 3: metadata endpoint, display JS, header include
+- **Metadata sink daemon rewritten** — no HA dependency. Primary: SendSpin protocol metadata@v1 → MA REST API fallback (no auth) → streaming status
+- **Hook/daemon race fixed** — hook defers to daemon via `systemctl is-active`; daemon corrects JSON hook output on startup
+- **Metadata display** — `sendspin-meta.php` endpoint, `sendspin-display.js` poller, `<script>` auto-added to `header.php`
+- **19 installer components** — +5 from original (metadata endpoint, JS, header, sink daemon, sink service)
 - **Merged with upstream moOde r1031** — 23 commits behind → 0
 - **JS file detection** — supports `playerlib.js` (r1031+) and `lib.min.js` (older moOde)
 - **`feat_bitmask` dedup fix** — changed `INSERT OR REPLACE` to `UPDATE` to prevent duplicate rows
