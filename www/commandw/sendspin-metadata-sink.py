@@ -336,6 +336,12 @@ async def main():
     await listener.start()
     logger.info("Listening on port %d, advertising as '%s'", LISTEN_PORT, CLIENT_NAME)
 
+    # Immediate correction: hook may have written JSON during startup
+    if is_meta_file_cleared():
+        clear_meta_file()
+    async with ClientSession() as session:
+        await poll_ma_metadata(session)
+
     # Start MA polling loop (only polls when protocol metadata isn't active)
     poll_task = asyncio.create_task(ma_poll_loop())
 
