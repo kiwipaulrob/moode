@@ -46,7 +46,7 @@ BACKUP_DIR=""
 FULL_INSTALL_FILES=(
     "${INC_DIR}/constants.php"
     "${INC_DIR}/renderer.php"
-    "${WWW_DIR}/js/lib.min.js"
+    "${WWW_DIR}/js/playerlib.js"
     "${WWW_DIR}/ren-config.php"
     "${WWW_DIR}/templates/ren-config.html"
     "${WWW_DIR}/ssp-config.php"
@@ -69,7 +69,7 @@ MINIMAL_INSTALL_FILES=(
 BACKUP_FILES=(
     "constants.php"
     "renderer.php"
-    "lib.min.js"
+    "playerlib.js"
     "ren-config.php"
     "ren-config.html"
     "ssp-config.php"
@@ -107,7 +107,7 @@ is_moode() {
 
 # Check if moOde is production (minified JS)
 is_production_moode() {
-    if [[ -f "${WWW_DIR}/js/lib.min.js" ]]; then
+    if [[ -f "${WWW_DIR}/js/playerlib.js" ]]; then
         return 0
     fi
     return 1
@@ -194,8 +194,8 @@ detect_renderer_php() {
     [[ -f "${INC_DIR}/renderer.php" ]] && grep -q "function.*Sendspin\|startSendspin\|stopSendspin" "${INC_DIR}/renderer.php"
 }
 
-detect_lib_min_js() {
-    [[ -f "${WWW_DIR}/js/lib.min.js" ]] && grep -q "FEAT_SENDSPIN=262144" "${WWW_DIR}/js/lib.min.js"
+detect_playerlib_js() {
+    [[ -f "${WWW_DIR}/js/playerlib.js" ]] && grep -q "FEAT_SENDSPIN=262144" "${WWW_DIR}/js/playerlib.js"
 }
 
 detect_ren_config_php() {
@@ -281,7 +281,7 @@ check_installation() {
     
     check_component "constants.php - FEAT_SENDSPIN constant" detect_constants_php
     check_component "renderer.php - SendSpin control functions" detect_renderer_php
-    check_component "lib.min.js - FEAT_SENDSPIN constant" detect_lib_min_js
+    check_component "playerlib.js - FEAT_SENDSPIN constant" detect_playerlib_js
     check_component "ren-config.php - Feature handling" detect_ren_config_php
     check_component "ren-config.html - UI section" detect_ren_config_html
     check_component "setup_3rdparty_sendspin.txt - Documentation" detect_setup_txt
@@ -561,26 +561,26 @@ EOF
     fi
 }
 
-install_lib_min_js() {
-    log_info "Updating lib.min.js..."
+install_playerlib_js() {
+    log_info "Updating playerlib.js..."
     
-    local target="${WWW_DIR}/js/lib.min.js"
+    local target="${WWW_DIR}/js/playerlib.js"
     
-    if detect_lib_min_js; then
-        log_warn "FEAT_SENDSPIN already exists in lib.min.js"
+    if detect_playerlib_js; then
+        log_warn "FEAT_SENDSPIN already exists in playerlib.js"
         return 0
     fi
     
-    backup_file "$target" "lib.min.js"
+    backup_file "$target" "playerlib.js"
     
     # Add FEAT_SENDSPIN after FEAT_PEPPYDISPLAY
-    sed -i 's/FEAT_PEPPYDISPLAY=131072/FEAT_PEPPYDISPLAY=131072,FEAT_SENDSPIN=262144/g' "$target" 2>/dev/null || true
+    sed -i "/const FEAT_PEPPYDISPLAY = 131072;/a const FEAT_SENDSPIN      = 262144; // x SendSpin multi-room audio" "$target" 2>/dev/null || true
     
-    if grep -q "FEAT_SENDSPIN=262144" "$target"; then
-        record_install "lib_min_js"
-        log_success "lib.min.js updated"
+    if grep -q "FEAT_SENDSPIN" "$target"; then
+        record_install "playerlib_js"
+        log_success "playerlib.js updated"
     else
-        log_error "Failed to update lib.min.js"
+        log_error "Failed to update playerlib.js"
         return 1
     fi
 }
@@ -1354,12 +1354,12 @@ uninstall_sendspin() {
             sed -i '/SendSpin Multi-Room Audio/,/^}/d' "${INC_DIR}/renderer.php" 2>/dev/null || true
         fi
         
-        # Restore lib.min.js
-        if [[ -f "${backup_dir}/lib.min.js" ]]; then
-            cp "${backup_dir}/lib.min.js" "${WWW_DIR}/js/lib.min.js"
-            log_success "Restored lib.min.js"
+        # Restore playerlib.js
+        if [[ -f "${backup_dir}/playerlib.js" ]]; then
+            cp "${backup_dir}/playerlib.js" "${WWW_DIR}/js/playerlib.js"
+            log_success "Restored playerlib.js"
         else
-            sed -i 's/,FEAT_SENDSPIN=262144//g' "${WWW_DIR}/js/lib.min.js" 2>/dev/null || true
+            sed -i '/FEAT_SENDSPIN/d' "${WWW_DIR}/js/playerlib.js" 2>/dev/null || true
         fi
         
         # Restore worker.php
@@ -1431,7 +1431,7 @@ uninstall_sendspin() {
             # Manual cleanup attempts
             sed -i '/FEAT_SENDSPIN/d' "${INC_DIR}/constants.php" 2>/dev/null || true
             sed -i '/SendSpin Multi-Room Audio/,/^}/d' "${INC_DIR}/renderer.php" 2>/dev/null || true
-            sed -i 's/,FEAT_SENDSPIN=262144//g' "${WWW_DIR}/js/lib.min.js" 2>/dev/null || true
+            sed -i '/FEAT_SENDSPIN/d' "${WWW_DIR}/js/playerlib.js" 2>/dev/null || true
             sed -i '/\/\/ SendSpin/,/^}$/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
             sed -i '/_feat_sendspin/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
             sed -i '/_feat_sendspin/,/\/div>/d' "${WWW_DIR}/templates/ren-config.html" 2>/dev/null || true
@@ -1482,8 +1482,8 @@ uninstall_sendspin() {
         found_traces=true
     fi
     
-    if detect_lib_min_js; then
-        log_warn "Traces found in lib.min.js"
+    if detect_playerlib_js; then
+        log_warn "Traces found in playerlib.js"
         found_traces=true
     fi
     
@@ -1658,7 +1658,7 @@ run_installation() {
         install_systemd_service
         install_constants_php
         install_renderer_php
-        install_lib_min_js
+        install_playerlib_js
         install_worker_php
         install_ren_config_php
         install_ren_config_html
@@ -1676,7 +1676,7 @@ run_installation() {
     if [[ "$INSTALL_MODE" == "full" ]]; then
         detect_constants_php || { log_error "constants.php verification failed"; verify_passed=false; }
         detect_renderer_php || { log_error "renderer.php verification failed"; verify_passed=false; }
-        detect_lib_min_js || { log_error "lib.min.js verification failed"; verify_passed=false; }
+        detect_playerlib_js || { log_error "playerlib.js verification failed"; verify_passed=false; }
         detect_worker_php || { log_error "worker.php verification failed"; verify_passed=false; }
         detect_ren_config_php || { log_error "ren-config.php verification failed"; verify_passed=false; }
         detect_ren_config_html || { log_error "ren-config.html verification failed"; verify_passed=false; }

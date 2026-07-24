@@ -234,6 +234,7 @@ const FEAT_BLUETOOTH    = 16384;	// y Bluetooth renderer
 const FEAT_DEVTWEAKS    = 32768;	//   Developer tweaks
 const FEAT_MULTIROOM    = 65536;	// y Multiroom audio
 const FEAT_PEPPYDISPLAY = 131072;	// y Peppy display
+const FEAT_SENDSPIN      = 262144;	// x SendSpin multi-room audio
 //						-------
 //						  228279
 
