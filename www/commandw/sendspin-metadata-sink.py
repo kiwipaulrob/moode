@@ -171,11 +171,17 @@ def on_metadata(payload):
 # ============================================================================
 
 def is_meta_file_cleared():
-    """Check if metadata file was externally cleared (e.g., by spspost.sh)."""
+    """Check if metadata file was externally cleared (e.g., by spspost.sh) or overwritten by hook."""
     try:
         with open(META_FILE, "r") as f:
             content = f.read().strip()
-            return content == CLEARED_META
+            # Cleared by spspost.sh
+            if content == CLEARED_META:
+                return True
+            # Overwritten by hook script (JSON format, not ~~~ format)
+            if content.startswith("{") and "status" in content:
+                return True
+            return False
     except (FileNotFoundError, IOError):
         return True
 
