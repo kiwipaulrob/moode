@@ -371,6 +371,16 @@ install_prerequisites() {
         log_info "  sendspin CLI already installed ($(sendspin --version 2>/dev/null || echo 'unknown'))"
     fi
     
+    # Tune PHP-FPM pool for better responsiveness with SendSpin metadata polling
+    local fpm_pool="/etc/php/$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo '8.2')/fpm/pool.d/www.conf"
+    if [[ -f "$fpm_pool" ]]; then
+        log_info "  Tuning PHP-FPM pool for responsiveness..."
+        sed -i 's/^pm.start_servers = .*/pm.start_servers = 8/' "$fpm_pool" 2>/dev/null || true
+        sed -i 's/^pm.min_spare_servers = .*/pm.min_spare_servers = 4/' "$fpm_pool" 2>/dev/null || true
+        sed -i 's/^pm.max_spare_servers = .*/pm.max_spare_servers = 12/' "$fpm_pool" 2>/dev/null || true
+        log_success "  PHP-FPM pool tuned (more idle children for responsiveness)"
+    fi
+    
     record_install "prerequisites"
     log_success "Prerequisites installed"
 }
