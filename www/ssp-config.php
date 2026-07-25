@@ -65,23 +65,42 @@ foreach ($result as $row) {
 	$cfgSendspin[$row['param']] = $row['value'];
 }
 
-// Get installed version
-$_installed_version = getSendspinVersion();
+// Get installed version (cached — getSendspinVersion() takes ~2s)
+$versionCacheFile = '/tmp/sendspin_local_version.txt';
+$versionCacheAge = 86400; // 24 hours
+if (file_exists($versionCacheFile) && (time() - filemtime($versionCacheFile)) < $versionCacheAge) {
+	$_installed_version = trim(@file_get_contents($versionCacheFile));
+} else {
+	$_installed_version = getSendspinVersion();
+	if ($_installed_version) {
+		@file_put_contents($versionCacheFile, $_installed_version);
+	}
+}
 $_installed_version_display = htmlspecialchars($_installed_version ?: 'Not installed');
 
-// Check for latest version via PyPI JSON API
+// Check for latest version via PyPI JSON API (cached hourly)
 $_latest_version_display = '';
 $_update_available = false;
 $_can_update = false;
 
-$pypi_url = 'https://pypi.org/pypi/sendspin/json';
-$pypi_json = @file_get_contents($pypi_url, false, stream_context_create(array(
-	'http' => array(
-		'timeout' => 5,
-		'method' => 'GET',
-		'header' => "Accept: application/json\r\n"
-	)
-)));
+$cacheFile = '/tmp/sendspin_version_cache.json';
+$cacheAge = 3600; // 1 hour
+
+if (file_exists($cacheFile) && (time() - filemtime($cacheFile)) < $cacheAge) {
+	$pypi_json = @file_get_contents($cacheFile);
+} else {
+	$pypi_url = 'https://pypi.org/pypi/sendspin/json';
+	$pypi_json = @file_get_contents($pypi_url, false, stream_context_create(array(
+		'http' => array(
+			'timeout' => 3,
+			'method' => 'GET',
+			'header' => "Accept: application/json\r\n"
+		)
+	)));
+	if ($pypi_json !== false) {
+		@file_put_contents($cacheFile, $pypi_json);
+	}
+}
 
 if ($pypi_json !== false) {
 	$pypi_data = json_decode($pypi_json, true);
