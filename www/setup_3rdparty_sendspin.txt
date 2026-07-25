@@ -89,11 +89,11 @@ Edit button:
         DEBUG (troubleshooting), INFO (normal), WARNING, or ERROR (minimal)
         Controls verbosity of the SendSpin daemon log.
 
-    MA Token:
-        Music Assistant long-lived access token for rich metadata display.
-        Found in MA Settings -> Security. Enter to enable album art and
-        track metadata on the moOde homepage. Leave empty to disable.
-        Token is stored securely in moOde's database.
+    HA Token:
+        Home Assistant long-lived access token for metadata display.
+        Found in HA Settings -> Long-Lived Access Tokens. The installer
+        writes it to the metadata sink systemd service. Required for
+        album art and track metadata on the moOde homepage.
 
     Version:
         Shows installed and latest available SendSpin CLI version.
@@ -111,10 +111,12 @@ Sources (in priority order):
     3. Streaming status -- shows "Now Playing" when audio is active
 
 To enable rich metadata (artist, title, album, cover art):
-    1. Open MA Settings -> Security -> create a long-lived access token
-    2. Open moOde -> Configure -> Renderers -> SendSpin -> Edit
-    3. Paste the token in the "MA Token" field -> Save
-    4. Album art + track info appears within 10 seconds
+    1. Create a long-lived access token in HA Settings
+    2. Set it in the metadata sink service:
+       sudo sed -i 's|Environment="HA_TOKEN="|Environment="HA_TOKEN=YOUR_TOKEN"|' /etc/systemd/system/sendspin-metadata-sink.service
+       sudo systemctl daemon-reload
+       sudo systemctl restart sendspin-metadata-sink
+    3. Album art + track info appears within 10 seconds
 
 VOLUME LEVEL
 
@@ -171,8 +173,8 @@ No metadata or album art displaying:
     1. Verify the metadata sink daemon is running:
        sudo systemctl status sendspin-metadata-sink
 
-    2. Check that a MA Token is configured on the Edit page
-       (required for rich metadata from Music Assistant)
+    2. Check that HA_TOKEN is configured in the systemd service:
+       grep HA_TOKEN /etc/systemd/system/sendspin-metadata-sink.service
 
     3. View metadata sink logs:
        sudo journalctl -u sendspin-metadata-sink -f
@@ -181,8 +183,8 @@ No metadata or album art displaying:
        cat /var/local/www/sendspinmeta.txt
        (~~~ format means metadata is flowing; empty means daemon issue)
 
-    5. Verify MA is reachable from the Pi:
-       curl http://192.168.214.159:8095/api
+    5. Verify HA is reachable from the Pi:
+       curl http://192.168.214.159:8123/api/
 
 Audio dropouts or stuttering:
 

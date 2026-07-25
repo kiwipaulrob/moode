@@ -5,11 +5,11 @@
 **Installer:** v4.1.0
 **Merged:** moOde r1031 (upstream/develop)
 
-### Latest (2026-07-25) — MA Token UI + Metadata Display
+### Latest (2026-07-26) — HA Polling + Clean Architecture
 
-- **MA Token in ssp-config UI** — `password` field on Edit page, stored in DB (`cfg_sendspin`), daemon reads automatically
+- **HA polling restored** — daemon polls `media_player.moode_sendspin` every 3s via HASS_TOKEN. Full track metadata + album art.
+- **Dead code removed** — MA Token UI, MA REST polling, `get_ma_token()`. MA protocol listener kept dormant for future.
 - **Shared session fix** — `feat_bitmask` preserved before `phpSession('close')` to prevent all renderers from disappearing
-- **Metadata sink daemon rewritten** — no HA dependency. Primary: SendSpin protocol metadata@v1 → MA REST API fallback → device detection
 - **Daemon reads token from DB** — `get_ma_token()` checks `cfg_sendspin.ma_token` + env var fallback; no systemd edit needed
 - **Hook/daemon race fixed** — hook defers to daemon via `systemctl is-active`; daemon corrects JSON/empty files on startup
 - **Metadata display** — `sendspin-meta.php` endpoint, `sendspin-display.js` poller, `<script>` auto-added to `header.php`
