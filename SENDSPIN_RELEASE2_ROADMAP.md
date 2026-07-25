@@ -5,10 +5,12 @@
 **Installer:** v4.1.0
 **Merged:** moOde r1031 (upstream/develop)
 
-### Latest (2026-07-25) — Multi-Source Metadata + Hook/Daemon Coexistence
+### Latest (2026-07-25) — MA Token UI + Metadata Display
 
-- **Metadata sink daemon rewritten** — no HA dependency. Primary: SendSpin protocol metadata@v1 → MA REST API fallback (no auth) → streaming status
-- **Hook/daemon race fixed** — hook defers to daemon via `systemctl is-active`; daemon corrects JSON hook output on startup
+- **MA Token in ssp-config UI** — `password` field on Edit page, stored in DB (`cfg_sendspin`), daemon reads automatically
+- **Metadata sink daemon rewritten** — no HA dependency. Primary: SendSpin protocol metadata@v1 → MA REST API fallback → device detection
+- **Daemon reads token from DB** — `get_ma_token()` checks `cfg_sendspin.ma_token` + env var fallback; no systemd edit needed
+- **Hook/daemon race fixed** — hook defers to daemon via `systemctl is-active`; daemon corrects JSON/empty files on startup
 - **Metadata display** — `sendspin-meta.php` endpoint, `sendspin-display.js` poller, `<script>` auto-added to `header.php`
 - **19 installer components** — +5 from original (metadata endpoint, JS, header, sink daemon, sink service)
 - **Merged with upstream moOde r1031** — 23 commits behind → 0
