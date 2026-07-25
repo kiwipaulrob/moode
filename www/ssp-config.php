@@ -20,9 +20,9 @@ if (isset($_POST['save']) && $_POST['save'] == '1') {
 	}
 	// Regenerate service file from updated config
 	generateSendspinService($dbh);
-	// Post-save: if MA_TOKEN changed, restart metadata sink
+	// Post-save: if MA_TOKEN changed, restart metadata sink (background)
 	if (isset($_POST['config']['ma_token'])) {
-		sysCmd('sudo systemctl try-restart sendspin-metadata-sink');
+		sysCmd('sudo systemctl try-restart sendspin-metadata-sink >/dev/null 2>&1 &');
 	}
 	// Restart service if running
 	if ($_SESSION['sendspinsvc'] == '1') {
