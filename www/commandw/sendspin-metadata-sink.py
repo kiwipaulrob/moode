@@ -132,7 +132,21 @@ def cleanup_old_covers(max_keep=50):
 last_title = None
 last_artist = None
 is_streaming = False
+server_connected = False  # True when a SendSpin server has connected
 protocol_meta_active = False  # True when protocol metadata was received
+
+
+def is_sendspin_streaming():
+    """Check if sendspin daemon is actively using the audio device."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["fuser", "/dev/snd/pcmC0D0p"],
+            capture_output=True, text=True, timeout=2
+        )
+        return result.returncode == 0 and result.stdout.strip() != ""
+    except Exception:
+        return False
 
 
 # ============================================================================
@@ -230,9 +244,12 @@ async def poll_ma_metadata(session):
                 last_artist = artist
             return  # Found a playing player, done
 
-    # No playing player found — if still streaming, write status
-    if is_streaming and is_meta_file_cleared():
-        write_streaming_status()
+    # No playing player found in MA — check device usage as final fallback
+    if is_meta_file_cleared():
+        if is_sendspin_streaming():
+            write_streaming_status()
+        elif server_connected and is_streaming:
+            write_streaming_status()
 
 
 async def ma_poll_loop():
@@ -249,10 +266,11 @@ async def ma_poll_loop():
 
 def on_disconnect():
     """Called when server disconnects."""
-    global is_streaming, last_title, last_artist, protocol_meta_active
+    global is_streaming, last_title, last_artist, protocol_meta_active, server_connected
     logger.info("Server disconnected")
     is_streaming = False
     protocol_meta_active = False
+    server_connected = False
     clear_meta_file()
     last_title = None
     last_artist = None
@@ -294,10 +312,20 @@ async def handle_connection(ws: web.WebSocketResponse) -> None:
 
     try:
         await client.attach_websocket(ws)
+        global server_connected
+        server_connected = True
         logger.info("Server connected, monitoring stream state...")
+        # Ensure metadata file exists — write placeholder on first connect
+        if is_meta_file_cleared():
+            write_streaming_status()
         disconnect_event = asyncio.Event()
         client.add_disconnect_listener(disconnect_event.set)
-        await disconnect_event.wait()
+        # Wait with timeout so shutdown signals can interrupt
+        while not disconnect_event.is_set():
+            try:
+                await asyncio.wait_for(disconnect_event.wait(), timeout=30)
+            except asyncio.TimeoutError:
+                pass  # Keep waiting, check signal
     except Exception as e:
         logger.error("Connection error: %s", e)
     finally:
