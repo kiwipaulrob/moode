@@ -230,6 +230,15 @@ if (isset($_POST['update_sendspin_settings'])) {
 if (isset($_POST['sendspinrestart']) && $_POST['sendspinrestart'] == 1 && $_SESSION['sendspinsvc'] == '1') {
 	submitJob('sendspinrestart', '', NOTIFY_TITLE_INFO, 'SendSpin' . NOTIFY_MSG_SVC_MANUAL_RESTART);
 }
+
+// Preserve cfg_system params (feat_bitmask) before closing shared session.
+// header.php opens the worker's shared session. phpSession('close')
+// writes $_SESSION back to disk. If a page doesn't load feat_bitmask,
+// it gets wiped from the session file, hiding all renderer sections.
+if (!isset($_SESSION['feat_bitmask'])) {
+	$stmt = $dbh->query("SELECT value FROM cfg_system WHERE param='feat_bitmask'");
+	$_SESSION['feat_bitmask'] = $stmt ? $stmt->fetchColumn() : '0';
+}
 phpSession('close');
 
 // Bluetooth
