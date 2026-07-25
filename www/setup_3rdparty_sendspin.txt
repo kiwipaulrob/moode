@@ -197,6 +197,20 @@ MPD does not resume after SendSpin stops:
     2. Verify MPD was playing before SendSpin started
     3. Check moOde logs: sudo tail -f /var/log/moode.log
 
+Renderers not appearing on Configure -> Renderers page:
+
+    moOde uses a shared session between the worker daemon and all web pages.
+    If renderer sections disappear (only top header visible), the shared
+    session has lost its cfg_system params.
+
+    1. Visit the moOde homepage first: http://<moode-ip>/
+       (This triggers the backend to reload configuration.)
+
+    2. If the problem persists, restart PHP-FPM:
+       sudo systemctl restart php8.4-fpm
+
+    3. If still not working, reboot the Pi: sudo reboot
+
 SendSpin config page hangs after saving:
 
     1. This can happen if the worker daemon is stuck.

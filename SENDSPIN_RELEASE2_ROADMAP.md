@@ -8,6 +8,7 @@
 ### Latest (2026-07-25) — MA Token UI + Metadata Display
 
 - **MA Token in ssp-config UI** — `password` field on Edit page, stored in DB (`cfg_sendspin`), daemon reads automatically
+- **Shared session fix** — `feat_bitmask` preserved before `phpSession('close')` to prevent all renderers from disappearing
 - **Metadata sink daemon rewritten** — no HA dependency. Primary: SendSpin protocol metadata@v1 → MA REST API fallback → device detection
 - **Daemon reads token from DB** — `get_ma_token()` checks `cfg_sendspin.ma_token` + env var fallback; no systemd edit needed
 - **Hook/daemon race fixed** — hook defers to daemon via `systemctl is-active`; daemon corrects JSON/empty files on startup
