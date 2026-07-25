@@ -38,8 +38,26 @@ CLIENT_ID = "sendspin-metadata-moOde"
 
 # Music Assistant configuration (fallback source)
 MA_URL = os.environ.get("MA_URL", "http://192.168.214.159:8095")
-MA_TOKEN = os.environ.get("MA_TOKEN", "")
-MA_POLL_INTERVAL = 5  # seconds between MA API polls (less frequent than protocol)
+MA_POLL_INTERVAL = 5
+DB_PATH = "/var/local/www/db/moode-sqlite3.db"
+
+def get_ma_token():
+    """Read MA_TOKEN from moOde DB (set via ssp-config.php) or env fallback."""
+    token = os.environ.get("MA_TOKEN", "")
+    if token:
+        return token
+    try:
+        import sqlite3
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute(
+            "SELECT value FROM cfg_sendspin WHERE param='ma_token'"
+        ).fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
+    except Exception:
+        pass
+    return ""
 
 # moOde metadata format: Title~~~Artist~~~Album~~~Duration~~~CoverPath~~~Codec
 CLEARED_META = "~~~SendSpin~~~Stopped~~~0~~~~~~"
@@ -212,7 +230,8 @@ async def poll_ma_metadata(session):
     if protocol_meta_active:
         return
 
-    if not MA_TOKEN:
+    token = get_ma_token()
+    if not token:
         logger.debug("MA_TOKEN not configured — skipping MA poll")
         return
 
@@ -222,7 +241,7 @@ async def poll_ma_metadata(session):
             f"{MA_URL}/api",
             data=payload,
             headers={
-                "Authorization": f"Bearer {MA_TOKEN}",
+                "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json"
             },
             timeout=ClientTimeout(total=5)

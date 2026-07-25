@@ -20,6 +20,10 @@ if (isset($_POST['save']) && $_POST['save'] == '1') {
 	}
 	// Regenerate service file from updated config
 	generateSendspinService($dbh);
+	// Post-save: if MA_TOKEN changed, restart metadata sink
+	if (isset($_POST['config']['ma_token'])) {
+		sysCmd('sudo systemctl try-restart sendspin-metadata-sink');
+	}
 	// Restart service if running
 	if ($_SESSION['sendspinsvc'] == '1') {
 		sysCmd('sudo systemctl restart sendspin');
@@ -125,6 +129,10 @@ $_select['log_level'] .= "<option value=\"DEBUG\" " . (($log_level == 'DEBUG') ?
 $_select['log_level'] .= "<option value=\"INFO\" " . (($log_level == 'INFO') ? "selected" : "") . ">INFO (Default)</option>\n";
 $_select['log_level'] .= "<option value=\"WARNING\" " . (($log_level == 'WARNING') ? "selected" : "") . ">WARNING</option>\n";
 $_select['log_level'] .= "<option value=\"ERROR\" " . (($log_level == 'ERROR') ? "selected" : "") . ">ERROR</option>\n";
+
+// MA Token (masked display on config page)
+$ma_token = $cfgSendspin['ma_token'] ?? '';
+$_select['ma_token'] = $ma_token ? htmlspecialchars(str_repeat("\xe2\x80\xa2", min(strlen($ma_token), 12))) : '';
 
 // ALSA card info
 $cardResult = sysCmd("sqlite3 /var/local/www/db/moode-sqlite3.db \"SELECT value FROM cfg_system WHERE param='cardnum'\" 2>/dev/null");

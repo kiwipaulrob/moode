@@ -84,6 +84,17 @@
 				</span>
 			</div>
 
+			<div class="config-horiz-rule">Music Assistant</div>
+
+			<label class="control-label" for="ma-token">MA Token</label>
+			<div class="controls">
+				<input class="config-input-large" type="password" id="ma-token" name="config[ma_token]" value="$_select[ma_token]" placeholder="Paste MA long-lived token">
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-ma-token" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-ma-token" class="config-help-info">
+					Long-lived access token from Music Assistant. Found in MA Settings → Security. Required for album art and track metadata display. Leave empty to disable.
+				</span>
+			</div>
+
 			<div class="config-horiz-rule">Audio output</div>
 
 			<label class="control-label">Audio device</label>
