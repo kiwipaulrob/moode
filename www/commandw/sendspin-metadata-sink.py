@@ -80,7 +80,7 @@ def write_streaming_status():
     """Write minimal metadata when streaming but no source has track info."""
     try:
         with open(META_FILE, "w") as f:
-            f.write("SendSpin~~~Streaming~~~ ~~~0~~~~~~\n")
+            f.write("Now Playing~~~SendSpin~~~ ~~~0~~~~~~\n")
         os.chmod(META_FILE, 0o644)
         logger.debug("Streaming status written (no track metadata available)")
     except Exception as e:
