@@ -236,7 +236,7 @@ async def poll_ma_metadata(session):
         return
 
     try:
-        payload = json.dumps({"message_id": "moode", "command": "music/players", "args": {}})
+        payload = json.dumps({"message_id": "moode", "command": "players/all", "args": {}})
         async with session.post(
             f"{MA_URL}/api",
             data=payload,
@@ -249,32 +249,50 @@ async def poll_ma_metadata(session):
             if resp.status != 200:
                 logger.debug("MA API returned %d", resp.status)
                 return
-            players = await resp.json()
+            data = await resp.json()
+            players = data if isinstance(data, list) else data.get("result", [])
     except Exception as e:
         logger.debug("MA poll failed: %s", e)
         return
 
-    # Find a player that is actively playing
+    # Find the source player — the one whose player_id matches any target's active_source.
+    # Source players have track metadata; target (multiroom) players do not.
+    source_id = None
     for player in players:
-        if player.get("active") and player.get("state") == "playing":
+        src = player.get("active_source", "")
+        if src:
+            source_id = src
+            break
+    if not source_id:
+        # Fallback: search for any player that has current_item metadata
+        for player in players:
             item = player.get("current_item") or {}
-            title = item.get("name", "")
-            artists = item.get("artists", [])
-            artist = artists[0] if artists else ""
-            album_name = (item.get("album") or {}).get("name", "")
-            duration = item.get("duration", 0)
-            image_url = item.get("image_url", "")
+            if item.get("name") or item.get("title"):
+                source_id = player.get("player_id", "")
+                break
 
-            if not title:
-                continue
+    if source_id:
+        for player in players:
+            if player.get("player_id") == source_id:
+                item = player.get("current_item") or {}
+                title = item.get("name", "") or item.get("title", "")
+                artists = item.get("artists", [])
+                artist = artists[0] if artists else item.get("artist", "")
+                album_name = (item.get("album") or {}).get("name", "")
+                duration = item.get("duration", 0)
+                image_url = item.get("image_url", "")
 
-            if title != last_title or artist != last_artist or is_meta_file_cleared():
-                logger.info("MA metadata: %s by %s", title, artist)
-                cover_path = download_cover(image_url) if image_url else ""
-                write_meta_file(title, artist, album_name, duration, cover_path, "SendSpin")
-                cleanup_old_covers()
-                last_title = title
-                last_artist = artist
+                if not title:
+                    break
+
+                if title != last_title or artist != last_artist or is_meta_file_cleared():
+                    logger.info("MA metadata: %s by %s", title, artist)
+                    cover_path = download_cover(image_url) if image_url else ""
+                    write_meta_file(title, artist, album_name, duration, cover_path, "SendSpin")
+                    cleanup_old_covers()
+                    last_title = title
+                    last_artist = artist
+                break
             return  # Found a playing player, done
 
     # No playing player found in MA — check device usage as final fallback
