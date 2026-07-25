@@ -822,7 +822,28 @@ install_ren_config_php() {
     backup_file "$target" "ren-config.php"
     
     # ------------------------------------------------------------------
-    # Step 1: Insert the POST handler block BEFORE phpSession('close')
+    # Step 1: Add feat_bitmask preservation before phpSession('close')
+    # moOde uses a SHARED session between worker and all web pages (header.php).
+    # When any page closes the session without feat_bitmask, it gets wiped.
+    # This fix loads it from DB before close, reusing $dbh to avoid lock conflicts.
+    # ------------------------------------------------------------------
+    
+    if ! grep -q "Preserve cfg_system params" "$target"; then
+        sed -i "/^phpSession('close');/i\\
+// Preserve cfg_system params (feat_bitmask) before closing shared session.\\
+// header.php opens the worker's shared session. phpSession('close')\\
+// writes \$_SESSION back to disk. If a page doesn't load feat_bitmask,\\
+// it gets wiped from the session file, hiding all renderer sections.\\
+if (!isset(\$_SESSION['feat_bitmask'])) {\\
+	\$stmt = \$dbh->query("SELECT value FROM cfg_system WHERE param='feat_bitmask'");\\
+	\$_SESSION['feat_bitmask'] = \$stmt ? \$stmt->fetchColumn() : '0';\\
+}\\
+" "$target" 2>/dev/null || true
+        log_info "  Added feat_bitmask preservation to ren-config.php"
+    fi
+    
+    # ------------------------------------------------------------------
+    # Step 2: Insert the POST handler block BEFORE phpSession('close')
     # This is critical - handlers must run while the session is still open
     # so that phpSession('close') writes the updated session to disk.
     # ------------------------------------------------------------------
