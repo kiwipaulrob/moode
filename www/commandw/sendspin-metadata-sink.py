@@ -178,13 +178,17 @@ def on_metadata(payload):
 
     meta = getattr(payload, "metadata", None)
     if meta is None:
-        return
+        # Some implementations pass the metadata object directly
+        meta = payload
 
     title = getattr(meta, "title", None) or getattr(meta, "name", None)
-    artist = getattr(meta, "artist", None) or ",".join(getattr(meta, "artists", []))
-    album = getattr(meta, "album", None)
-    duration = getattr(meta, "duration", 0)
-    cover_url = getattr(meta, "image_url", None) or getattr(meta, "artwork_url", None) or getattr(meta, "cover_url", None)
+    title = (title or "").strip()
+    artist = getattr(meta, "artist", None) or ",".join(getattr(meta, "artists", []) or [])
+    artist = (artist or "").strip()
+    album = getattr(meta, "album", None) or ""
+    duration = getattr(meta, "progress", None)
+    duration = duration.track_duration if duration and hasattr(duration, "track_duration") else 0
+    cover_url = getattr(meta, "artwork_url", None) or getattr(meta, "image_url", None)
 
     if not title:
         logger.debug("Protocol metadata received but no title — falling back")
