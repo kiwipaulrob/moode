@@ -1203,7 +1203,8 @@ ExecStart=/root/.local/share/uv/tools/sendspin/bin/python /var/local/www/command
 Restart=on-failure
 RestartSec=10
 Environment="HOME=/root"
-Environment="MA_URL=http://192.168.214.30:8095"
+Environment="MA_URL=http://192.168.214.159:8095"
+Environment="MA_TOKEN="
 
 [Install]
 WantedBy=multi-user.target

@@ -37,7 +37,8 @@ CLIENT_NAME = "moOde Metadata"
 CLIENT_ID = "sendspin-metadata-moOde"
 
 # Music Assistant configuration (fallback source)
-MA_URL = os.environ.get("MA_URL", "http://192.168.214.30:8095")
+MA_URL = os.environ.get("MA_URL", "http://192.168.214.159:8095")
+MA_TOKEN = os.environ.get("MA_TOKEN", "")
 MA_POLL_INTERVAL = 5  # seconds between MA API polls (less frequent than protocol)
 
 # moOde metadata format: Title~~~Artist~~~Album~~~Duration~~~CoverPath~~~Codec
@@ -208,9 +209,19 @@ async def poll_ma_metadata(session):
     if protocol_meta_active:
         return
 
+    if not MA_TOKEN:
+        logger.debug("MA_TOKEN not configured — skipping MA poll")
+        return
+
     try:
-        async with session.get(
-            f"{MA_URL}/api/players",
+        payload = json.dumps({"message_id": "moode", "command": "music/players", "args": {}})
+        async with session.post(
+            f"{MA_URL}/api",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {MA_TOKEN}",
+                "Content-Type": "application/json"
+            },
             timeout=ClientTimeout(total=5)
         ) as resp:
             if resp.status != 200:
