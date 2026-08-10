@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# moOde SendSpin Integration Installer v4.1.0
+# moOde SendSpin Integration Installer v4.1.1
 # Repository: https://github.com/kiwipaulrob/moode
 # Branch: sendspin-advanced
 #
@@ -19,7 +19,7 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.0"
+SCRIPT_VERSION="4.1.1"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
@@ -240,7 +240,7 @@ detect_feat_bitmask() {
 }
 
 detect_worker_php() {
-    [[ -f "${WWW_DIR}/daemon/worker.php" ]] && grep -q "sendspinsvc\\|sendspinrestart\\|startSendspin\\|stopSendspin" "${WWW_DIR}/daemon/worker.php"
+    [[ -f "${WWW_DIR}/daemon/worker.php" ]] && grep -q "SendSpin renderer startup" "${WWW_DIR}/daemon/worker.php" && grep -q "case 'sendspinsvc':" "${WWW_DIR}/daemon/worker.php"
 }
 
 detect_sendspin_spspre() {
@@ -744,21 +744,34 @@ import re
 with open('/tmp/worker_sendspin_patch.php', 'r') as f:
     content = f.read()
 
-# Find the RoonBridge startup code and add SendSpin after it
+# Add SendSpin startup code after the RoonBridge startup block.
+# Anchor: the RoonBridge workerLog status line (stable across moOde r1024+).
+# Fallback: the Multiroom startup section that directly follows RoonBridge.
+# The marker comment MUST stay unique -- detect_worker_php() greps for it.
 sendspin_startup = '''
-	// SendSpin
+	// SendSpin renderer startup
 	if ($_SESSION['sendspinsvc'] == '1') {
 		startSendspin();
 	}
 '''
 
-# Find RoonBridge startup pattern and insert after it
-pattern = r"(// RoonBridge.*?if \(\$_SESSION\['roonbridge_svc'\] == '1'\) \{[^}]+\})"
-match = re.search(pattern, content, re.DOTALL)
-
-if match:
-    insert_pos = match.end()
-    content = content[:insert_pos] + sendspin_startup + content[insert_pos:]
+if '// SendSpin renderer startup' not in content:
+    inserted = False
+    anchor = "workerLog('worker: RoonBridge:      ' . $status);"
+    pos = content.find(anchor)
+    if pos != -1:
+        nl = content.find('\n', pos)
+        insert_pos = nl + 1 if nl != -1 else len(content)
+        content = content[:insert_pos] + sendspin_startup + content[insert_pos:]
+        inserted = True
+    if not inserted:
+        # Fallback: insert before the Multiroom startup section
+        pos = content.find('// Start Multiroom audio')
+        if pos != -1:
+            content = content[:pos] + sendspin_startup + content[pos:]
+            inserted = True
+    if not inserted:
+        print("WARNING: could not locate worker.php RoonBridge/Multiroom anchor -- SendSpin startup block NOT inserted")
 
 # Now add the case statements for job handling
 # Find the case 'rbrestart': block and add sendspin cases after it
@@ -784,13 +797,16 @@ sendspin_cases = '''
 		break;
 '''
 
-# Find case 'rbrestart' and insert after the break
-rb_pattern = r"(case 'rbrestart':.*?break;)"
-rb_match = re.search(rb_pattern, content, re.DOTALL)
+# Find case 'rbrestart' and insert after the break (idempotent: skip if already present)
+if "case 'sendspinsvc':" not in content:
+    rb_pattern = r"(case 'rbrestart':.*?break;)"
+    rb_match = re.search(rb_pattern, content, re.DOTALL)
 
-if rb_match:
-    insert_pos = rb_match.end()
-    content = content[:insert_pos] + sendspin_cases + content[insert_pos:]
+    if rb_match:
+        insert_pos = rb_match.end()
+        content = content[:insert_pos] + sendspin_cases + content[insert_pos:]
+    else:
+        print("WARNING: could not locate case 'rbrestart': in worker.php -- SendSpin job handlers NOT inserted")
 
 with open('/tmp/worker_sendspin_patch.php', 'w') as f:
     f.write(content)
@@ -1637,7 +1653,8 @@ uninstall_sendspin() {
             log_success "Restored worker.php"
         else
             # Remove SendSpin startup and job handlers
-            sed -i '/\/\/ SendSpin startup/,/^\t\}$/d' "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
+            sed -i '/\/\/ SendSpin renderer startup/,/^\t}$/d' "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
+            sed -i '/\/\/ SendSpin$/,/^\t}$/d' "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
             sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
             sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
         fi
@@ -1704,7 +1721,8 @@ uninstall_sendspin() {
             sed -i '/\/\/ SendSpin/,/^}$/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
             sed -i '/_feat_sendspin/d' "${WWW_DIR}/ren-config.php" 2>/dev/null || true
             sed -i '/_feat_sendspin/,/\/div>/d' "${WWW_DIR}/templates/ren-config.html" 2>/dev/null || true
-            sed -i '/\/\/ SendSpin startup/,/^\t\}$/d' "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
+            sed -i '/\/\/ SendSpin renderer startup/,/^\t}$/d' "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
+            sed -i '/\/\/ SendSpin$/,/^\t}$/d' "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
             sed -i "/case 'sendspinsvc':/,/break;/d" "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
             sed -i "/case 'sendspinrestart':/,/break;/d" "${WWW_DIR}/daemon/worker.php" 2>/dev/null || true
             rm -f "${WWW_DIR}/setup_3rdparty_sendspin.txt"
