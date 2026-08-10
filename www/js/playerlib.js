@@ -97,6 +97,9 @@ const DEFAULT_NOTFOUND_COVER = 'images/default-notfound-cover.jpg';
 const DEFAULT_UPNP_COVER = 'images/default-upnp-cover.jpg';
 const DEFAULT_RX_COVER = 'images/default-rx-cover.jpg'; // DEPRECATED
 
+// Radio Browser
+const RB_API = 'command/radio-browser.php';
+
 var UI = {
     knob: null,
     path: '',
@@ -784,6 +787,14 @@ function engineCmdLite() {
                     // This functions as a dummy command which has the effect of
                     // causing engine-cmd.php to start releasing idle connections
                     console.log(cmd[0]);
+                    break;
+                case 'pairreq':
+                    // cmd: pairreq,<id>,<method>,<code>,<name_b64>,<icon>
+                    btPairRequest(cmd[1], cmd[2], cmd[3], cmd[4]);
+                    break;
+                case 'paircancel':
+                    // cmd: paircancel,<id> (timed out or the device gave up)
+                    btPairCancel(cmd[1]);
                     break;
                 default:
                     console.log('engineCmdLite(): ' + cmd[0]);

@@ -746,6 +746,5 @@ function formatFanTemp0Params($params) {
 //----------------------------------------------------------------------------//
 
 function updDSIScnBrightness($screenType, $brightnessValue) {
-	// Write brightness to i2c bus 10 device 0045 (both Touch1 and Touch2 use this)
-	sysCmd('/bin/su -c "echo '. $brightnessValue . ' > /sys/class/backlight/10-0045/brightness"');
+	sysCmd('/bin/su -c "echo '. $brightnessValue . ' > /sys/class/backlight/*/brightness"');
 }

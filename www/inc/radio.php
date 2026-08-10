@@ -37,9 +37,12 @@ function getRadioCoverUrl($title, $station = 'None') {
 			workerLog('getRadioCoverUrl(): WARNING: Session var "radio_covers" is empty');
 	}
 
-	// Update cache
-	sqlQuery("INSERT OR IGNORE INTO cfg_rcucache VALUES " .
-		'(NULL,' . "'" . SQLite3::escapeString($title) . "', '" . $coverUrl . "'" . ')', $dbh);
+	// Update cache (prevent duplicates)
+	$id = sqlQuery("SELECT id FROM cfg_rcucache WHERE title='" . SQLite3::escapeString($title) . "'", $dbh);
+	if (empty($id[0])) {
+		sqlQuery("INSERT OR IGNORE INTO cfg_rcucache VALUES " .
+			'(NULL,' . "'" . SQLite3::escapeString($title) . "', '" . $coverUrl . "'" . ')', $dbh);
+	}
 
 	return $coverUrl;
 }

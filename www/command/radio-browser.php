@@ -133,7 +133,7 @@ switch ($cmd) {
 					rbEnsureLogo($exName, trim($station['favicon'] ?? ''));
 					rbWritePls($exName, $url);
 				}
-				$response = array('success' => true, 'message' => 'Station has been added');
+				$response = array('success' => true, 'message' => 'Station added to Favorites');
 			}
 			break;
 		}
@@ -152,7 +152,7 @@ switch ($cmd) {
 			'format' => trim($station['codec'] ?? ''),
 			'home_page' => trim($station['homepage'] ?? '')
 		));
-		$response = array('success' => true, 'message' => 'Station has been added');
+		$response = array('success' => true, 'message' => 'Station added to Favorites');
 		break;
 
 	case 'remove':
@@ -223,11 +223,28 @@ switch ($cmd) {
 			$response = array('success' => false, 'message' => 'Invalid station URL');
 			break;
 		}
-		rbRegisterStation($station);
+
+		$reg = rbRegisterStation($station);
+
+		rbAddRecent(array(
+			'name' => $reg['name'],
+			'url' => $url,
+			'favicon' => trim($station['favicon'] ?? ''),
+			'country' => trim($station['country'] ?? ''),
+			'tags' => trim($station['tags'] ?? ''),
+			'bitrate' => (int)$reg['bitrate'],
+			'codec' => $reg['format'],
+			'stationuuid' => trim($station['stationuuid'] ?? ''),
+			'registered_at' => time()
+		));
+
 		rbPruneOrphanStations($url); // drop transient 'rb' rows that have left the queue
+
 		$response = array('success' => true, 'message' => 'Registered');
 		break;
 
+	// NOTE: Instant play disabled
+	// Lacks registration checks and time delay needed to ensure Queue thumb shows up
 	case 'play':
 		$station = rbInputStation();
 		$url = trim($station['url'] ?? '');

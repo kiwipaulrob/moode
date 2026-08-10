@@ -1309,7 +1309,6 @@ $('#database-radio').on('click', 'img', function(e) {
 	}, DEFAULT_TIMEOUT);
 });
 
-// TODO: this should only be a remove?
 // This removes the station from Radio view Favorites and refreshes the list
 // Favorite heart will only be on RB favorite stations
 $('#database-radio').on('click', '.rb-fav-toggle', function(e) {
@@ -1319,9 +1318,8 @@ $('#database-radio').on('click', '.rb-fav-toggle', function(e) {
     var name = $toggle.closest('li').data('name');
     if (!url) {return;}
     var isAdded = $toggle.hasClass('added');
-    var cmd = isAdded ? 'remove' : 'add';
     $.ajax({
-        url: 'command/radio-browser.php?cmd=' + cmd,
+        url: RB_API + '?cmd=remove',
         type: 'POST',
         contentType: 'application/json',
         data: JSON.stringify({url: url, name: name}),
@@ -1330,10 +1328,10 @@ $('#database-radio').on('click', '.rb-fav-toggle', function(e) {
             if (data && data.success) {
                 $toggle.toggleClass('added', !isAdded);
                 $toggle.find('i').toggleClass('fa-solid', !isAdded).toggleClass('fa-regular', isAdded);
-            }
-            notify(data && data.success ? NOTIFY_TITLE_INFO : NOTIFY_TITLE_ALERT,
-                'mpd_error', data ? data.message : 'Action failed', NOTIFY_DURATION_SHORT);
-            // 'update RADIO' lights the busy-spinner; clear it after it settles (native pattern)
+            } else {
+				notify(NOTIFY_TITLE_ALERT, 'rb_message', 'Action failed. ', NOTIFY_DURATION_SHORT);
+			}
+            // Clear the busy spinner
             setTimeout(function() { $('.busy-spinner').hide(); }, ONE_SEC_TIMEOUT);
 			// Refresh list
 			setTimeout(function() {
@@ -1549,18 +1547,18 @@ $('#btn-rb-manager').click(function(e) {
     $('#radio-browser-manager-modal').modal();
 });
 $('#btn-rb-clear-recents').click(function(e) {
-	$.getJSON('command/radio-browser.php?cmd=clear_recents', function(result) {
+	$.getJSON(RB_API + '?cmd=clear_recents', function(result) {
 		$('#rb-clear-recents-msg').text(result).show();
 	});
 });
 $('#btn-rb-clear-caches').click(function(e) {
-	$.getJSON('command/radio-browser.php?cmd=clear_caches', function(result) {
+	$.getJSON(RB_API + '?cmd=clear_caches', function(result) {
 		$('#rb-clear-caches-msg').text(result).show();
 	});
 });
 $('#btn-rb-check-servers').click(function(e) {
 	$('#rb-check-servers-msg').text('Checking...').show();
-	$.getJSON('command/radio-browser.php?cmd=check_servers', function(result) {
+	$.getJSON(RB_API + '?cmd=check_servers', function(result) {
 		$('#rb-check-servers-msg').text(result);
 	});
 });
