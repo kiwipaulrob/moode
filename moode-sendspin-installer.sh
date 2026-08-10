@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# moOde SendSpin Integration Installer v4.1.3
+# moOde SendSpin Integration Installer v4.1.4
 # Repository: https://github.com/kiwipaulrob/moode
 # Branch: sendspin-advanced
 #
@@ -19,7 +19,7 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.3"
+SCRIPT_VERSION="4.1.4"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
@@ -435,11 +435,11 @@ install_database_entries_minimal() {
     
     # Add minimal database entries
     sqlite3 "$DB_PATH" << 'EOF'
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('sendspinsvc', '0');
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('sendspin_installed', 'yes');
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('sendspinname', 'moode-sendspin');
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('rsmafterss', 'No');
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('sendspin_mpd_was_playing', '0');
+INSERT INTO cfg_system (param, value) SELECT 'sendspinsvc', '0' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspinsvc');
+INSERT INTO cfg_system (param, value) SELECT 'sendspin_installed', 'yes' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspin_installed');
+INSERT INTO cfg_system (param, value) SELECT 'sendspinname', 'moode-sendspin' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspinname');
+INSERT INTO cfg_system (param, value) SELECT 'rsmafterss', 'No' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='rsmafterss');
+INSERT INTO cfg_system (param, value) SELECT 'sendspin_mpd_was_playing', '0' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspin_mpd_was_playing');
 CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
@@ -1469,11 +1469,11 @@ install_database_entries_full() {
     
     # Add full database entries
     sqlite3 "$DB_PATH" << 'EOF'
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('sendspinsvc', '0');
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('sendspin_installed', 'yes');
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('sendspinname', 'moode-sendspin');
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('rsmafterss', 'No');
-INSERT OR IGNORE INTO cfg_system (param, value) VALUES ('sendspin_mpd_was_playing', '0');
+INSERT INTO cfg_system (param, value) SELECT 'sendspinsvc', '0' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspinsvc');
+INSERT INTO cfg_system (param, value) SELECT 'sendspin_installed', 'yes' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspin_installed');
+INSERT INTO cfg_system (param, value) SELECT 'sendspinname', 'moode-sendspin' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspinname');
+INSERT INTO cfg_system (param, value) SELECT 'rsmafterss', 'No' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='rsmafterss');
+INSERT INTO cfg_system (param, value) SELECT 'sendspin_mpd_was_playing', '0' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspin_mpd_was_playing');
 CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
