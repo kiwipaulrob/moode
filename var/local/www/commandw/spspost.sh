@@ -21,6 +21,10 @@ debug_log "Event: Run spspost.sh"
 
 # Worker picks this up and sends aplactive0 to front-end
 $(sqlite3 $SQLDB "UPDATE cfg_system SET value='0' WHERE param='aplactive'")
+
+# Truncate metadata file
+truncate /var/local/www/aplmeta.json --size 0
+
 # cfg_system
 RESULT=$(sqlite3 $SQLDB "SELECT value FROM cfg_system WHERE param IN ('alsavolume_max','alsavolume','amixname','mpdmixer','rsmafterapl','camilladsp_volume_sync','inpactive','volknob_mpd','multiroom_tx')")
 readarray -t arr <<<"$RESULT"

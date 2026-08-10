@@ -23,7 +23,7 @@
 		</p>
 		<h5>Release Information</h5>
 		<ul>
-			<li>Release: 10.3.1 2026-MM-DD</li> <!-- NOTE: getMoodeRel() parses this  -->
+			<li>Release: 10.3.2 2026-08-03</li> <!-- NOTE: getMoodeRel() parses this  -->
 			<li>Maintainer: Tim Curtis &copy; 2014</li>
 			<li>Documentation: <a class="moode-about-link target-blank-link" href="./relnotes.txt" target="_blank">View</a> release notes,&nbsp<a class="moode-about-link target-blank-link" href="https://github.com/moode-player/docs/blob/main/setup_guide.md#setup-guide-" target="_blank">View</a> setup guide</li>
 			<li>Contributors:  <a class="moode-about-link target-blank-link" href="./CONTRIBS.html" target="_blank">View</a> contributors</li>
@@ -87,6 +87,22 @@
 	</div>
 	<div class="modal-footer">
 		<button aria-label="Cancel" class="btn singleton" data-dismiss="modal" aria-hidden="true">Cancel</button>
+	</div>
+</div>
+
+<!-- BLUETOOTH PAIRING -->
+<div id="btpair-modal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="btpair-modal-label" data-backdrop="static" data-keyboard="false" aria-hidden="true">
+	<div class="modal-header">
+		<h3 id="btpair-modal-label">Bluetooth pairing</h3>
+	</div>
+	<div class="modal-body">
+		<p id="btpair-modal-text" class="btpair-text"></p>
+		<p id="btpair-modal-name" class="btpair-name"></p>
+		<div id="btpair-modal-code" class="btpair-code"></div>
+	</div>
+	<div class="modal-footer">
+		<button id="btpair-cancel-btn" aria-label="Reject" class="btn" onclick="btPairRespond('0')">Reject</button>
+		<button id="btpair-confirm-btn" aria-label="Confirm" class="btn btn-primary" onclick="btPairRespond('1')">Confirm</button>
 	</div>
 </div>
 

@@ -696,6 +696,14 @@ function engineCmd() {
                     // causing engine-cmd.php to start releasing idle connections
                     console.log(cmd[0]);
                     break;
+                case 'pairreq':
+                    // cmd: pairreq,<id>,<method>,<code>,<name_b64>,<icon>
+                    btPairRequest(cmd[1], cmd[2], cmd[3], cmd[4]);
+                    break;
+                case 'paircancel':
+                    // cmd: paircancel,<id> (timed out or the device gave up)
+                    btPairCancel(cmd[1]);
+                    break;
                 default:
                     console.log('engineCmd(): ' + cmd[0]);
                     break;
@@ -794,6 +802,54 @@ function engineCmdLite() {
     });
 }
 
+// Bluetooth pairing confirmation modal. bt-pairing-agent.py pushes a pairreq; the
+// user confirms the code matches the one on their device, and the answer is POSTed
+// back to the agent. See command/renderer.php (bt_pair_response) and footer.php.
+var btPairCurrentId = null;
+
+function btPairRequest(id, method, code, nameB64) {
+	var name;
+	try { name = decodeURIComponent(escape(window.atob(nameB64))); } catch (e) { name = 'Bluetooth device'; }
+	btPairCurrentId = id;
+
+	var text, showCode = true, showConfirm = true;
+	if (method === 'confirm') {
+		text = 'Confirm this code matches the one shown on';
+	} else if (method === 'display') {
+		text = 'Enter this code on';
+		showConfirm = false; // informational; the device does the entering
+	} else if (method === 'authorize') {
+		text = 'Allow pairing with';
+		showCode = false;
+	} else {
+		text = 'Pairing request from';
+		showCode = false;
+	}
+
+	$('#btpair-modal-text').text(text);
+	$('#btpair-modal-name').text(name);
+	$('#btpair-modal-code').text(showCode ? code : '').toggle(showCode);
+	$('#btpair-confirm-btn').toggle(showConfirm);
+	$('#btpair-cancel-btn').text(showConfirm ? 'Reject' : 'Close');
+	$('#btpair-modal').modal('show');
+}
+
+function btPairRespond(accepted) {
+	if (btPairCurrentId === null) {
+		return;
+	}
+	$.post('command/renderer.php?cmd=bt_pair_response', {id: btPairCurrentId, accepted: accepted});
+	btPairCurrentId = null;
+	$('#btpair-modal').modal('hide');
+}
+
+function btPairCancel(id) {
+	if (btPairCurrentId === id) {
+		btPairCurrentId = null;
+		$('#btpair-modal').modal('hide');
+	}
+}
+
 function inpSrcIndicator(cmd, msgText) {
 	// DEBUG:
 	//console.log('inpSrcIndicator(): ' + cmd + ' | ' + msgText);
@@ -864,8 +920,11 @@ function updateInpsrcMeta(cmd, data) {
 		//console.log('metadata', metadata);
 	}
 	catch (e) {
-		console.log('updateInpsrcMeta(): JSON parse error:', e.message);
-		console.log('updateInpsrcMeta(): data=(' + (data ? data : 'empty') + ')');
+		if (data) {
+			console.log('updateInpsrcMeta(): JSON parse error:', e.message);
+			console.log('updateInpsrcMeta(): data=(' + data + ')');
+		}
+		// Empty data: metadata file gets truncated when service disconnects or is started/restarted.
 		return;
 	}
 
@@ -2186,7 +2245,7 @@ function renderRadioView(lazyLoad = true) {
         if (showHideOtherStations == 'Hide all' || showHideOtherStations == 'Un-hide all') {
             var newStationType = showHideOtherStations == 'Hide all' ? 'h' : 'r';
             for (var i = 0; i < data.length; i++) {
-                if (parseInt(data[i].id) > 499 && data[i].type.substring(0, 1) != 'f') { // f or fb
+                if (parseInt(data[i].id) > 499 && data[i].type.substring(0, 1) != 'f' && data[i].type != 'rb') {
                     data[i].type = newStationType;
                 }
             }
@@ -2391,6 +2450,7 @@ function renderRadioView(lazyLoad = true) {
             output += radioViewHdDiv;
 			output += radioViewBgDiv;
             output += '<span class="station-name">' + data[i].name + '</span>';
+			output += '<span class="station-type hide">' + data[i].type + '</span>';
             output += broadcasterDiv;
             output += countryDiv;
             output += languageDiv;
@@ -4551,7 +4611,14 @@ $('#index-browse li').on('click', function(e) {
 	listLook('database li', 'folder', $(this).text());
 });
 $('#index-radio li').on('click', function(e) {
-    list = SESSION.json['radioview_sort_group'].split(',')[1] == 'No grouping' ? 'radio' : 'radio_headers';
+	var sortGroup = SESSION.json['radioview_sort_group'].split(',')[1];
+	if (sortGroup == 'No grouping') {
+		list = 'radio';
+	} else if (sortGroup == 'Favorites first') {
+		list = 'radio_exclude_favorites';
+	} else {
+		list = 'radio_headers';
+	}
 	listLook('radio-covers li', list, $(this).text());
 });
 $('#index-playlist li').on('click', function(e) {
@@ -4566,9 +4633,20 @@ function listLook(selector, list, searchText) {
 	if (searchText != '#') {
         if (list == 'radio') {
             $('#' + selector).each(function() {
-                var text = removeArticles($(this).children('span').text().toLowerCase());
+                var text = removeArticles($(this).children('.station-name').text().toLowerCase());
                 if (text.substr(0, 1) == searchText) {return false;}
         		itemNum++;
+        	});
+        }
+		else if (list == 'radio_exclude_favorites') {
+			list = 'radio';
+            $('#' + selector).each(function() {
+				var type = $(this).children('.station-type').text();
+				if (!type.includes('f')) {
+					var text = removeArticles($(this).children('.station-name').text().toLowerCase());
+	                if (text.substr(0, 1) == searchText) {return false;}
+					itemNum++;
+				}
         	});
         }
         else if (list == 'radio_headers') {

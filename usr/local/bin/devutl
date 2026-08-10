@@ -4,7 +4,7 @@
 # http://moodeaudio.org
 #
 function chk_sudo() {
-	[[ $EUID -ne 0 ]] && { echo "You must use sudo for this utility" ; exit 1 ; } ;
+	[[ $EUID -ne 0 ]] && { echo "Use sudo to run the script" ; exit 1 ; } ;
 }
 
 function readYnInput () {
@@ -94,7 +94,7 @@ elif [ $1 = "-m" ]; then
 elif [ $1 = "-w" ]; then
 	watch_for_mount $2
 elif [ $1 = "-r" ]; then
-	remove_dot_files
+	remove_dotfiles
 else
 	echo "Unknown option"
 fi

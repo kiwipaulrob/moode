@@ -93,6 +93,9 @@ if [[ $PLAYER_EVENT == "session_disconnected" ]]; then
 	# Worker picks this up and sends spotactive0 to front-end
 	$(sqlite3 $SQLDB "UPDATE cfg_system SET value='0' WHERE param='spotactive'")
 
+	# Truncate metadata file
+	truncate /var/local/www/spotmeta.json --size 0
+
 	# Local
 	/var/www/util/vol.sh -restore
 

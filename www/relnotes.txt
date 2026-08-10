@@ -11,11 +11,43 @@
 
 ################################################################################
 #
-# 2026-MM-DD moOde 10.3.1 (Trixie)
+# 2026-08-03 moOde 10.3.2 (Trixie)
 #
 ################################################################################
 
+Packages
+- NEW: alsa-lib: 1.2.14-1+rpt1moode1
+- UPD: peppy-alsa: 2026.07.26-1moode1
+- UPD: shairport-sync: 5.2.1-1moode1
+- UPD: shairport-sync-metadata-reader: 2.0.0~git20260724.a4a29f3-1moode1
+- UPD: mpd: 0.24.13-1moode1
+- UPD: linux-image: 1:6.18.39-1+rpt1
+
 Updates
+- UPD: Support native DSD levels in Peppy (pkgbuild PR #24/25 by @Gjuju)
+- UPD: Support DoP levels in Peppy (pkgbuild PR #23 by @Gjuju)
+- UPD: Get Bluetooth decoded-to using bluealsa-cli instead of hard coding it
+- UPD: Add AirPlay protocol (1|2) option to Renderer Config
+- UPD: New logo for Soma FM - DEF CON Radio
+
+Bug fixes
+- FIX: Bluetooth PIN pairing: use Confirm Code pairing (PR #784 by @Gjuju)
+- FIX: MPD socket error when native DSD and Peppy (pkgbuild PR #24 by @Gjuju)
+- FIX: Previous AirPlay or Spotify covers shows after disconnect, start/restart
+- FIX: RB station names with -- and > cause issues in Radio view
+- FIX: Shairport-sync stop/restart pkill command string
+
+################################################################################
+#
+# 2026-07-22 moOde 10.3.1 (Trixie)
+#
+################################################################################
+
+Packages
+- UPD: peppy-meter 2026.7.20-1moode1
+
+Updates
+- UPD: Increase hit area of the ... button for Queue items (PR #771 @Gjuju)
 - UPD: Provide dB values for MPD software volume (PR #770 @Gjuju)
 
 Radio Browser
@@ -25,10 +57,16 @@ Radio Browser
 - FIX: Highlight is missing when tile is clicked
 - FIX: Duplicate station URL's can be added
 - FIX: Countries sorted by country code instead of name
+- FIX: Remove duplicate genre "Jazz - Bebop" entry
+- FIX: Radio Manager hide/unhide actions set wrong station type for RB stations
 
 Bug fixes
-- FIX: dB volume/attenuation when Peppy is in the audio chain (PR #769 @Gjuju)
+- FIX: Premature auto-switch from Peppy to WebUI on track change (PR #777 @Gjuju)
+- FIX: Fix no Bluetooth audio when a GEQ/PEQ/Crossfeed active (PR #774 @Gjuju)
+- FIX: Hardware volume not being tracked when Peppy is on (PR #773 @Gjuju)
+- FIX: Volume/attenuation when Peppy is on (PR #769 @Gjuju)
 - FIX: Typo in Library Config help for the Analyze button
+- FIX: Index search broken in Radio view when group by "Favorites first"
 
 ################################################################################
 #

@@ -284,7 +284,7 @@ function putRadioViewShowHide($stBlock, $stType) {
 	} else if ($stBlock == 'Moode geo-fenced') {
 		$whereClause = "WHERE id < '499' AND type != 'f' AND geo_fenced = 'Yes'";
 	} else if ($stBlock == 'Other') {
-		$whereClause = "WHERE id > '499' AND type != 'f'";
+		$whereClause = "WHERE id > '499' AND substr(type,1 ,1) != 'f' AND type != 'rb'";
 	}
 
 	$result = sqlQuery("UPDATE cfg_radio SET type='" . $stType . "' " . $whereClause, $dbh);

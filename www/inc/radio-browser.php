@@ -110,6 +110,7 @@ function rbNormalizeUrl($url) {
 // separators and the few chars that break a double-quoted shell arg or a file write.
 function rbSafeName($name) {
 	$safe = preg_replace('#[/\\\\"`$\x00-\x1f]#', '', (string)$name);
+	$safe = preg_replace('/--|>|/', '', (string)$safe); // -- is sql injection, > is shell hack
 	$safe = trim(preg_replace('/\s+/', ' ', $safe));
 	$safe = substr($safe, 0, 128);
 	return $safe !== '' ? $safe : DEFAULT_STATION_NAME;

@@ -217,7 +217,6 @@ sysCmd('chmod 0666 ' . SPSEVENT_LOG);
 sysCmd('chmod 0666 ' . SLPOWER_LOG);
 sysCmd('chmod 0666 ' . MOODE_LOG);
 sysCmd('chmod 0666 ' . MOUNTMON_LOG);
-sysCmd('chmod 0600 ' . BT_PINCODE_CONF);
 if (!file_exists(ETC_MACHINE_INFO)) {
 	sysCmd('cp /usr/share/moode-player' . ETC_MACHINE_INFO . ' /etc/');
 	workerLog('worker: File check:    created default /etc/machine-info');
@@ -1075,10 +1074,12 @@ workerLog('worker: Input select:    ' . $status);
 
 // Bluetooth session vars
 $status = 'session vars ok';
-if (!isset($_SESSION['bt_pin_code'])) {
+if (!isset($_SESSION['bt_pairing_confirm'])) {
 	$status = 'session vars created';
-	$_SESSION['bt_pin_code'] = '';
+	$_SESSION['bt_pairing_confirm'] = '1';
 }
+// Keep the agent's capability file in step with the setting before it is started.
+applyBtPairingConfirm($_SESSION['bt_pairing_confirm']);
 // ALSA/CDSP max volumes
 if (!isset($_SESSION['alsavolume_max_bt'])) {
 	$_SESSION['alsavolume_max_bt'] = $_SESSION['alsavolume_max'];
@@ -1105,19 +1106,23 @@ if ($_SESSION['feat_bitmask'] & FEAT_BLUETOOTH) {
 } else {
 	$status = 'n/a';
 }
-$status .= ', PIN: ' . (empty($_SESSION['bt_pin_code']) ? 'None' : 'Set');
+$status .= ', Pair confirm: ' . ($_SESSION['bt_pairing_confirm'] == '1' ? 'On' : 'Off');
 $status .= ', ALSA/CDSP max: ' . $_SESSION['alsavolume_max_bt'] . '%/' . $_SESSION['cdspvolume_max_bt'] . 'dB';
 $status .= ', Transport: ' . $_SESSION['bluez_controller_mode'];
 workerLog('worker: Bluetooth:       ' . $status);
 
 // Start airplay renderer
 if ($_SESSION['feat_bitmask'] & FEAT_AIRPLAY) {
+	if (!isset($_SESSION['airplaysvc_type'])) {
+		$_SESSION['airplaysvc_type'] = '2';
+	}
 	if (isset($_SESSION['airplaysvc']) && $_SESSION['airplaysvc'] == 1) {
 		$status = 'started';
 		startAirPlay();
 	} else {
 		$status = 'available';
 	}
+	$status = $status . ', protocol: ' . $_SESSION['airplaysvc_type'];
 } else {
 	$status = 'n/a';
 }
@@ -1433,6 +1438,12 @@ if ($_SESSION['local_display'] == '1' || $_SESSION['peppy_display'] == '1') {
 		$_SESSION['enable_peppyalsa'] = '1';
 	}
 	startLocalDisplay();
+}
+// Not gated on peppy_display: that only says which screen touchmon is showing right now
+// (it swaps to the WebUI whenever playback stops), while the meter can come back at the
+// next track. Follow the ALSA chain instead, like updAudioOutAndBtOutConfs() does.
+if ($_SESSION['peppy_display'] == '1' || $_SESSION['enable_peppyalsa'] == '1') {
+	startPeppyGainMon();
 }
 
 // WebUI display
@@ -1954,6 +1965,10 @@ while (true) {
 		//debugLog('** chkPeppyScnBlank');
 		chkPeppyScnBlank();
 	}
+	if ($_SESSION['peppy_display'] == '1' || $_SESSION['enable_peppyalsa'] == '1') {
+		//debugLog('** chkPeppyGainMon');
+		chkPeppyGainMon();
+	}
 	// CoverView (as screen saver)
 	if ($_SESSION['scnsaver_timeout'] != 'Never') {
 		//debugLog('** chkScnSaver');
@@ -2283,6 +2298,16 @@ function chkAttachedDisplayOnOff() {
 	if ($_SESSION['local_display_onoff'] != $currentOnOff) {
 		$_SESSION['local_display_onoff'] = $currentOnOff;
 		sendFECmd('local_display_onoff,' . $currentOnOff);
+	}
+}
+// Tracks Hardware volume and updates peppy
+function chkPeppyGainMon() {
+	// The meter gain is only as good as the daemon that publishes it: if it dies the
+	// needles keep displaying the last dB and silently stop following the volume.
+	// The [.] keeps the pattern from matching the shell that runs pgrep itself.
+	if (sysCmd('pgrep -c -f "peppy-gain[.]php"')[0] == '0') {
+		workerLog('worker: Peppy gain monitor: not running, restarted');
+		startPeppyGainMon();
 	}
 }
 // Peppy screen blank
@@ -3148,6 +3173,9 @@ function runQueuedJob() {
 					break;
 			}
 
+			// Regenerate the Bluetooth A2DP sink device (AUDIODEV) for the new DSP head
+			updDspAndBtInConfs($_SESSION['cardnum'], $_SESSION['alsa_output_mode']);
+
 			// Restart MPD
 			// NOTE: Don't restart if already done in the camillaDSP section
 			if ($_SESSION['w_queue'] != 'camilladsp' || ($_SESSION['w_queue'] == 'camilladsp' && empty($queueArgs[1]))) {
@@ -3201,17 +3229,10 @@ function runQueuedJob() {
 				}
 			}
 			break;
-		case 'bt_pin_code':
-			if (empty($_SESSION['w_queueargs'])) {
-				sysCmd('echo "* ' . '" > ' . BT_PINCODE_CONF);
-				sysCmd("sed -i s'|ExecStart=/usr/bin/bt-agent.*|ExecStart=/usr/bin/bt-agent -c NoInputNoOutput|' /etc/systemd/system/bt-agent.service");
-				sysCmd("sed -i s'|ExecStartPost=/bin/hciconfig.*|ExecStartPost=/bin/hciconfig hci0 sspmode 1|' /etc/systemd/system/bt-agent.service");
-			} else {
-				sysCmd('echo "* ' . $_SESSION['w_queueargs'] . '" > ' . BT_PINCODE_CONF);
-				sysCmd("sed -i s'|ExecStart=/usr/bin/bt-agent.*|ExecStart=/usr/bin/bt-agent -c NoInputNoOutput -p " . BT_PINCODE_CONF . "|' /etc/systemd/system/bt-agent.service");
-				sysCmd("sed -i s'|ExecStartPost=/bin/hciconfig.*|ExecStartPost=/bin/hciconfig hci0 sspmode 0|' /etc/systemd/system/bt-agent.service");
-			}
-			sysCmd('systemctl daemon-reload');
+		case 'bt_pairing_confirm':
+			// On: the pairing agent asks the user to confirm the code (DisplayYesNo,
+			// Numeric Comparison). Off: Just Works, no confirmation.
+			applyBtPairingConfirm($_SESSION['bt_pairing_confirm']);
 			sysCmd('systemctl restart bt-agent');
 			break;
 		case 'reset_bt_auto_disconnect':

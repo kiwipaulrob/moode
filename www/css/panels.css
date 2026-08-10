@@ -130,7 +130,7 @@ html {background-color:inherit;}
 .configure-renderer,
 .disconnect-renderer,
 .turnoff-renderer,
-.turnoff-receiver {border-radius:5rem;background-color:var(--btnshade4);margin:0.2em 1vw;padding:0.5rem 0;font-size:.7em;width:10em;color:inherit;}
+.turnoff-receiver {border-radius:5rem;background-color:var(--btnshade4);margin:0.2em 1vw;padding:0.65rem 0;font-size:.7em;width:10em;color:inherit;}
 .renderer-btn {border-radius:5rem;background-color:transparent;padding:1em 0;font-size:.6em;width:3em;color:inherit;}
 
  /* Mask hover effect */
@@ -381,6 +381,8 @@ img.coverart {
 .database .db-entry div {padding-left:.25em;}
 .playqueue .playqueue-action, .playqueue .db-action a {position:relative;width:4.5em;margin-left:1em;font-weight:normal;text-decoration:none;z-index:3;font-size:.9em;line-height:.625em;padding:.318em 0;float:right;}
 .cv-playqueue .playqueue-action, .cv-playqueue .db-action a {position:relative;width:4.5em;margin-left:1em!important;font-weight:normal;text-decoration:none;z-index:3;font-size:.9em;line-height:.625em;padding:.318em 0;float:right;}
+.playqueue .playqueue-action {position:static;}
+.playqueue .playqueue-action::after {content:'';position:absolute;top:0;bottom:0;right:0;width:4.5em;z-index:3;}
 #db-search-results {font-size:1em;font-style:italic;padding:1em;display:none;cursor:pointer;}
 #playlist-save-name, #playlist-favorites-name {width:85%;}
 .input-append, .input-prepend {margin-bottom:0em;font-size:1em;}

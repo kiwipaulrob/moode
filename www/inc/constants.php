@@ -111,7 +111,8 @@ const BOOT_CONFIG_TXT = BOOT_DIR . '/config.txt';
 const BOOT_CMDLINE_TXT = BOOT_DIR . '/cmdline.txt';
 const BOOT_MOODEBACKUP_ZIP = '/boot/moodebackup.zip';
 const BOOT_MOODECFG_INI = '/boot/moodecfg.ini';
-const BT_PINCODE_CONF = '/etc/bluetooth/pin.conf';
+const BT_AGENT_SOCK = '/tmp/moode-btagent.sock'; // bt-pairing-agent.py response socket
+const BT_AGENT_ENV = '/var/local/www/btagent.env'; // bt-agent.service capability (BT_AGENT_CAPABILITY)
 const ETC_MACHINE_INFO = '/etc/machine-info';
 const CHROMIUM_DOWNGRADE_VER = '126.0.6478.164-rpt1';
 const NO_USERID_DEFINED = 'userid does not exist';
@@ -127,9 +128,17 @@ const PEPPY_METER_ETC_DIR = '/etc/peppymeter';
 const PEPPY_METER_OPT_DIR = '/opt/peppymeter';
 const PEPPY_SPECTRUM_ETC_DIR = '/etc/peppyspectrum';
 const PEPPY_SPECTRUM_OPT_DIR = '/opt/peppyspectrum';
+// Live meter gain source: peppy-gain.php writes the current hardware attenuation (dB)
+// here and PeppyMeter (volume.gain.db.source) scales its needles by 10^(dB/20). /tmp,
+// alongside the existing /tmp/peppymeter FIFO.
+const PEPPY_GAIN_DB_FILE = '/tmp/peppy_gain_db';
+// Seconds before retrying the ALSA monitor after the card goes away (DAC unplugged)
+const PEPPY_GAIN_MON_RETRY = 5;
+const PEPPY_GAIN_MON_LOG = '/tmp/moode_peppy_gain.log';
 // Peppy touch monitor
 const TOUCHMON_LOG = '/tmp/moode_touchmon.log';
 const TOUCHMON_TIMEOUT_DEFAULT = 15;
+const TOUCHMON_CLOSED_COUNT = 3;
 // Notifications
 const NOTIFY_TITLE_INFO = '<i class="fa fa-solid fa-sharp fa-circle-check" style="color:#27ae60;"></i> Info';
 const NOTIFY_TITLE_ALERT = '<i class="fa fa-solid fa-sharp fa-circle-xmark" style="color:#e74c3c;"></i> Alert';
