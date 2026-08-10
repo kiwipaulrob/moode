@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# moOde SendSpin Integration Installer v4.1.1
+# moOde SendSpin Integration Installer v4.1.2
 # Repository: https://github.com/kiwipaulrob/moode
 # Branch: sendspin-advanced
 #
@@ -19,7 +19,7 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.1"
+SCRIPT_VERSION="4.1.2"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
@@ -1911,17 +1911,22 @@ run_installation() {
         log_info "Proceeding with reinstallation..."
     elif [[ $install_status -eq 2 ]]; then
         echo ""
-        log_warn "Partial installation detected (not all 14 components found)."
-        log_warn "Continuing may cause issues if previous installation is incomplete."
+        log_warn "Partial installation detected (some components missing)."
+        log_warn "Continuing will install the missing components; existing components are left intact."
         echo ""
-        read -r -p "Type 'yes' to continue, or 'no' to exit: " REPLY
-        echo ""
-        if [[ ! "$REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        if [[ "$FORCE" != "true" ]]; then
+            read -r -p "Type 'yes' to continue, or 'no' to exit: " REPLY
             echo ""
-            log_info "Installation cancelled."
-            log_info "Run with --uninstall first for a clean removal, then reinstall."
+            if [[ ! "$REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+                echo ""
+                log_info "Installation cancelled."
+                log_info "Run with --uninstall first for a clean removal, then reinstall."
+                echo ""
+                exit 0
+            fi
+        else
             echo ""
-            exit 0
+            log_info "Skipping confirmation prompt (--force specified)"
         fi
     fi
     
