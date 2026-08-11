@@ -589,7 +589,7 @@ function stopSendspin() {
 	sendFECmd('sspactive0');
 }
 
-// === SendSpin Advanced Functions ===
+// === SendSpin Advanced Functions (Release 2) ===
 
 function getSendspinVersion() {
     $result = sysCmd('sudo /root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
@@ -612,7 +612,7 @@ function checkSendspinUpdate() {
 }
 
 function updateSendspin() {
-    sysCmd('sudo -u root bash -c \"/root/.local/share/uv/tools/sendspin/bin/python -m uv tool upgrade sendspin 2>&1 && systemctl restart sendspin\" > /tmp/sendspin-update.log 2>&1 &');
+    sysCmd('sudo -u root bash -c "/root/.local/share/uv/tools/sendspin/bin/python -m uv tool upgrade sendspin 2>&1 && systemctl restart sendspin" > /tmp/sendspin-update.log 2>&1 &');
     workerLog('updateSendspin(): upgrade launched in background');
     return true;
 }
@@ -630,28 +630,28 @@ function generateSendspinService($dbh = null) {
     $codec = in_array($cfg['audio_codec'] ?? '', ['flac', 'pcm']) ? $cfg['audio_codec'] : 'flac';
     $rate = in_array($cfg['audio_rate'] ?? '', ['44100', '48000', '96000']) ? $cfg['audio_rate'] : '48000';
     $depth = in_array($cfg['audio_depth'] ?? '', ['16', '24', '32']) ? $cfg['audio_depth'] : '16';
-    $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
+        $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
 
-    $audio_format = \"{$codec}:{$rate}:{$depth}:2\";
+        $audio_format = "{$codec}:{$rate}:{$depth}:2";
 
-    $service = <<<SVC
-[Unit]
-Description=SendSpin Audio Receiver
-After=network-online.target sound.target avahi-daemon.service
-Wants=network-online.target
+        $service = <<<SVC
+    [Unit]
+    Description=SendSpin Audio Receiver
+    After=network-online.target sound.target avahi-daemon.service
+    Wants=network-online.target
 
-[Service]
-Type=simple
-ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
-ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device _audioout --audio-format {$audio_format} --name moode-sendspin \\
-    --log-level {$log_level} \\
-    --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
-    --hook-stop /var/local/www/commandw/sendspin-metadata.sh
-ExecStopPost=/var/local/www/commandw/spspost.sh
-Restart=on-failure
-RestartSec=5
-TimeoutStartSec=30
-Environment=\"HOME=/root\"
+    [Service]
+    Type=simple
+    ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
+    ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device _audioout --audio-format {$audio_format} --name moode-sendspin \\
+        --log-level {$log_level} \\
+        --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
+        --hook-stop /var/local/www/commandw/sendspin-metadata.sh
+    ExecStopPost=/var/local/www/commandw/spspost.sh
+    Restart=on-failure
+    RestartSec=5
+    TimeoutStartSec=30
+    Environment="HOME=/root"
 
 LimitRTPRIO=99
 LimitMEMLOCK=8388608
@@ -665,7 +665,7 @@ SVC;
     $result = file_put_contents($tmpfile, $service);
     if ($result !== false) {
         chmod($tmpfile, 0644);
-        sysCmd(\"sudo cp {$tmpfile} {$file}\");
+        sysCmd("sudo cp {$tmpfile} {$file}");
         sysCmd('sudo systemctl daemon-reload');
         @unlink($tmpfile);
 
@@ -844,18 +844,38 @@ install_ren_config_php() {
     # This fix loads it from DB before close, reusing $dbh to avoid lock conflicts.
     # ------------------------------------------------------------------
     
-    if ! grep -q "Preserve cfg_system params" "$target"; then
-        sed -i "/^phpSession('close');/i\\
-// Preserve cfg_system params (feat_bitmask) before closing shared session.\\
-// header.php opens the worker's shared session. phpSession('close')\\
-// writes \$_SESSION back to disk. If a page doesn't load feat_bitmask,\\
-// it gets wiped from the session file, hiding all renderer sections.\\
-if (!isset(\$_SESSION['feat_bitmask'])) {\\
-	\$stmt = \$dbh->query("SELECT value FROM cfg_system WHERE param='feat_bitmask'");\\
-	\$_SESSION['feat_bitmask'] = \$stmt ? \$stmt->fetchColumn() : '0';\\
-}\\
-" "$target" 2>/dev/null || true
-        log_info "  Added feat_bitmask preservation to ren-config.php"
+        if ! grep -q "Preserve cfg_system params" "$target"; then
+        # Python positioned insert: immune to shell quoting (the old multi-line
+        # sed with embedded \" broke ren-config.php with a PHP parse error).
+        if python3 - "$target" << 'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    content = f.read()
+needle = "phpSession('close');"
+idx = content.find(needle)
+if idx == -1:
+    print("ERROR: phpSession('close') not found", file=sys.stderr)
+    sys.exit(1)
+block = r"""// Preserve cfg_system params (feat_bitmask) before closing shared session.
+// header.php opens the worker's shared session. phpSession('close')
+// writes $_SESSION back to disk. If a page doesn't load feat_bitmask,
+// it gets wiped from the session file, hiding all renderer sections.
+if (!isset($_SESSION['feat_bitmask'])) {
+	$stmt = $dbh->query("SELECT value FROM cfg_system WHERE param='feat_bitmask'");
+	$_SESSION['feat_bitmask'] = $stmt ? $stmt->fetchColumn() : '0';
+}
+"""
+content = content[:idx] + block + content[idx:]
+with open(path, "w", encoding="utf-8") as f:
+    f.write(content)
+PYEOF
+        then
+            log_info "  Added feat_bitmask preservation to ren-config.php"
+        else
+            log_error "  Failed to add feat_bitmask preservation to ren-config.php"
+            return 1
+        fi
     fi
     
     # ------------------------------------------------------------------
@@ -877,27 +897,27 @@ if (!isset(\$_SESSION['feat_bitmask'])) {\\
     head -n $((insert_line - 1)) "$target" > /tmp/ren-config-new.php
     
     cat >> /tmp/ren-config-new.php << 'EOF'
-// SendSpin Multi-Room Audio POST handler
+// SendSpin Multi-Room Audio
 if (isset($_POST['update_sendspin_settings'])) {
-    if (isset($_POST['sendspinsvc']) && $_POST['sendspinsvc'] != $_SESSION['sendspinsvc']) {
-        $update = true;
-        phpSession('write', 'sendspinsvc', $_POST['sendspinsvc']);
-    }
-    if (isset($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
-        $update = true;
-        phpSession('write', 'sendspinname', $_POST['sendspinname']);
-    }
-    if (isset($_POST['rsmafterss']) && $_POST['rsmafterss'] != $_SESSION['rsmafterss']) {
-        $update = true;
-        phpSession('write', 'rsmafterss', $_POST['rsmafterss']);
-    }
-    if (isset($update)) {
-        // Worker handles service regeneration + start/stop via submitJob
-        submitJob('sendspinsvc');
-    }
+	if (isset($_POST['sendspinsvc']) && $_POST['sendspinsvc'] != $_SESSION['sendspinsvc']) {
+		$update = true;
+		phpSession('write', 'sendspinsvc', $_POST['sendspinsvc']);
+	}
+	if (isset($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
+		$update = true;
+		phpSession('write', 'sendspinname', $_POST['sendspinname']);
+	}
+	if (isset($_POST['rsmafterss']) && $_POST['rsmafterss'] != $_SESSION['rsmafterss']) {
+		$update = true;
+		phpSession('write', 'rsmafterss', $_POST['rsmafterss']);
+	}
+	if (isset($update)) {
+		// Worker handles service regeneration + start/stop via submitJob
+		submitJob('sendspinsvc');
+	}
 }
 if (isset($_POST['sendspinrestart']) && $_POST['sendspinrestart'] == 1 && $_SESSION['sendspinsvc'] == '1') {
-    submitJob('sendspinrestart', '', NOTIFY_TITLE_INFO, 'SendSpin' . NOTIFY_MSG_SVC_MANUAL_RESTART);
+	submitJob('sendspinrestart', '', NOTIFY_TITLE_INFO, 'SendSpin' . NOTIFY_MSG_SVC_MANUAL_RESTART);
 }
 
 EOF
@@ -921,18 +941,20 @@ EOF
     
     cat >> /tmp/ren-config-new.php << 'EOF'
 if (($_SESSION['feat_bitmask'] & FEAT_SENDSPIN)) {
-    $_feat_sendspin = '';
-    $_SESSION['sendspin_installed'] == 'yes' ? $_sendspin_svcbtn_disable = '' : $_sendspin_svcbtn_disable = 'disabled';
-    $_SESSION['sendspinsvc'] == '1' ? $_sendspin_btn_disable = '' : $_sendspin_btn_disable = 'disabled';
-    $_SESSION['sendspinsvc'] == '1' ? $_sendspin_link_disable = '' : $_sendspin_link_disable = 'onclick="return false;"';
-    $autoClick = " onchange=\"autoClick('#btn-set-sendspinsvc');\"";
-    $_select['sendspinsvc_on']  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION['sendspinsvc'] == '1') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
-    $_select['sendspinsvc_off'] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION['sendspinsvc'] == '0') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
-    $_select["sendspinname"] = $_SESSION["sendspinname"];
+	$_feat_sendspin = '';
+	$_SESSION['sendspin_installed'] == 'yes' ? $_sendspin_svcbtn_disable = '' : $_sendspin_svcbtn_disable = 'disabled';
+	$_SESSION['sendspinsvc'] == '1' ? $_sendspin_btn_disable = '' : $_sendspin_btn_disable = 'disabled';
+	$_SESSION['sendspinsvc'] == '1' ? $_sendspin_link_disable = '' : $_sendspin_link_disable = 'onclick="return false;"';
+	$autoClick = " onchange=\"autoClick('#btn-set-sendspinsvc');\"";
+	$_select['sendspinsvc_on']  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION['sendspinsvc'] == '1') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+	$_select['sendspinsvc_off'] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION['sendspinsvc'] == '0') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+	$_select['sendspinname'] = $_SESSION['sendspinname'];
+	$autoClick = " onchange=\"autoClick('#btn-set-rsmafterss');\" " . $_sendspin_btn_disable;
+	$_select['rsmafterss_on'] = "<input type=\"radio\" name=\"rsmafterss\" id=\"toggle-rsmafterss-1\" value=\"Yes\" " . (($_SESSION['rsmafterss'] == 'Yes') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
+	$_select['rsmafterss_off'] = "<input type=\"radio\" name=\"rsmafterss\" id=\"toggle-rsmafterss-2\" value=\"No\" " . (($_SESSION['rsmafterss'] == 'No') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 } else {
-    $_feat_sendspin = 'hide';
+	$_feat_sendspin = 'hide';
 }
-
 
 EOF
     
