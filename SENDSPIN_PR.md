@@ -14,7 +14,7 @@ The frontend JS (`sendspin-display.js`) polls the metadata API and populates the
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 14-component detection, and commandw script deployment.
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and commandw script deployment. **Current version: v4.1.4** (moOde 10.3.2 / r1033 merged; idempotent re-runs; partial-install repair; boot-start honors the UI toggle).
 
 ### Command Line Options
 
@@ -73,7 +73,7 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 |------|---------|
 | `inc/constants.php` | `FEAT_SENDSPIN` bitmask constant (bit 18 = 262144), `SENDSPINMETA_FILE` constant |
 | `inc/renderer.php` | `startSendspin()`, `stopSendspin()`, `getSendspinStatus()`, `getSendspinVersion()`, `updateSendspin()`, `generateSendspinService()`, `getSendspinMetadata()`, `checkSendspinUpdate()` |
-| `templates/ssp-config.html` | Dedicated config page template (audio format, delay, log level, version, updates) |
+| `templates/ssp-config.html` | Dedicated config page template (audio format, log level, version, updates) |
 | `ssp-config.php` | Config page controller with save handler, PyPI version check (cached 1 hour), service regeneration |
 | `commandw/sendspin-spspre.sh` | Pre-start hook — validates ALSA config, clears stale metadata |
 | `commandw/sendspin-metadata.sh` | Hook for start/stop — writes/clears metadata to `sendspinmeta.txt` |
@@ -90,9 +90,10 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 | `ren-config.php` | Added `$_feat_sendspin` visibility check, POST handlers for name/service/rsmafterss, calls `generateSendspinService($dbh)` on save (reuses existing `$dbh` connection), `require_once` moved to top |
 | `templates/ren-config.html` | Added SendSpin section with Name, Service toggle, Resume MPD toggle, Restart, Edit — proper sibling of RoonBridge |
 | `daemon/worker.php` | Added `sendspinsvc` and `sendspinrestart` job handlers, startup detection, lifecycle logging |
-| `command/renderer.php` | Added `get_sendspinmeta` endpoint (reads `/var/local/www/sendspinmeta.txt`) |
+| `command/sendspin-meta.php` | Standalone metadata JSON endpoint — the endpoint the JS poller actually calls (reads `/var/local/www/sendspinmeta.txt`); deployed by the installer |
+| `command/renderer.php` | Also carries a `get_sendspinmeta` switch case in the fork (dormant — not deployed; kept for parity with the other metadata endpoints) |
 | `footer.php` | Added `<script src=\"sendspin-display.js\">` before `<?php` — only extra line in moOde HTML |
-| `moode-sendspin-installer.sh` | Backup system, uninstall, 14-component detection, commandw script deployment, service generation |
+| `moode-sendspin-installer.sh` | Backup system, uninstall, 19-component detection, commandw script deployment, service generation |
 
 ### Files NOT Modified (uses existing moOde infrastructure)
 
@@ -142,13 +143,13 @@ The metadata pipeline is:
 ```
 Home Assistant → sendspin-metadata-sink.py (polls every 3s)
     → writes /var/local/www/sendspinmeta.txt (~~~ delimited format)
-    → command/renderer.php?cmd=get_sendspinmeta (PHP reads file)
+    → command/sendspin-meta.php (standalone PHP endpoint)
     → sendspin-display.js (polls every 3s)
     → populates #inpsrc-indicator, #inpsrc-cover, #inpsrc-metadata (native moOde elements)
 ```
 
 Key design decisions:
-1. **Hook-based metadata** — `--hook-start/--hook-stop` write metadata directly via `sendspin-metadata.sh`; HA sink daemon is an optional alternative
+1. **Metadata sources** — HA sink daemon (primary; polls `media_player.moode_sendspin` every 3s) + stream hooks (`sendspin-metadata.sh` on `--hook-start`/`--hook-stop`); a SendSpin-protocol `metadata@v1` listener is built and dormant, and activates automatically if a server populates the role fields
 2. **No custom overlay HTML/CSS** — uses moOde's built-in `#inpsrc-indicator`
 3. **No modification to playerlib.js/main.min.js** — `sendspinactive` FECmd is unused
 4. **Always writes on every poll** — resilient to race conditions from any source
@@ -262,3 +263,7 @@ Minimum required files:
 - Cover art download and caching verified
 - No hook warnings in sendspin journal (stream starts/stops clean)
 - Install/uninstall cycle tested with backup and restore
+- **Fresh-install test on moOde 10.3.0** (2026-07-18) — installer from scratch, services active, MA handshake complete, zero errors
+- **moOde r1032 (10.3.2) + r1033 WIP merged** (2026-08-11) — one conflict resolved (`command/renderer.php` switch cases, both kept); all installer anchors re-verified
+- **31-point verification suite** (2026-08-11, on the dev container): `bash -n`, Python heredoc compile, all embedded PHP heredocs linted, merged files linted, worker.php patching tested against r1024/r1033/deployed files (insert, idempotency, uninstall, legacy cleanup), DB seeding idempotency (fresh=5 rows, re-run=5 rows, user values preserved), anchor survival
+- **Boot-time auto-start verified live** (2026-08-11, after Pi reboot) — worker log shows `startSendspin(): daemon started` in the boot sequence; `--check` reports 19/19

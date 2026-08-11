@@ -11,12 +11,12 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 - **Update button** — upgrades SendSpin CLI in the background
 - **Metadata overlay** — shows cover art, title, artist, album using moOde's built-in `#inpsrc-indicator` (same element used by AirPlay/Spotify)
 - **Native volume** — uses moOde's `_audioout` ALSA device (same as AirPlay, Spotify, MPD); volume knob works natively
-- **Auto-start on boot** — via systemd service
+- **Auto-start on boot** — honors the Renderers-page toggle (worker.php boot-time startup block; systemd service enabled)
 - **Status detection** — shows active/inactive/streaming
 
 ## Requirements
 
-- moOde 9.x or later (tested through r1031 on moOde 10.x)
+- moOde 9.x or later (tested through r1033 / moOde 10.3.2)
 - Raspberry Pi 3/4/5
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
@@ -32,7 +32,7 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 14-component detection, and all features
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.4** (moOde 10.3.2 / r1033 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
 
 ### Installation
 
@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-advanced
 |--------|-------------|
 | *(no flag)* | Full install — all features, config page, metadata overlay |
 | `--minimal` | Minimal install — ON/OFF toggle + Resume MPD only (no config page) |
-| `--check` | Check current installation status of all components |
+| `--check` | Check current installation status of all components (flags partial installs) |
 | `--uninstall` | Uninstall — restores original moOde files from the most recent backup |
 | `--force` | Skip all confirmation prompts (for automated/scripted installs) |
 | `--no-backup` | Skip creating backup (for testing) |
@@ -109,7 +109,7 @@ The `--uninstall` command finds the **most recent** backup and restores all file
 | Renderers page controller | `ren-config.php` — POST handlers, session variables |
 | Renderers page template | `templates/ren-config.html` — SendSpin section |
 | Dedicated config page | `ssp-config.php` + `templates/ssp-config.html` |
-| Worker job handlers | `daemon/worker.php` — `sendspinsvc`, `sendspinrestart` cases |
+| Worker job handlers + boot startup | `daemon/worker.php` — `sendspinsvc`, `sendspinrestart` cases plus a boot-time startup block that honors the UI toggle |
 | Metadata overlay | `js/sendspin-display.js` — uses native `#inpsrc-indicator` (no custom HTML/CSS) |
 | Pre-start hook | `commandw/sendspin-spspre.sh` — validates `_audioout` device |
 | Systemd service | `/etc/systemd/system/sendspin.service` — uses `_audioout`, same device as AirPlay/Spotify/MPD |
@@ -159,7 +159,7 @@ If you update moOde (via System → Check for Update), core files are replaced w
 cd moode && git pull && sudo bash moode-sendspin-installer.sh
 ```
 
-Database settings and custom files (config page, metadata overlay) survive the update and do not need to be reconfigured. The backup system preserves the previous state in case you need to roll back.
+The installer detects partial installations (components missing after a moOde update) and reinstalls **only** the missing components — including re-patching `worker.php` and repairing the boot-time startup block. Re-running is safe and idempotent: database settings and custom files (config page, metadata overlay) survive and are never duplicated or reset.
 
 ## Uninstall
 

@@ -1,16 +1,26 @@
 # SendSpin for moOde — Feature Status
 
 **Branch:** `sendspin-advanced`
-**Updated:** 2026-07-25
-**Installer:** v4.1.0
-**Merged:** moOde r1031 (upstream/develop)
+**Updated:** 2026-08-11
+**Installer:** v4.1.4
+**Merged:** moOde r1032 (10.3.2) + r1033 WIP (upstream/develop)
 
-### Latest (2026-07-26) — HA Polling + Clean Architecture
+### Latest (2026-08-11) — r1032/r1033 Merge + Installer Idempotency
+
+- **Merged moOde r1032 (10.3.2, released 2026-08-03)** — Bluetooth pairing-confirm overhaul, AirPlay protocol 1|2 option, Peppy hardware-volume, radio-browser fixes incl. SQL-injection filter (security), package bumps (mpd 0.24.13, shairport-sync 5.2.1, kernel 6.18.39). One conflict resolved in `command/renderer.php` (both `bt_pair_response` and `get_sendspinmeta` cases kept)
+- **Merged r1033 WIP** (radio-browser fixes) — zero conflicts
+- **Installer v4.1.1 — worker.php boot-start anchor fix** — the startup-insertion regex anchored on `roonbridge_svc` (renamed to `rbsvc` before r1030) and had silently failed since: SendSpin booted via systemd enable regardless of the UI toggle. Now anchors on the RoonBridge workerLog line, uses a unique `// SendSpin renderer startup` marker, and `--check` flags partial installs so re-runs repair them
+- **Installer v4.1.2 — `--force` guard on the partial-install prompt** — non-interactive re-runs no longer silently cancel when a component is missing
+- **Installer v4.1.3/4.1.4 — idempotent `cfg_system` seeding** — `INSERT OR REPLACE`/`IGNORE` duplicated all 5 sendspin params on every run (param column has no UNIQUE constraint); now conditional `INSERT ... WHERE NOT EXISTS` — re-runs never duplicate rows and user settings (toggle state, custom name) are preserved
+- **Boot-time auto-start honors the UI toggle — verified live** after a Pi reboot (worker log: `startSendspin(): daemon started` in the boot sequence)
+- **Stale `cfg_sendspin.ma_token` removed** from the live database (dead since MA token UI removal)
+
+### Previous (2026-07-26) — HA Polling + Clean Architecture
 
 - **HA polling restored** — daemon polls `media_player.moode_sendspin` every 3s via HASS_TOKEN. Full track metadata + album art.
 - **Dead code removed** — MA Token UI, MA REST polling, `get_ma_token()`. MA protocol listener kept dormant for future.
 - **Shared session fix** — `feat_bitmask` preserved before `phpSession('close')` to prevent all renderers from disappearing
-- **Daemon reads token from DB** — `get_ma_token()` checks `cfg_sendspin.ma_token` + env var fallback; no systemd edit needed
+- **Token source** — `HASS_TOKEN` env var in the systemd unit (no DB-stored tokens; the stale `cfg_sendspin.ma_token` row was removed 2026-08-11)
 - **Hook/daemon race fixed** — hook defers to daemon via `systemctl is-active`; daemon corrects JSON/empty files on startup
 - **Metadata display** — `sendspin-meta.php` endpoint, `sendspin-display.js` poller, `<script>` auto-added to `header.php`
 - **19 installer components** — +5 from original (metadata endpoint, JS, header, sink daemon, sink service)
@@ -49,7 +59,7 @@
   - No custom overlay HTML, no custom CSS added to moOde
   - Matches AirPlay/Spotify/Deezer display pattern exactly
   - Covers full page with album art backdrop, metadata text, Turn Off button
-- Polls `/command/renderer.php?cmd=get_sendspinmeta` every 3 seconds
+- Polls `command/sendspin-meta.php` every 3 seconds
 - Shows cover art, title, artist, album on the main playback page
 - Auto-hides when streaming stops
 - Only activates on main page (`/` or `/index.php`) — never on config pages
@@ -100,7 +110,7 @@
 
 ### Installer Quality
 - **Status:** Complete
-- **Installer v4.1.0** — 14-component detection, backup + uninstall, sed operations guarded with `|| true`, dynamic PHP-FPM version detection, `require_once` patching for `renderer.php` dependency
+- **Installer v4.1.4** — 19-component detection, backup + uninstall, sed operations guarded with `|| true`, dynamic PHP-FPM version detection, `require_once` patching for `renderer.php` dependency, idempotent DB seeding, self-repairing partial installs
 - **Reuses existing `$dbh`** connection in `ren-config.php` POST handler (no unnecessary reconnect)
 - **Uses moOde's `_audioout` device** — same ALSA path as AirPlay, Spotify, MPD; volume knob works natively, no attenuation hacks needed
 - **Follows renderer patterns** — `vol.sh -restore`, CDSP volume sync, `sspactive` flag, `sendFECmd('sspactive0')` on stop, matching all other renderers

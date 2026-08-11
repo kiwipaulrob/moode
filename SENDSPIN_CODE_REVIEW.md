@@ -509,5 +509,20 @@ These remaining items are low priority — they do not affect functionality and 
 
 ---
 
+## 2026-08-11 Addendum — Post-Merge Review (r1032/r1033)
+
+Found during the moOde r1032/r1033 merge and installer re-verification; all fixed in installer v4.1.4:
+
+| ID | Severity | File | Issue | Status |
+|----|----------|------|-------|--------|
+| ADD-01 | **High** | installer `install_worker_php()` | Startup-insertion regex anchored on `$_SESSION['roonbridge_svc']` — moOde renamed it to `rbsvc` before r1030, so the boot-start block was silently never inserted (UI-toggle job cases still worked, so detection reported "installed" and re-runs never repaired it). Effect: SendSpin booted via `systemctl enable` regardless of the UI toggle | ✅ FIXED v4.1.1 — anchors on the RoonBridge `workerLog` status line (+ `// Start Multiroom audio` fallback), unique `// SendSpin renderer startup` marker, detection requires marker + case, case insertion idempotent, uninstall covers new + legacy markers |
+| ADD-02 | **Medium** | installer `install_database_entries_*()` | `INSERT OR REPLACE`/`IGNORE` on `cfg_system` (param column has no UNIQUE constraint) duplicated all 5 sendspin params on every run, shadowing user values (toggle state, custom name) | ✅ FIXED v4.1.4 — conditional `INSERT ... WHERE NOT EXISTS` per param (verified: fresh=5 rows, re-run=5 rows, user values preserved) |
+| ADD-03 | **Medium** | installer partial-install prompt | Unguarded `read` — `--force` / non-interactive re-runs silently cancelled when a component was missing, blocking the documented re-patch-after-moOde-update workflow | ✅ FIXED v4.1.2 — prompt guarded by `$FORCE` |
+| ADD-04 | **Info** | `moode-worker.service` / worker lock | STRUCT-06 context refined: the worker lock is a flock on `/run/worker.pid` (not a stale-PIDFile issue) and the fd is inherited by every daemon the worker spawns (shairport-sync, librespot, aplmeta-reader, mountmon) — killing the worker alone does not release it; a reboot (or killing the renderer stack) is required. Some moOde 10.3.x installs have no `moode-worker.service` unit at all (worker runs via `/etc/rc.local`) | Documented — moOde core behavior, no SendSpin code change |
+| ADD-05 | **Info** | live DB | Stale `cfg_sendspin.ma_token` row (dead since the MA token UI removal) | ✅ Removed from the deployed database 2026-08-11 |
+
+---
+
 *Code review — 2026-06-25*  
+*Addendum — 2026-08-11*  
 *All line numbers reference the `sendspin-advanced` branch at commit `ca2d4627`*
