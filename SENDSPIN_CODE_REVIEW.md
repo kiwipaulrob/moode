@@ -18,12 +18,12 @@
 | `www/js/sendspin-display.js` | New | JS overlay for metadata display |
 | `www/inc/renderer.php` | Modified | SendSpin renderer functions added |
 | `www/daemon/sendspin-metadata-sink.py` | New | HA-polling metadata sink daemon |
-|| `www/commandw/sendspin-spspre.sh` | New | Pre-start hook — validates ALSA config |
+|| `www/commandw/sendspin-spspre.sh` | New | Pre-start hook — validates the `_audioout` device |
 | `www/commandw/sendspin-metadata.sh` | New | Hook for start/stop metadata write |
 | `www/commandw/spspost.sh` | New | Post-stop cleanup hook |
 | `www/commandw/sendspin-version-check.sh` | New | PyPI version check script |
 | `etc/systemd/system/sendspin.service` | New | SendSpin daemon systemd service |
-| `etc/alsa/conf.d/sendspin.conf` | New | ALSA virtual device definition |
+| `etc/alsa/conf.d/sendspin.conf` | Removed in v4.1.0 | Custom ALSA device was deleted — SendSpin uses moOde's stock `_audioout` device |
 
 ---
 

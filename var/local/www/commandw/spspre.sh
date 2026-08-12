@@ -1,42 +1,63 @@
 #!/bin/bash
-set -euo pipefail
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright 2014 The moOde audio player project / Tim Curtis
+#
 
-DB_FILE="/var/local/www/db/moode-sqlite3.db"
-STATE_FILE="/dev/shm/sendspin_state.json"
+LOGFILE="/var/log/moode_spsevent.log"
+DEBUG=$(sudo moodeutl -d -gv debuglog)
+SQLDB=/var/local/www/db/moode-sqlite3.db
 
-log() {
-    logger -t sendspin-spspre "$1" 2>/dev/null || true
+debug_log () {
+	if [[ $DEBUG == '0' ]]; then
+		return 0
+	fi
+	echo "$1"
+	TIME=$(date +'%Y%m%d %H%M%S')
+	echo "$TIME $1" >> $LOGFILE
 }
 
-# Read card number from DB (supports any ALSA card)
-CARD_NUM=$(sqlite3 "$DB_FILE" "SELECT value FROM cfg_system WHERE param='cardnum';" 2>/dev/null || echo "0")
+debug_log "Event: Run spspre.sh"
 
-# ALSA config with dynamic card number
-cat > /etc/alsa/conf.d/sendspin.conf << EOF
-pcm.sendspin {
-type plug
-slave {
-pcm "plughw:${CARD_NUM},0"
-}
-}
-EOF
-chmod 644 /etc/alsa/conf.d/sendspin.conf 2>/dev/null || true
-echo "direct" > /var/local/www/sendspin_dsp_state.txt
-chmod 644 /var/local/www/sendspin_dsp_state.txt 2>/dev/null || true
+# cfg_system
+RESULT=$(sqlite3 $SQLDB "SELECT value FROM cfg_system WHERE param IN ('volknob','alsavolume_max','alsavolume','amixname','camilladsp_volume_sync','inpactive','multiroom_tx')")
+readarray -t arr <<<"$RESULT"
+VOLKNOB=${arr[0]}
+ALSAVOLUME_MAX=${arr[1]}
+ALSAVOLUME=${arr[2]}
+AMIXNAME=${arr[3]}
+CDSP_VOLSYNC=${arr[4]}
+INPACTIVE=${arr[5]}
+MULTIROOM_TX=${arr[6]}
+RX_ADDRESSES=$(sudo moodeutl -d -gv rx_addresses)
 
-# Set active state in shared memory
-echo '{"active":1}' > "$STATE_FILE"
-chmod 644 "$STATE_FILE" 2>/dev/null || true
-
-# Update DB so worker.php chkSendspinActive() can detect it
-sqlite3 "$DB_FILE" "UPDATE cfg_system SET value='1' WHERE param='sendspinactive';" 2>/dev/null || true
-log "SendSpin active state set to 1 (shm + db)"
-
-# Stop MPD if playing
-MPC_STATUS=$(mpc status 2>/dev/null | head -1 || echo "")
-if echo "$MPC_STATUS" | grep -q "playing"; then
-    mpc stop 2>/dev/null || true
-    log "MPD stopped (was playing)"
+if [[ $INPACTIVE == '1' ]]; then
+	exit 1
 fi
 
-exit 0
+$(sqlite3 $SQLDB "UPDATE cfg_system SET value='1' WHERE param='aplactive'")
+/usr/bin/mpc stop > /dev/null
+# Send to front-end
+/var/www/util/send-fecmd.php "aplactive1"
+
+# Local
+if [[ $CDSP_VOLSYNC == "on" ]]; then
+	# Set 0dB CDSP volume
+	sed -i '0,/- -.*/s//- 0.0/' /var/lib/cdsp/statefile.yml
+elif [[ $ALSAVOLUME != "none" ]]; then
+	# Set 0dB ALSA volume
+	/var/www/util/sysutil.sh set-alsavol "$AMIXNAME" $ALSAVOLUME_MAX
+fi
+
+# Multiroom receivers
+if [[ $MULTIROOM_TX == "On" ]]; then
+	for IP_ADDR in $RX_ADDRESSES; do
+		RESULT=$(curl -G -S -s --data-urlencode "cmd=trx_control -set-alsavol" http://$IP_ADDR/command/)
+		if [[ $RESULT != "" ]]; then
+			RESULT=$(curl -G -S -s --data-urlencode "cmd=trx_control -set-alsavol" http://$IP_ADDR/command/)
+			if [[ $RESULT != "" ]]; then
+				echo $(date +'%Y%m%d %H%M%S') "Event: trx_control -set-alsavol failed: $IP_ADDR" >> $LOGFILE
+			fi
+		fi
+	done
+fi

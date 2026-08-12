@@ -2,7 +2,7 @@
 #
 #  Setup Guide for SendSpin Multi-Room Audio Renderer
 #
-#  Version: 2.2 (2026-07-25)
+#  Version: 3.0 (2026-08-12)
 #
 ################################################################################
 
@@ -25,7 +25,7 @@ REQUIREMENTS
 
 - moOde 9.x or later running on a Raspberry Pi 3, 4, or 5
 - Network connection to a SendSpin server (e.g., Music Assistant)
-- Music Assistant long-lived access token (for rich metadata display -- optional)
+- Home Assistant long-lived access token (for rich metadata display -- optional)
 
 No manual installation of Python, uv, or the sendspin CLI is required --
 the installer handles all prerequisites automatically.
@@ -89,11 +89,9 @@ Edit button:
         DEBUG (troubleshooting), INFO (normal), WARNING, or ERROR (minimal)
         Controls verbosity of the SendSpin daemon log.
 
-    HA Token:
-        Home Assistant long-lived access token for metadata display.
-        Found in HA Settings -> Long-Lived Access Tokens. The installer
-        writes it to the metadata sink systemd service. Required for
-        album art and track metadata on the moOde homepage.
+    Audio device:
+        Read-only display of the ALSA output chain SendSpin uses.
+        Shows moOde's standard `_audioout` device (same as AirPlay/Spotify).
 
     Version:
         Shows installed and latest available SendSpin CLI version.
@@ -107,7 +105,7 @@ on moOde's homepage using the built-in input source indicator.
 
 Sources (in priority order):
     1. SendSpin protocol metadata@v1 -- real-time push from the sender
-    2. Music Assistant REST API -- polls MA for current track (requires token)
+    2. Home Assistant REST API -- polls media_player.moode_sendspin every 3s (requires HA token)
     3. Streaming status -- shows "Now Playing" when audio is active
 
 To enable rich metadata (artist, title, album, cover art):

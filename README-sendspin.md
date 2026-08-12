@@ -16,7 +16,7 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 
 ## Requirements
 
-- moOde 9.x or later (tested through r1033 / moOde 10.3.2)
+- moOde 9.x or later — verified against the current release, moOde 10.3.2 (r1032, Trixie), and the r1033 development tree; the fork is re-merged with every new upstream release
 - Raspberry Pi 3/4/5
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
@@ -27,7 +27,7 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 1. **No custom overlay HTML/CSS** — The metadata display uses moOde's built-in `#inpsrc-indicator` element (already in `header.php`), matching AirPlay/Spotify/Deezer display pattern exactly. Zero additional HTML/CSS footprint.
 2. **Uses moOde's `_audioout` device** — Same ALSA path as AirPlay, Spotify, MPD. No separate ALSA config needed. Volume knob works natively without attenuation hacks.
-3. **No modification to playerlib.js** — `sendspinactive` FECmd is unused. The frontend JS polls the metadata API directly instead.
+3. **Minimal playerlib.js change** — the installer adds only a `FEAT_SENDSPIN` feature-flag constant to `playerlib.js` (falling back to `lib.min.js` on older moOde). The renderer switch and FECmd path are untouched — `sendspinactive` FECmd is unused; the frontend JS polls the metadata API directly instead.
 4. **Stop/start matches other renderers** — Calls `vol.sh -restore`, CamillaDSP volume sync, and `sendFECmd('sspactive0')` on stop, exactly like AirPlay/Spotify/RoonBridge.
 
 ## Installer
@@ -167,7 +167,7 @@ The installer detects partial installations (components missing after a moOde up
 sudo bash moode-sendspin-installer.sh --uninstall
 ```
 
-Restores original moOde files from the most recent backup at `/var/backups/moode-sendspin-*/`. Also removes systemd service files, ALSA config, and the `cfg_sendspin` database table. Backups are preserved after uninstall so you can re-install later.
+Restores original moOde files from the most recent backup at `/var/backups/moode-sendspin-*/`. Also removes the SendSpin systemd service files and the `cfg_sendspin` database table. Backups are preserved after uninstall so you can re-install later.
 
 ## Check Status
 

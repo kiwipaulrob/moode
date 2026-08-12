@@ -75,7 +75,7 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 | `inc/renderer.php` | `startSendspin()`, `stopSendspin()`, `getSendspinStatus()`, `getSendspinVersion()`, `updateSendspin()`, `generateSendspinService()`, `getSendspinMetadata()`, `checkSendspinUpdate()` |
 | `templates/ssp-config.html` | Dedicated config page template (audio format, log level, version, updates) |
 | `ssp-config.php` | Config page controller with save handler, PyPI version check (cached 1 hour), service regeneration |
-| `commandw/sendspin-spspre.sh` | Pre-start hook — validates ALSA config, clears stale metadata |
+| `commandw/sendspin-spspre.sh` | Pre-start hook — validates the `_audioout` device, clears stale metadata |
 | `commandw/sendspin-metadata.sh` | Hook for start/stop — writes/clears metadata to `sendspinmeta.txt` |
 | `commandw/spspost.sh` | Post-stop hook — cleanup, clear metadata, log device status |
 | `commandw/sendspin-version-check.sh` | PyPI version check — returns JSON `{installed, latest, update_available}` |
@@ -102,7 +102,7 @@ cp /var/local/www/db/moode-sqlite3.db /var/backups/moode-sendspin-manual/
 | `header.php` | `#inpsrc-indicator` already in every page — no changes needed |
 | `styles.min.css` | All `#inpsrc-*` CSS already present — no changes needed |
 | `footer.min.php` on Pi | Only the `<script>` tag was added — no custom overlay HTML |
-| `main.min.js` (playerlib.js) | Not modified — `sendspinactive` FECmd not needed since our JS polls directly |
+| `main.min.js` (playerlib.js) | Only a `FEAT_SENDSPIN` feature-flag constant is added by the installer — renderer switch/FECmd path untouched; `sendspinactive` FECmd not needed since our JS polls directly |
 
 ## Database Schema
 
@@ -151,7 +151,7 @@ Home Assistant → sendspin-metadata-sink.py (polls every 3s)
 Key design decisions:
 1. **Metadata sources** — HA sink daemon (primary; polls `media_player.moode_sendspin` every 3s) + stream hooks (`sendspin-metadata.sh` on `--hook-start`/`--hook-stop`); a SendSpin-protocol `metadata@v1` listener is built and dormant, and activates automatically if a server populates the role fields
 2. **No custom overlay HTML/CSS** — uses moOde's built-in `#inpsrc-indicator`
-3. **No modification to playerlib.js/main.min.js** — `sendspinactive` FECmd is unused
+3. **Minimal playerlib.js/main.min.js change** — only a `FEAT_SENDSPIN` feature-flag constant is added; `sendspinactive` FECmd is unused
 4. **Always writes on every poll** — resilient to race conditions from any source
 5. **Only activates on main page** (`/` or `/index.php`) — never affects config pages
 
@@ -216,7 +216,7 @@ Database settings and custom files survive the update. The installer re-applies 
 
 ## Uninstall
 
-The `--uninstall` command restores all original moOde files from the most recent backup at `/var/backups/moode-sendspin-*/`. It also removes systemd service files, ALSA config, and the `cfg_sendspin` database table.
+The `--uninstall` command restores all original moOde files from the most recent backup at `/var/backups/moode-sendspin-*/`. It also removes the SendSpin systemd service files and the `cfg_sendspin` database table.
 
 ```bash
 sudo bash moode-sendspin-installer.sh --uninstall
@@ -257,7 +257,7 @@ Minimum required files:
 - PHP syntax check on all modified files
 - Session handling tested with and without cookies (incognito mode)
 - Service file regeneration tested with all audio format combinations
-- ALSA config verified with different card numbers
+- `_audioout` device verified with different card numbers
 - MPD coexistence tested (stop/resume cycle)
 - Metadata overlay tested with active and stopped streams (browser verified)
 - Cover art download and caching verified
