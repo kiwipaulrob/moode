@@ -1,0 +1,254 @@
+################################################################################
+#
+#  Setup Guide for SendSpin Multi-Room Audio Renderer
+#
+#  Version: 3.0 (2026-08-12)
+#
+################################################################################
+
+OVERVIEW
+
+SendSpin is a synchronized multi-room audio protocol. This integration adds
+SendSpin as a first-class renderer in moOde's web UI, allowing your Raspberry Pi
+to act as an audio endpoint in multi-room systems (Music Assistant, etc.).
+
+The installer handles everything automatically -- it installs Python 3, uv
+(Python package manager), and the sendspin CLI, then patches moOde's web
+interface, creates the systemd service, configures the database, and creates
+a backup of all modified files.
+
+Metadata (now-playing track info, artist, album, cover art) is displayed on
+moOde's homepage via the built-in input source indicator. The metadata sink
+daemon runs alongside the audio daemon to provide rich track information.
+
+REQUIREMENTS
+
+- moOde 9.x or later running on a Raspberry Pi 3, 4, or 5
+- Network connection to a SendSpin server (e.g., Music Assistant)
+- Home Assistant long-lived access token (for rich metadata display -- optional)
+
+No manual installation of Python, uv, or the sendspin CLI is required --
+the installer handles all prerequisites automatically.
+
+INSTALLATION
+
+Full install (all features):
+
+    git clone https://github.com/kiwipaulrob/moode.git
+    cd moode && git checkout sendspin-advanced
+    sudo bash moode-sendspin-installer.sh
+
+Or install directly from URL:
+
+    curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-advanced/moode-sendspin-installer.sh | sudo bash
+
+INSTALLER COMMAND LINE OPTIONS
+
+    sudo bash moode-sendspin-installer.sh           Full install (default)
+    sudo bash moode-sendspin-installer.sh --minimal Endpoint only (ON/OFF + Resume MPD, no config page)
+    sudo bash moode-sendspin-installer.sh --check   Check installation status
+    sudo bash moode-sendspin-installer.sh --uninstall  Remove SendSpin, restore originals
+    sudo bash moode-sendspin-installer.sh --no-backup   Skip backup creation
+    sudo bash moode-sendspin-installer.sh --help    Show help
+
+USAGE
+
+After installation, open moOde's web UI and navigate to:
+  Configure -> Renderers -> SendSpin section
+
+RENDERER CONTROLS
+
+Service toggle (ON/OFF):
+    ON   -- SendSpin is active and appears as an available endpoint in controllers
+    OFF  -- SendSpin is stopped and does not appear in controllers
+    Changes take effect immediately on save.
+
+Name:
+    The name that appears in your multi-room audio controller.
+    Default: "moode-sendspin"
+    Change this to identify your device (e.g., "Kitchen Speaker", "Living Room").
+
+Resume MPD:
+    ON   -- MPD playback resumes automatically when SendSpin streaming stops
+    OFF  -- MPD remains stopped after SendSpin disconnects
+
+Restart button:
+    Restarts the SendSpin service. Use this if the device disappears from
+    the controller or audio stops working.
+
+Edit button:
+    Opens the SendSpin configuration page (ssp-config.php) with these settings:
+
+    Audio format:
+        Codec:       FLAC (lossless, recommended) or PCM (uncompressed)
+        Sample rate: 44100, 48000 (default), or 96000 Hz
+        Bit depth:   16 (CD quality), 24, or 32 bit
+        Changes take effect on next service restart.
+
+    Log level:
+        DEBUG (troubleshooting), INFO (normal), WARNING, or ERROR (minimal)
+        Controls verbosity of the SendSpin daemon log.
+
+    Audio device:
+        Read-only display of the ALSA output chain SendSpin uses.
+        Shows moOde's standard `_audioout` device (same as AirPlay/Spotify).
+
+    Version:
+        Shows installed and latest available SendSpin CLI version.
+        If an update is available, an Update button appears to upgrade
+        the CLI in the background via uv.
+
+METADATA DISPLAY
+
+SendSpin includes a metadata sink daemon that displays now-playing information
+on moOde's homepage using the built-in input source indicator.
+
+Sources (in priority order):
+    1. SendSpin protocol metadata@v1 -- real-time push from the sender
+    2. Home Assistant REST API -- polls media_player.moode_sendspin every 3s (requires HA token)
+    3. Streaming status -- shows "Now Playing" when audio is active
+
+To enable rich metadata (artist, title, album, cover art):
+    1. Create a long-lived access token in HA Settings
+    2. Set it in the metadata sink service:
+       sudo sed -i 's|Environment="HA_TOKEN="|Environment="HA_TOKEN=YOUR_TOKEN"|' /etc/systemd/system/sendspin-metadata-sink.service
+       sudo systemctl daemon-reload
+       sudo systemctl restart sendspin-metadata-sink
+    3. Album art + track info appears within 10 seconds
+
+VOLUME LEVEL
+
+SendSpin uses moOde's standard _audioout ALSA device, the same device used
+by AirPlay, Spotify, RoonBridge, and MPD. Volume is controlled by moOde's
+integrated volume knob -- SendSpin matches the level of all other renderers
+automatically. No manual attenuation adjustment is needed.
+
+MOODE UPDATES
+
+Re-run the installer after a moOde system update:
+
+    cd moode && git pull && sudo bash moode-sendspin-installer.sh
+
+TROUBLESHOOTING
+
+"Device in Use" error [PaErrorCode -9985]:
+
+    This error occurs when SendSpin cannot open the audio device because MPD
+    is currently using it.
+
+    SOLUTION: Enable the SendSpin service in moOde UI first. The integration
+    handles ALSA device sharing automatically. If you start SendSpin manually
+    via SSH, stop MPD first:
+
+        mpc stop
+        sudo systemctl start sendspin
+
+No audio when streaming starts:
+
+    1. Check SendSpin service status:
+       sudo systemctl status sendspin
+
+    2. View SendSpin logs:
+       sudo journalctl -u sendspin -f
+
+    3. Verify the daemon is running:
+       pgrep -f "sendspin daemon"
+
+    4. Check that the _audioout ALSA device is available:
+       aplay -L | grep _audioout
+
+moOde device not appearing in controller:
+
+    1. Check that Service is toggled ON in moOde UI
+    2. Verify mDNS discovery is working:
+       sendspin --list-servers
+    3. Ensure your controller is on the same network
+    4. Check firewall settings (port 44556/UDP for mDNS)
+    5. Restart SendSpin service
+
+No metadata or album art displaying:
+
+    1. Verify the metadata sink daemon is running:
+       sudo systemctl status sendspin-metadata-sink
+
+    2. Check that HA_TOKEN is configured in the systemd service:
+       grep HA_TOKEN /etc/systemd/system/sendspin-metadata-sink.service
+
+    3. View metadata sink logs:
+       sudo journalctl -u sendspin-metadata-sink -f
+
+    4. Check current metadata file:
+       cat /var/local/www/sendspinmeta.txt
+       (~~~ format means metadata is flowing; empty means daemon issue)
+
+    5. Verify HA is reachable from the Pi:
+       curl http://192.168.214.159:8123/api/
+
+Audio dropouts or stuttering:
+
+    1. Check CPU usage during playback: top
+    2. Ensure adequate power supply (especially for Pi 4/5)
+    3. Try a wired network connection instead of WiFi
+    4. Lower the audio quality in your controller settings
+
+MPD does not resume after SendSpin stops:
+
+    1. Check that Resume MPD is enabled in the SendSpin section of Renderers
+    2. Verify MPD was playing before SendSpin started
+    3. Check moOde logs: sudo tail -f /var/log/moode.log
+
+Renderers not appearing on Configure -> Renderers page:
+
+    moOde uses a shared session between the worker daemon and all web pages.
+    If renderer sections disappear (only top header visible), the shared
+    session has lost its cfg_system params.
+
+    1. Visit the moOde homepage first: http://<moode-ip>/
+       (This triggers the backend to reload configuration.)
+
+    2. If the problem persists, restart PHP-FPM:
+       sudo systemctl restart php8.4-fpm
+
+    3. If still not working, reboot the Pi: sudo reboot
+
+SendSpin config page hangs after saving:
+
+    1. This can happen if the worker daemon is stuck.
+    2. Restart PHP-FPM: sudo systemctl restart php8.4-fpm
+    3. If persistent, reboot the Pi: sudo reboot
+
+COMMAND REFERENCE
+
+    # Check SendSpin status
+    sudo systemctl status sendspin
+
+    # Check metadata sink status
+    sudo systemctl status sendspin-metadata-sink
+
+    # View SendSpin logs
+    sudo journalctl -u sendspin -f
+
+    # View metadata sink logs
+    sudo journalctl -u sendspin-metadata-sink -f
+
+    # List available SendSpin servers on network
+    sendspin --list-servers
+
+    # List audio devices
+    sendspin --list-audio-devices
+
+    # Restart SendSpin
+    sudo systemctl restart sendspin
+
+    # Restart metadata sink
+    sudo systemctl restart sendspin-metadata-sink
+
+    # Check that _audioout is available
+    aplay -L | grep _audioout
+
+    # Check current metadata
+    cat /var/local/www/sendspinmeta.txt
+
+################################################################################
+#  For support, visit https://github.com/kiwipaulrob/moode/issues
+################################################################################

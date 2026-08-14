@@ -7,6 +7,7 @@
 require_once __DIR__ . '/alsa.php';
 require_once __DIR__ . '/common.php';
 require_once __DIR__ . '/mpd.php';
+require_once __DIR__ . '/peripheral.php';
 require_once __DIR__ . '/renderer.php';
 require_once __DIR__ . '/session.php';
 require_once __DIR__ . '/sql.php';
@@ -273,11 +274,18 @@ function updDspAndBtInConfs($cardNum, $outputMode) {
 		} else {
 			$alsaDevice = 'peppy';
 		}
-	// AUDIODEV=_audioout or plughw depending on Bluetooth Config, ALSA output mode
-	} else if ($_SESSION['alsa_output_mode_bt'] == 'plughw') {
-		$alsaDevice = $outputMode == 'iec958' ? getAlsaIEC958Device() : 'plughw' . ':' . $cardNum . ',0';
+	// LADSPA heads (alsaequal/crossfeed/eqfa12p) can't be opened via plug:_audioout; open directly
+	} else if ($_SESSION['alsaequal'] != 'Off') {
+		$alsaDevice = 'alsaequal';
+	} else if ($_SESSION['camilladsp'] != 'off') {
+		$alsaDevice = 'plug:_audioout';
+	} else if ($_SESSION['crossfeed'] != 'Off') {
+		$alsaDevice = 'crossfeed';
+	} else if ($_SESSION['eqfa12p'] != 'Off') {
+		$alsaDevice = 'eqfa12p';
 	} else {
-		$alsaDevice = $_SESSION['alsa_output_mode_bt']; // _audioout
+		// A2DP sink: convert the fixed-format decoded PCM at the top of the chain
+		$alsaDevice = 'plug:_audioout';
 	}
 	sysCmd("sed -i 's/^AUDIODEV.*/AUDIODEV=" . $alsaDevice . "/' /etc/bluealsaaplay.conf");
 
@@ -296,28 +304,43 @@ function updPeppyConfs($cardNum, $outputMode) {
 	}
 	sysCmd("sed -i 's/^slave.pcm.*/slave.pcm \"" . $alsaDevice . "\"/' " . ALSA_PLUGIN_PATH . '/_peppyout.conf');
 	// ALSA mixer
-	$alsaMixer = $_SESSION['amixname'] == 'none' ? 'PCM' : $_SESSION['amixname'];
+	// The softvol control{} block takes a raw control element name. A simple mixer name
+	// never matches, which makes softvol create its own 0-255 control alongside the
+	// hardware one instead of binding to it.
+	$alsaMixer = $_SESSION['amixname'] == 'none' ?
+		'PCM' : getAlsaCtlElemName($_SESSION['amixname'], $cardNum);
 	$peppyConfFile = file_exists(ALSA_PLUGIN_PATH . '/peppy.conf.hide') ? '/peppy.conf.hide' : '/peppy.conf';
 	sysCmd("sed -i 's/^name.*/name \"" . $alsaMixer . "\"/' " . ALSA_PLUGIN_PATH . $peppyConfFile);
 	sysCmd("sed -i 's/^card.*/card " . $cardNum . "/' " . ALSA_PLUGIN_PATH . $peppyConfFile);
+	// Follow the ALSA chain, not the display: touchmon flips peppy_display straight in the
+	// database whenever it swaps the screen between the WebUI and Peppy, so peppy_display
+	// says what is on screen right now, not whether peppyalsa is in the chain. Bounce the
+	// monitor rather than leave it: it watches a fixed card, and the output device (hw:N),
+	// output mode or volume type may just have changed.
+	if ($_SESSION['peppy_display'] == '1' || $_SESSION['enable_peppyalsa'] == '1') {
+		startPeppyGainMon();
+	} else {
+		stopPeppyGainMon();
+	}
 }
 
 // Read output device cache
 function readOutputDeviceCache($deviceName) {
 	$dbh = sqlConnect();
+	$deviceName = SQLite3::escapeString($deviceName);
 
-    $result = sqlRead('cfg_outputdev', $dbh, $deviceName);
-    if ($result === true) {
-    	// Not in table
+	$result = sqlRead('cfg_outputdev', $dbh, $deviceName);
+	if ($result === true) {
+		// Not in table
 		$values = 'device not found';
-    } else {
+	} else {
 		// In table
 		$values = array(
 			'device_name' => $result[0]['device_name'],
 			'mpd_volume_type' => $result[0]['mpd_volume_type'],
 			'alsa_output_mode' => $result[0]['alsa_output_mode'],
 			'alsa_max_volume' => $result[0]['alsa_max_volume']);
-    }
+	}
 
 	return $values;
 }
@@ -325,23 +348,24 @@ function readOutputDeviceCache($deviceName) {
 // Update output device cache
 function updOutputDeviceCache($deviceName) {
 	$dbh = sqlConnect();
+	$deviceName = SQLite3::escapeString($deviceName);
 
-    $result = sqlRead('cfg_outputdev', $dbh, $deviceName);
-    if ($result === true) {
-    	// Not in table so add new
-    	$values =
+	$result = sqlRead('cfg_outputdev', $dbh, $deviceName);
+	if ($result === true) {
+		// Not in table so add new
+		$values =
 			"'" . $deviceName . "'," .
 			"'" . $_SESSION['mpdmixer'] . "'," .
 			"'" . $_SESSION['alsa_output_mode'] . "'," .
 			"'" . $_SESSION['alsavolume_max'] . "'";
-    	$result = sqlInsert('cfg_outputdev', $dbh, $values);
-    } else {
+		$result = sqlInsert('cfg_outputdev', $dbh, $values);
+	} else {
 		$value = array(
 			'mpd_volume_type' => $_SESSION['mpdmixer'],
 			'alsa_output_mode' => $_SESSION['alsa_output_mode'],
 			'alsa_max_volume' => $_SESSION['alsavolume_max']);
 		$result = sqlUpdate('cfg_outputdev', $dbh, $deviceName, $value);
-    }
+	}
 }
 
 function checkOutputDeviceCache($deviceName, $cardNum) {

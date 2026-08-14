@@ -1,0 +1,23 @@
+[Unit]
+Description=SendSpin Audio Receiver
+After=network-online.target sound.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
+ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device _audioout --audio-format flac:48000:16:2 --name moode-sendspin \
+    --log-level INFO \
+    --hook-start /var/local/www/commandw/sendspin-metadata.sh \
+    --hook-stop /var/local/www/commandw/sendspin-metadata.sh
+ExecStopPost=/var/local/www/commandw/spspost.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+Environment="HOME=/root"
+
+LimitRTPRIO=99
+LimitMEMLOCK=8388608
+
+[Install]
+WantedBy=multi-user.target

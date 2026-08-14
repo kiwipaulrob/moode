@@ -1,0 +1,14 @@
+[Unit]
+Description=SendSpin Metadata Sink for moOde
+After=network-online.target sendspin.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/root/.local/share/uv/tools/sendspin/bin/python /var/local/www/commandw/sendspin-metadata-sink.py
+Restart=on-failure
+RestartSec=10
+Environment="HOME=/root"
+
+[Install]
+WantedBy=multi-user.target

@@ -507,6 +507,25 @@ function sendFECmd ($cmd) {
 	}
 }
 
+// Send a pairing decision to the Bluetooth agent (bt-pairing-agent.py) over its
+// local socket. $accepted is '1'/'0'; $code is only used for Passkey Entry input.
+function sendBtAgentResponse($id, $accepted, $code = '') {
+	if (preg_match('/^[0-9a-f]{8}$/', $id) !== 1) {
+		return false;
+	}
+	$msg = 'pairresp,' . $id . ',' . ($accepted == '1' ? '1' : '0');
+	if ($code !== '' && ctype_digit((string)$code)) {
+		$msg .= ',' . $code;
+	}
+	if (false === ($sock = socket_create(AF_UNIX, SOCK_DGRAM, 0))) {
+		workerLog('sendBtAgentResponse(): Socket create failed');
+		return false;
+	}
+	$result = @socket_sendto($sock, $msg, strlen($msg), 0, BT_AGENT_SOCK);
+	socket_close($sock);
+	return $result !== false;
+}
+
 function sockWrite($sock, $msg) {
     $length = strlen($msg);
 	$retryCount = 4;
@@ -727,6 +746,5 @@ function formatFanTemp0Params($params) {
 //----------------------------------------------------------------------------//
 
 function updDSIScnBrightness($screenType, $brightnessValue) {
-	// Write brightness to i2c bus 10 device 0045 (both Touch1 and Touch2 use this)
-	sysCmd('/bin/su -c "echo '. $brightnessValue . ' > /sys/class/backlight/10-0045/brightness"');
+	sysCmd('/bin/su -c "echo '. $brightnessValue . ' > /sys/class/backlight/*/brightness"');
 }

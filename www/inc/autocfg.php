@@ -472,7 +472,7 @@ function autoConfigSettings() {
 		['requires' => ['rbsvc'], 'handler' => 'setSessVarSql'],
 		['requires' => ['rsmafterrb'], 'handler' => 'setSessVarSql'],
 		'Bluetooth',
-		['requires' => ['bt_pin_code'], 'handler' => 'setSessVarOnly'],
+		['requires' => ['bt_pairing_confirm'], 'handler' => 'setSessVarOnly'],
 		['requires' => ['alsavolume_max_bt'], 'handler' => 'setSessVarOnly'],
 		['requires' => ['cdspvolume_max_bt'], 'handler' => 'setSessVarOnly'],
 		['requires' => ['audioout'], 'handler' => function($values) {
@@ -485,10 +485,6 @@ function autoConfigSettings() {
 		['requires' => ['bluez_sbc_quality'], 'handler' => function($values) {
 			$_SESSION['bluez_sbc_quality'] = $values['bluez_sbc_quality'];
 			sysCmd("sed -i 's/--sbc-quality.*/--sbc-quality=" . $values['bluez_sbc_quality'] . "/' /etc/systemd/system/bluealsa.service");
-		}],
-		['requires' => ['alsa_output_mode_bt'], 'handler' => function($values) {
-			$_SESSION['alsa_output_mode_bt'] = '_audioout'; // Reset to Standard (_audioout)
-			sysCmd("sed -i '/AUDIODEV/c\AUDIODEV=_audioout" . "' /etc/bluealsaaplay.conf");
 		}],
 		['requires' => ['bluez_controller_mode'], 'handler' => function($values) {
 			$_SESSION['bluez_controller_mode'] = $values['bluez_controller_mode'];
@@ -603,7 +599,6 @@ function autoConfigSettings() {
 		['requires' => ['cover_backdrop'], 'handler' => 'setSessVarSql'],
 		['requires' => ['cover_blur'], 'handler' => 'setSessVarSql'],
 		['requires' => ['cover_scale'], 'handler' => 'setSessVarSql'],
-		['requires' => ['renderer_backdrop'], 'handler' => 'setSessVarSql'],
 		['requires' => ['font_size'], 'handler' => 'setSessVarSql'],
 		['requires' => ['native_lazyload'], 'handler' => 'setSessVarSql'],
 		'Playback',
@@ -626,7 +621,7 @@ function autoConfigSettings() {
 		['requires' => ['library_hiresthm'], 'handler' => 'setSessVarSql'],
 		['requires' => ['playlist_art'], 'handler' => 'setSessVarSql'],
 		['requires' => ['library_tagview_covers'], 'handler' => 'setSessVarSql'],
-		['requires' => ['radio_track_covers'], 'handler' => 'setSessVarSql'],
+		['requires' => ['radio_covers'], 'handler' => 'setSessVarSql'],
 		['requires' => ['itunes_query_timeout'], 'handler' => 'setSessVarSql'],
 		'Library',
 		['requires' => ['library_onetouch_album'], 'handler' => 'setSessVarSql'],

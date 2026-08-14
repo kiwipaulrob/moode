@@ -19,11 +19,11 @@
 
 		<h5>Your Privacy</h5>
 		<p>
-			We want you to know that our audio player does not serve Ads, nag for subscriptions, use cookies, analytics/tracking or any other such technology. Player preference, configuration and operational data is stored on the local boot media and is not provided to any 3rd parties.
+			We want you to know that our audio player does not serve Ads, nag for subscriptions, use cookies, analytics/tracking or any other such technology. Player preference, configuration and operational data is stored on the local boot media and is under your complete control.
 		</p>
 		<h5>Release Information</h5>
 		<ul>
-			<li>Release: 10.2.3 2026-06-15</li> <!-- NOTE: getMoodeRel() parses this  -->
+			<li>Release: 10.3.3 2026-MM-DD</li> <!-- NOTE: getMoodeRel() parses this  -->
 			<li>Maintainer: Tim Curtis &copy; 2014</li>
 			<li>Documentation: <a class="moode-about-link target-blank-link" href="./relnotes.txt" target="_blank">View</a> release notes,&nbsp<a class="moode-about-link target-blank-link" href="https://github.com/moode-player/docs/blob/main/setup_guide.md#setup-guide-" target="_blank">View</a> setup guide</li>
 			<li>Contributors:  <a class="moode-about-link target-blank-link" href="./CONTRIBS.html" target="_blank">View</a> contributors</li>
@@ -69,6 +69,7 @@
 				<?php if ($_SESSION['feat_bitmask'] & FEAT_INPSOURCE) { ?>
 					<li><a href="inp-config.php" class="btn btn-large"><i class="fa-solid fa-sharp fa-dial"></i><br>Input select</a></li>
 				<?php } ?>
+				<li><a href="rcp-config.php" class="btn btn-large"><i class="fa-solid fa-sharp fa-album-collection"></i><br>Radio Cover+</a></li>
 			</ul>
 		</div>
 	</div>
@@ -86,6 +87,22 @@
 	</div>
 	<div class="modal-footer">
 		<button aria-label="Cancel" class="btn singleton" data-dismiss="modal" aria-hidden="true">Cancel</button>
+	</div>
+</div>
+
+<!-- BLUETOOTH PAIRING -->
+<div id="btpair-modal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="btpair-modal-label" data-backdrop="static" data-keyboard="false" aria-hidden="true">
+	<div class="modal-header">
+		<h3 id="btpair-modal-label">Bluetooth pairing</h3>
+	</div>
+	<div class="modal-body">
+		<p id="btpair-modal-text" class="btpair-text"></p>
+		<p id="btpair-modal-name" class="btpair-name"></p>
+		<div id="btpair-modal-code" class="btpair-code"></div>
+	</div>
+	<div class="modal-footer">
+		<button id="btpair-cancel-btn" aria-label="Reject" class="btn" onclick="btPairRespond('0')">Reject</button>
+		<button id="btpair-confirm-btn" aria-label="Confirm" class="btn btn-primary" onclick="btPairRespond('1')">Confirm</button>
 	</div>
 </div>
 
@@ -165,9 +182,10 @@
 	</div>
 </div>
 
+<script src="js/sendspin-display.js?v=3"></script>
 <?php
-	//workerLog('-- footer.php');
-	$return_val = session_write_close();
-	//workerLog('session_write_close=' . (($return_val) ? 'TRUE' : 'FALSE'));
-	echo "</body></html>";
+//workerLog('-- footer.php');
+$return_val = session_write_close();
+//workerLog('session_write_close=' . (($return_val) ? 'TRUE' : 'FALSE'));
+echo "</body></html>";
 ?>

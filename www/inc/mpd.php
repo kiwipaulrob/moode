@@ -10,6 +10,7 @@ require_once __DIR__ . '/alsa.php';
 require_once __DIR__ . '/audio.php';
 require_once __DIR__ . '/cdsp.php';
 require_once __DIR__ . '/music-library.php';
+require_once __DIR__ . '/radio.php';
 require_once __DIR__ . '/session.php';
 require_once __DIR__ . '/sql.php';
 
@@ -723,7 +724,7 @@ function enhanceMetadata($current, $sock, $caller = '') {
 	if ($caller == 'engine_mpd_php') {
 		// Both these functions perform phpSession('open_ro');
 		$current['cover_art_hash'] = getCoverHash($current['file']);
-		$current['mapped_db_vol'] = getMappedDbVol();
+		$current['mapped_db_vol'] = getMappedDbVol($current['file']);
 		//debugLog('enhanceMetadata(): ' . $caller . ' OPEN_RO session');
 	}
 
@@ -798,14 +799,14 @@ function enhanceMetadata($current, $sock, $caller = '') {
 					// URL logo image
 					$current['coverurl'] = rawurlencode($_SESSION[$song['file']]['logo']);
 				}
-				// Track cover from Apple Music (iTunes API)
+				// Get radio cover
 				if ($current['title'] != DEFAULT_STATION_NAME) {
-					if ($_SESSION['radio_track_covers'] == 'Yes') {
+					if ($_SESSION['radio_covers'] != 'No') {
 						if ($current['state'] == 'play') {
-							// NOTE: This function performs phpSession('open_ro') or phpSession(open) / phpSession(close)
-							$trackCoverUrl = getTrackCoverUrl($current['title']);
-							if (str_contains($trackCoverUrl, 'https://')) {
-								$current['coverurl'] = $trackCoverUrl;
+							// NOTE: getRadioCoverUrl() opens the session
+							$coverUrl = getRadioCoverUrl($current['title'], $current['album']); // title, station
+							if (substr($coverUrl, 0, 4) == 'http') { // URL and not 'None' or ''
+								$current['coverurl'] = $coverUrl;
 							}
 						}
 					}
@@ -864,7 +865,7 @@ function enhanceMetadata($current, $sock, $caller = '') {
 				$format[1] = $result[0]; // bits
 				$format[2] = $result[2]; // channels
 			} else { // Song file
-				sendMpdCmd($sock, 'lsinfo "' . $song['file'] . '"');
+				sendMpdCmd($sock, 'lsinfo "' . escapeDblQuotes($song['file']) . '"');
     			$songData = parseDelimFile(readMpdResp($sock), ': ');
 				// [0] rate, [1] bits, [2] channels
 				$format = explode(':', $songData['Format']);
@@ -902,57 +903,6 @@ function enhanceMetadata($current, $sock, $caller = '') {
 	return $current;
 }
 
-function getTrackCoverUrl($trackTitle) {
-	$trackTitle = html_entity_decode($trackTitle);
-
-	phpSession('open_ro');
-	$coverUrl = $_SESSION['trackcover_url_cache'][$trackTitle];
-	if (!empty($coverUrl)) {
-		// DEBUG:
-		//workerLog('getTrackCoverUrl(): Return cached cover URL for: ' . $trackTitle);
-		return $coverUrl;
-	}
-
-	// DEBUG:
-	//workerLog('getTrackCoverUrl(): Query iTunes repository for: ' . $trackTitle);
-	// Create query
-	$parts = explode(' - ', $trackTitle); // $parts[0]=Artist name, $parts[1]=Track title
-	$query = '?term=' . urlencode($parts[0] . ' ' . $parts[1]) . '&media=music&entity=musicTrack&limit=1';
-	$apiUrl = ITUNES_API_BASE_URL . $query;
-	// Get stream timeout, same for both connect and readdata
-	$timeout = $_SESSION['itunes_query_timeout'] . '.0';
-	$options = array(
-		'http' => array(
-			'protocol_version' => (float)'1.1',
-			'timeout' => (float)$timeout
-		)
-	);
-	// Submit query to iTunes repo
-	$result = file_get_contents($apiUrl, false, stream_context_create($options));
-	if ($result === false) {
-		$msg = 'Query failed for: ' . $trackTitle;
-		$coverUrl = '';
-	} else {
-		$resultArray = json_decode($result, true);
-		if ($resultArray['resultCount'] == '0') {
-			$msg = 'Query return 0 results for: ' . $trackTitle;
-			$coverUrl = '';
-		} else {
-			$msg = 'Query successful for: ' . $trackTitle  . "\n" . 'Cover URL= ' . $coverUrl;
-			$coverUrl = str_replace('100x100', '1000x1000', $resultArray['results'][0]['artworkUrl100']);
-		}
-	}
-
-	// DEBUG:
-	//workerLog('getTrackCoverUrl(): ' . $msg . "\n" . $coverUrl . (!empty($coverUrl) ? "\n" : '') . $apiUrl);
-
-	phpSession('open');
-	$_SESSION['trackcover_url_cache'][$trackTitle] = $coverUrl;
-	phpSession('close');
-
-	return $coverUrl;
-}
-
 function getUpnpCoverUrl() {
 	$mode = sqlQuery("SELECT value FROM cfg_upnp WHERE param='upnpav'", sqlConnect())[0]['value'] == 1 ? 'upnpav' : 'openhome';
 	$result = sysCmd('/var/www/util/upnp_albumart.py "' . $_SESSION['upnpname'] . '" '. $mode);
@@ -960,7 +910,7 @@ function getUpnpCoverUrl() {
 	return explode(',', $result[0])[0];
 }
 
-function getMappedDbVol() {
+function getMappedDbVol($file = '') {
 	phpSession('open_ro');
 
 	if (CamillaDsp::isMPD2CamillaDSPVolSyncEnabled()) {
@@ -976,24 +926,50 @@ function getMappedDbVol() {
 		} else {
 			$mappedDbVol = str_contains($mappedDbVol, '.') ? $mappedDbVol . 'dB' : $mappedDbVol . '.0dB';
 		}
+	} else if ($_SESSION['mpdmixer'] == 'software') {
+		// MPD software volume, no ALSA control is driven so the dB value is computed.
+		// MPD maps the volume with gain = (exp(volume / 25) - 1) / (e^4 - 1), see
+		// PercentVolumeToSoftwareVolume() in MPD's SoftwareMixerPlugin.cxx.
+		$ext = getSongFileExt($file);
+		$volKnob = (int)sqlRead('cfg_system', sqlConnect(), 'volknob')[0]['value'];
+		if ($ext == 'dsf' || $ext == 'dff') {
+			// MPD cannot attenuate DSD
+			$mappedDbVol = '0dB';
+		} else if ($volKnob <= 0) {
+			$mappedDbVol = '-120dB';
+		} else if ($volKnob >= 100) {
+			$mappedDbVol = '0dB';
+		} else {
+			$gain = (exp($volKnob / 25) - 1) / (exp(4) - 1);
+			$mappedDbVol = number_format(20 * log10($gain), 1) . 'dB';
+		}
 	} else {
 		// MPD volume
-		$mappedDbVol = sysCmd('amixer -c ' . $_SESSION['cardnum'] . ' sget "' . $_SESSION['amixname'] . '" | ' .
-			"awk -F\"[][]\" '/dB/ {print $4; count++; if (count==1) exit}'")[0];
-		if (empty($mappedDbVol) || $_SESSION['mpdmixer'] == 'software' || $_SESSION['mpdmixer'] == 'null') {
-			$mappedDbVol = '';
+		$mappedDbVol = getAlsaMappedDbVol($_SESSION['cardnum'], $_SESSION['amixname'], $_SESSION['mpdmixer']);
+	}
+
+	return $mappedDbVol;
+}
+
+// Read the ALSA mixer attenuation
+// NOTE: args, not session vars: peppy-gain.php runs sessionless
+function getAlsaMappedDbVol($cardNum, $amixName, $mixerType) {
+	$mappedDbVol = sysCmd('amixer -c ' . $cardNum . ' sget "' . $amixName . '" | ' .
+		"awk -F\"[][]\" '/dB/ {print $4; count++; if (count==1) exit}'")[0];
+	if (empty($mappedDbVol) || $mixerType == 'null') {
+		$mappedDbVol = '';
+	} else {
+		$mappedDbVol = number_format(rtrim($mappedDbVol, 'dB'), 1);
+		if ($mappedDbVol == 0) {
+			$mappedDbVol = '0dB';
 		} else {
-			$mappedDbVol = number_format(rtrim($mappedDbVol, 'dB'), 1);
-			if ($mappedDbVol == 0) {
-				$mappedDbVol = '0dB';
-			} else {
-				$mappedDbVol = ($mappedDbVol <= -127 ? '-127' : $mappedDbVol) . 'dB';
-			}
+			$mappedDbVol = ($mappedDbVol <= -127 ? '-127' : $mappedDbVol) . 'dB';
 		}
 	}
 
 	return $mappedDbVol;
 }
+
 
 function getCoverHash($file) {
 	$ext = getSongFileExt($file);
@@ -1156,4 +1132,8 @@ function parseDir($path) {
 	}
 
 	return $result;
+}
+
+function escapeDblQuotes($path) {
+	return str_replace('"', '\"', $path);
 }

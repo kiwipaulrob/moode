@@ -18,6 +18,7 @@ require_once __DIR__ . '/../inc/music-library.php';
 require_once __DIR__ . '/../inc/music-source.php';
 require_once __DIR__ . '/../inc/network.php';
 require_once __DIR__ . '/../inc/peripheral.php';
+require_once __DIR__ . '/../inc/radio-browser.php';
 require_once __DIR__ . '/../inc/renderer.php';
 require_once __DIR__ . '/../inc/session.php';
 require_once __DIR__ . '/../inc/sql.php';
@@ -144,6 +145,9 @@ if (file_exists(BOOT_DIR . '/.fseventsd')) {
 }
 // - Delete session vars that have been removed or renamed
 $sessionVars = array(
+	'mpd_dbupdate_status',
+	'trackcover_url_cache',
+	'radio_track_covers'
 );
 foreach ($sessionVars as $var) {
 	sysCmd('moodeutl -D ' . $var);
@@ -188,6 +192,8 @@ sysCmd('touch ' . SPSEVENT_LOG);
 sysCmd('touch ' . SLPOWER_LOG);
 sysCmd('truncate ' . MOUNTMON_LOG . ' --size 0');
 sysCmd('mkdir ' . THMCACHE_DIR . ' > /dev/null 2>&1');
+// Radio Browser caches are written synchronously by www-data (php-fpm), so unlike moOde's
+sysCmd('/var/www/util/radio-browser.sh --fix-permissions > /dev/null 2>&1');
 // Delete any tmp files left over from New/Edit station or playlist
 sysCmd('rm /var/local/www/imagesw/radio-logos/' . TMP_IMAGE_PREFIX . '* > /dev/null 2>&1');
 sysCmd('rm /var/local/www/imagesw/radio-logos/thumbs/' . TMP_IMAGE_PREFIX . '* > /dev/null 2>&1');
@@ -211,7 +217,6 @@ sysCmd('chmod 0666 ' . SPSEVENT_LOG);
 sysCmd('chmod 0666 ' . SLPOWER_LOG);
 sysCmd('chmod 0666 ' . MOODE_LOG);
 sysCmd('chmod 0666 ' . MOUNTMON_LOG);
-sysCmd('chmod 0600 ' . BT_PINCODE_CONF);
 if (!file_exists(ETC_MACHINE_INFO)) {
 	sysCmd('cp /usr/share/moode-player' . ETC_MACHINE_INFO . ' /etc/');
 	workerLog('worker: File check:    created default /etc/machine-info');
@@ -739,6 +744,13 @@ workerLog('worker: ALSA mode:     ' . ALSA_OUTPUT_MODE_NAME[$_SESSION['alsa_outp
 // ALSA mixer
 phpSession('write', 'amixname', getAlsaMixerName($_SESSION['adevname']));
 workerLog('worker: ALSA mixer:    ' . ($_SESSION['amixname'] == 'none' ? 'none exists' : $_SESSION['amixname']));
+// Drop a stray softvol control left under the simple mixer name by an earlier release.
+// ALSA restores it at boot, where it shadows the hardware control. Only application
+// created controls are removed, so a hardware element is never touched.
+if ($_SESSION['amixname'] != 'none') {
+	sysCmd('alsactl clean ' . $_SESSION['cardnum'] . ' "name=\'' . $_SESSION['amixname'] . '\'"');
+	sysCmd('alsactl store ' . $_SESSION['cardnum']);
+}
 // HDMI mixer initialize (after first boot a test signal needs to be sent to "register" the mixer with ALSA)
 if ($_SESSION['alsa_output_mode'] == 'iec958') {
 	$result = getAlsaVolume($_SESSION['amixname']);
@@ -912,9 +924,13 @@ if (!file_exists('/etc/mpd.conf')) {
 	}
 }
 
-// Database update item count
-if (!isset($_SESSION['mpd_dbupdate_status'])) {
-	$_SESSION['mpd_dbupdate_status'] = 0;
+// Database update file count
+if (!isset($_SESSION['mpd_dbupdate_count'])) {
+	$_SESSION['mpd_dbupdate_count'] = 0;
+}
+// Database stats (artists/albums/tracks)
+if (!isset($_SESSION['mpd_db_stats'])) {
+	$_SESSION['mpd_db_stats'] = 'none';
 }
 
 // Start MPD
@@ -979,9 +995,9 @@ if ($_SESSION['first_use_help'] == 'y,y,y') {
 workerLog('worker: MPD CDSP volsync:   ' . lcfirst($_SESSION['camilladsp_volume_sync']));
 $serviceCmd = CamillaDSP::isMPD2CamillaDSPVolSyncEnabled() ? 'start' : 'stop';
 sysCmd('systemctl ' . $serviceCmd .' mpd2cdspvolume');
-// Library stats
-$stats = getLibraryStats($sock);
-workerLog('worker: Library stats:      ' . $stats);
+workerLog('worker: Database stats:     ' .
+	($_SESSION['mpd_db_stats'] == 'none' ? 'Analyze has not been run' : $_SESSION['mpd_db_stats'])
+);
 
 //----------------------------------------------------------------------------//
 workerLog('worker: --');
@@ -1058,10 +1074,12 @@ workerLog('worker: Input select:    ' . $status);
 
 // Bluetooth session vars
 $status = 'session vars ok';
-if (!isset($_SESSION['bt_pin_code'])) {
+if (!isset($_SESSION['bt_pairing_confirm'])) {
 	$status = 'session vars created';
-	$_SESSION['bt_pin_code'] = '';
+	$_SESSION['bt_pairing_confirm'] = '1';
 }
+// Keep the agent's capability file in step with the setting before it is started.
+applyBtPairingConfirm($_SESSION['bt_pairing_confirm']);
 // ALSA/CDSP max volumes
 if (!isset($_SESSION['alsavolume_max_bt'])) {
 	$_SESSION['alsavolume_max_bt'] = $_SESSION['alsavolume_max'];
@@ -1072,10 +1090,6 @@ if (!isset($_SESSION['cdspvolume_max_bt'])) {
 // SBC quality
 if (!isset($_SESSION['bluez_sbc_quality'])) {
 	$_SESSION['bluez_sbc_quality'] = 'xq+';
-}
-// ALSA output mode
-if (!isset($_SESSION['alsa_output_mode_bt'])) {
-	$_SESSION['alsa_output_mode_bt'] = '_audioout';
 }
 // Controller mode
 if (!isset($_SESSION['bluez_controller_mode'])) {
@@ -1092,20 +1106,23 @@ if ($_SESSION['feat_bitmask'] & FEAT_BLUETOOTH) {
 } else {
 	$status = 'n/a';
 }
-$status .= ', PIN: ' . (empty($_SESSION['bt_pin_code']) ? 'None' : 'Set');
+$status .= ', Pair confirm: ' . ($_SESSION['bt_pairing_confirm'] == '1' ? 'On' : 'Off');
 $status .= ', ALSA/CDSP max: ' . $_SESSION['alsavolume_max_bt'] . '%/' . $_SESSION['cdspvolume_max_bt'] . 'dB';
-$status .= ', ALSA out: ' . ALSA_OUTPUT_MODE_BT_NAME[$_SESSION['alsa_output_mode_bt']];
 $status .= ', Transport: ' . $_SESSION['bluez_controller_mode'];
 workerLog('worker: Bluetooth:       ' . $status);
 
 // Start airplay renderer
 if ($_SESSION['feat_bitmask'] & FEAT_AIRPLAY) {
+	if (!isset($_SESSION['airplaysvc_type'])) {
+		$_SESSION['airplaysvc_type'] = '2';
+	}
 	if (isset($_SESSION['airplaysvc']) && $_SESSION['airplaysvc'] == 1) {
 		$status = 'started';
 		startAirPlay();
 	} else {
 		$status = 'available';
 	}
+	$status = $status . ', protocol: ' . $_SESSION['airplaysvc_type'];
 } else {
 	$status = 'n/a';
 }
@@ -1422,6 +1439,12 @@ if ($_SESSION['local_display'] == '1' || $_SESSION['peppy_display'] == '1') {
 	}
 	startLocalDisplay();
 }
+// Not gated on peppy_display: that only says which screen touchmon is showing right now
+// (it swaps to the WebUI whenever playback stops), while the meter can come back at the
+// next track. Follow the ALSA chain instead, like updAudioOutAndBtOutConfs() does.
+if ($_SESSION['peppy_display'] == '1' || $_SESSION['enable_peppyalsa'] == '1') {
+	startPeppyGainMon();
+}
 
 // WebUI display
 workerLog('worker: WebUI display:    ' . ($_SESSION['local_display'] == '1' ? 'on' : 'off'));
@@ -1521,9 +1544,9 @@ $validIPAddress = ($_SESSION['ipaddress'] != '0.0.0.0' && $wlan0Ip != explode('/
 // NOTE: updaterAutoCheck() logs status
 $_SESSION['updater_available_update'] = updaterAutoCheck($validIPAddress);
 
-// Radio track covers
-workerLog('worker: Radio track covers:   ' . lcfirst($_SESSION['radio_track_covers']));
-workerLog('worker: iTunes query timeout: ' . $_SESSION['itunes_query_timeout'] . ' sec(s)');
+// Radio cover search provider
+workerLog('worker: Radio covers:         ' . $_SESSION['radio_covers']);
+workerLog('worker: iTunes timeout:       ' . $_SESSION['itunes_query_timeout'] . ' secs');
 
 // Automatic CoverView (Preferences)
 workerLog('worker: Auto-CoverView:       ' . ($_SESSION['auto_coverview'] == '-on' ? 'on' : 'off'));
@@ -1646,13 +1669,6 @@ if (!isset($_SESSION['ready_script'])) {
 if (!isset($_SESSION['lib_fv_only'])) {
 	$_SESSION['lib_fv_only'] = 'off';
 }
-
-// Radio track cover URL cache
-if (!isset($_SESSION['trackcover_url_cache'])) {
-	$_SESSION['trackcover_url_cache'] = '';
-}
-// Empty cache
-$_SESSION['trackcover_url_cache'] = array('' => ''); // trackTitle => URL
 
 // Metadata file
 if (!isset($_SESSION['extmeta'])) {
@@ -1948,6 +1964,10 @@ while (true) {
 	if ($_SESSION['peppy_display'] == '1' && $_SESSION['scn_blank'] != 'off') {
 		//debugLog('** chkPeppyScnBlank');
 		chkPeppyScnBlank();
+	}
+	if ($_SESSION['peppy_display'] == '1' || $_SESSION['enable_peppyalsa'] == '1') {
+		//debugLog('** chkPeppyGainMon');
+		chkPeppyGainMon();
 	}
 	// CoverView (as screen saver)
 	if ($_SESSION['scnsaver_timeout'] != 'Never') {
@@ -2280,6 +2300,16 @@ function chkAttachedDisplayOnOff() {
 		sendFECmd('local_display_onoff,' . $currentOnOff);
 	}
 }
+// Tracks Hardware volume and updates peppy
+function chkPeppyGainMon() {
+	// The meter gain is only as good as the daemon that publishes it: if it dies the
+	// needles keep displaying the last dB and silently stop following the volume.
+	// The [.] keeps the pattern from matching the shell that runs pgrep itself.
+	if (sysCmd('pgrep -c -f "peppy-gain[.]php"')[0] == '0') {
+		workerLog('worker: Peppy gain monitor: not running, restarted');
+		startPeppyGainMon();
+	}
+}
 // Peppy screen blank
 // - Timeout is set
 // - Peppy is on
@@ -2359,18 +2389,17 @@ function chkLibraryUpdate() {
 		workerLog('worker: CRITICAL ERROR: chkLibraryUpdate(): Connection to MPD failed');
 	} else {
 		$status = getMpdStatus($sock);
-		$stats = getLibraryStats($sock);
 		closeMpdSock($sock);
 
-		$_SESSION['mpd_dbupdate_status'] = countMpdLogLines();
-		if ($_SESSION['mpd_dbupdate_status'] != 0) {
-			debugLog('mpdindex: File count ' . $_SESSION['mpd_dbupdate_status']);
+		$_SESSION['mpd_dbupdate_count'] = countMpdLogLines();
+		if ($_SESSION['mpd_dbupdate_count'] != 0) {
+			debugLog('mpdindex: File count ' . $_SESSION['mpd_dbupdate_count']);
 		}
 
 		if (!isset($status['updating_db'])) {
 			sendFECmd('libupd_done');
 			$GLOBALS['check_library_update'] = '0';
-			workerLog('mpdindex: Done: indexed ' . $stats);
+			workerLog('mpdindex: Done: updated ' . $_SESSION['mpd_dbupdate_count'] . ' files');
 			workerLog('worker: Job update_library done');
 		}
 	}
@@ -2382,18 +2411,17 @@ function chkLibraryRegen() {
 		workerLog('worker: CRITICAL ERROR: chkLibraryRegen(): Connection to MPD failed');
 	} else {
 		$status = getMpdStatus($sock);
-		$stats = getLibraryStats($sock);
 		closeMpdSock($sock);
 
-		$_SESSION['mpd_dbupdate_status'] = countMpdLogLines();
-		if ($_SESSION['mpd_dbupdate_status'] != 0) {
-			debugLog('mpdindex: File count ' . $_SESSION['mpd_dbupdate_status']);
+		$_SESSION['mpd_dbupdate_count'] = countMpdLogLines();
+		if ($_SESSION['mpd_dbupdate_count'] != 0) {
+			debugLog('mpdindex: File count ' . $_SESSION['mpd_dbupdate_count']);
 		}
 
 		if (!isset($status['updating_db'])) {
 			sendFECmd('libregen_done');
 			$GLOBALS['check_library_regen'] = '0';
-			workerLog('mpdindex: Done: indexed ' . $stats);
+			workerLog('mpdindex: Done: indexed ' . $_SESSION['mpd_dbupdate_count'] . ' files');
 			workerLog('worker: Job regen_library done');
 		}
 	}
@@ -2425,13 +2453,12 @@ function chkClockRadio() {
 				$mpdCmd = 'play ' . parseMpdRespAsArray($resp)['Pos'];
 			}
 
+			// Set volume
+			sysCmd('/var/www/util/vol.sh ' . $_SESSION['clkradio_volume']);
 			// Send play cmd
 			sendMpdCmd($sock, $mpdCmd);
 			$resp = readMpdResp($sock);
 			closeMpdSock($sock);
-
-			// Set volume
-			sysCmd('/var/www/util/vol.sh ' . $_SESSION['clkradio_volume']);
 		}
 	} else if ($currentTime == $GLOBALS['clkradio_stop_time'] && $GLOBALS['clkradio_stop_days'][$currentDay] == '1') {
 		//workerLog('chkClockRadio(): stoptime=(' . $GLOBALS['clkradio_stop_time'] . ')');
@@ -2809,7 +2836,7 @@ function runQueuedJob() {
 			workerLog('worker: Truncate MPD log');
 			truncateMpdLog();
 			// Update library
-			$cmd = empty($_SESSION['w_queueargs']) ? 'update' : 'update "' . html_entity_decode($_SESSION['w_queueargs']) . '"';
+			$cmd = empty($_SESSION['w_queueargs']) ? 'update' : 'update "' . escapeDblQuotes(html_entity_decode($_SESSION['w_queueargs'])) . '"';
 			workerLog('mpdindex: Cmd (' . $cmd . ')');
 			workerLog('mpdindex: Scanning');
 			if (false === ($sock = openMpdSock('localhost', 6600))) {
@@ -3146,6 +3173,9 @@ function runQueuedJob() {
 					break;
 			}
 
+			// Regenerate the Bluetooth A2DP sink device (AUDIODEV) for the new DSP head
+			updDspAndBtInConfs($_SESSION['cardnum'], $_SESSION['alsa_output_mode']);
+
 			// Restart MPD
 			// NOTE: Don't restart if already done in the camillaDSP section
 			if ($_SESSION['w_queue'] != 'camilladsp' || ($_SESSION['w_queue'] == 'camilladsp' && empty($queueArgs[1]))) {
@@ -3199,17 +3229,10 @@ function runQueuedJob() {
 				}
 			}
 			break;
-		case 'bt_pin_code':
-			if (empty($_SESSION['w_queueargs'])) {
-				sysCmd('echo "* ' . '" > ' . BT_PINCODE_CONF);
-				sysCmd("sed -i s'|ExecStart=/usr/bin/bt-agent.*|ExecStart=/usr/bin/bt-agent -c NoInputNoOutput|' /etc/systemd/system/bt-agent.service");
-				sysCmd("sed -i s'|ExecStartPost=/bin/hciconfig.*|ExecStartPost=/bin/hciconfig hci0 sspmode 1|' /etc/systemd/system/bt-agent.service");
-			} else {
-				sysCmd('echo "* ' . $_SESSION['w_queueargs'] . '" > ' . BT_PINCODE_CONF);
-				sysCmd("sed -i s'|ExecStart=/usr/bin/bt-agent.*|ExecStart=/usr/bin/bt-agent -c NoInputNoOutput -p " . BT_PINCODE_CONF . "|' /etc/systemd/system/bt-agent.service");
-				sysCmd("sed -i s'|ExecStartPost=/bin/hciconfig.*|ExecStartPost=/bin/hciconfig hci0 sspmode 0|' /etc/systemd/system/bt-agent.service");
-			}
-			sysCmd('systemctl daemon-reload');
+		case 'bt_pairing_confirm':
+			// On: the pairing agent asks the user to confirm the code (DisplayYesNo,
+			// Numeric Comparison). Off: Just Works, no confirmation.
+			applyBtPairingConfirm($_SESSION['bt_pairing_confirm']);
 			sysCmd('systemctl restart bt-agent');
 			break;
 		case 'reset_bt_auto_disconnect':
@@ -3824,7 +3847,7 @@ function runQueuedJob() {
 			setAudioOut($_SESSION['w_queueargs']);
 			break;
 
-		// command jobs
+		// From Prefs > Appearance
 		case 'set_bg_image':
 			$imgdata = base64_decode($_SESSION['w_queueargs'], true);
 			if ($imgdata === false) {
@@ -3835,6 +3858,8 @@ function runQueuedJob() {
 				fclose($fh);
 			}
 			break;
+
+		// Radio and Playlist view cover images
 		case 'set_ralogo_image':
 		case 'set_plcover_image':
 			$job = $_SESSION['w_queue'];
@@ -3935,6 +3960,38 @@ function runQueuedJob() {
 			sysCmd('chmod 0777 "' . $imgDir . $thmDir . TMP_IMAGE_PREFIX . '"*');
 			break;
 
+		// Radio Browser favorite to Radio view
+		case 'set_rblogo_image':
+			$queueArgs = explode('~~~', $_SESSION['w_queueargs'], 2);
+			$name = $queueArgs[0];
+			$imageData = $queueArgs[1];
+
+			$image = @imagecreatefromstring($imageData);
+			if (!$image) {
+				workerLog('worker: '. $job .' ERROR: imagecreatefromstring() failed for ' . $name);
+				break;
+			}
+
+			$w = imagesx($image);
+			$h = imagesy($image);
+			$ok1 = rbResizeAndSave($image, $w, $h, 400, RADIO_LOGOS_ROOT . $name . '.jpg');
+			$ok2 = rbResizeAndSave($image, $w, $h, 200, RADIO_LOGOS_ROOT . 'thumbs/' . $name . '.jpg');
+			$ok3 = rbResizeAndSave($image, $w, $h, 80, RADIO_LOGOS_ROOT . 'thumbs/' . $name . '_sm.jpg');
+
+			if ($ok1 && $ok2 && $ok3) {
+				if (imagedestroy($image) === false) {
+					workerLog('worker: '. $job .' ERROR: imagedestroy() failed for ' . $name);
+					break;
+				}
+			} else {
+				workerLog('worker: '. $job .' ERROR: rbResizeAndSave() failed for ' . $name);
+				break;
+			}
+
+			sysCmd('chmod 0777 "' . RADIO_LOGOS_ROOT . $name . '"*');
+			sysCmd('chmod 0777 "' . RADIO_LOGOS_ROOT . 'thumbs/' . $name . '"*');
+			break;
+
 		// Other jobs
 		case 'reboot':
 		case 'poweroff':
@@ -3983,7 +4040,8 @@ function runQueuedJob() {
 // Clear MPD log
 function truncateMpdLog() {
 	sysCmd('truncate ' . MPD_LOG . ' --size 0');
-	$_SESSION['mpd_dbupdate_status'] = 0;
+	$_SESSION['mpd_dbupdate_count'] = 0;
+	$_SESSION['mpd_db_stats'] = 'none';
 }
 // Count number of lines in MPD log for database update or regen
 function countMpdLogLines() {

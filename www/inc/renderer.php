@@ -11,6 +11,13 @@ require_once __DIR__ . '/session.php';
 require_once __DIR__ . '/sql.php';
 
 // Bluetooth
+// Write the pairing agent's capability file. On ('1') -> DisplayYesNo (the agent asks
+// the user to confirm the pairing code); off -> NoInputNoOutput (Just Works). Read by
+// bt-agent.service via EnvironmentFile; the caller restarts bt-agent to apply it.
+function applyBtPairingConfirm($confirm) {
+	$capability = $confirm == '1' ? 'DisplayYesNo' : 'NoInputNoOutput';
+	file_put_contents(BT_AGENT_ENV, 'BT_AGENT_CAPABILITY=' . $capability . "\n");
+}
 function startBluetooth() {
 	sysCmd('systemctl start hciuart');
 	sysCmd('systemctl start bluetooth');
@@ -53,7 +60,9 @@ function stopBluetooth() {
 
 // AirPlay
 function startAirPlay() {
-	sysCmd('systemctl start nqptp');
+	if ($_SESSION['airplaysvc_type'] == '2') {
+		sysCmd('systemctl start nqptp');
+	}
 
 	// Verbose logging
 	if ($_SESSION['debuglog'] == '1') {
@@ -95,6 +104,9 @@ function startAirPlay() {
 	$cmd = '/var/www/daemon/aplmeta-reader.sh > /dev/null 2>&1 &';
 	debugLog('startAirPlay(): (' . $cmd . ')');
 	sysCmd($cmd);
+
+	// Truncate metadata file
+	sysCmd('truncate ' . APLMETA_CACHE_FILE . ' --size 0');
 }
 function stopAirPlay() {
 	$maxRetries = 3;
@@ -125,8 +137,11 @@ function stopAirPlay() {
 	}
 	// Stop shairport-sync
 	for ($i = 0; $i < $maxRetries; $i++) {
-		sysCmd('pkill -f -9 shairport-sync');
-		$result = sysCmd('pgrep -c -f "LC_ALL=C /usr/bin/shairport-sync"')[0];
+		$result = sysCmd('pkill -c -f -9 "[s]hairport-sync"');
+		//workerLog(print_r($result, true));
+
+		$result = sysCmd('pgrep -c -f "[L]C_ALL=C /usr/bin/shairport-sync"')[0];
+		//workerLog(print_r($result, true));
 		if ($result == 0) {
 			break;
 		}
@@ -215,6 +230,9 @@ function startSpotify() {
 
 	debugLog('startSpotify(): (' . $cmd . ')');
 	sysCmd($cmd);
+
+	// Truncate metadata file
+	sysCmd('truncate ' . SPOTMETA_CACHE_FILE . ' --size 0');	
 }
 function stopSpotify() {
 	sysCmd('killall -s9 librespot');
@@ -403,4 +421,185 @@ function stopAllRenderers() {
 			workerLog('stopAllRenderers(): ' . $svc . ' stopped');
 		}
 	}
+}
+
+// SendSpin Multi-Room Audio renderer functions
+
+function getSendspinStatus() {
+	// Check systemd service status safely
+	$result = sysCmd('systemctl is-active sendspin 2>/dev/null');
+	$status = (!empty($result) && isset($result[0])) ? $result[0] : 'inactive';
+	if ($status === 'active') {
+		// Check if actually streaming (process using audio)
+		$sndResult = sysCmd('fuser /dev/snd/pcmC0D0p 2>/dev/null');
+		if (!empty($sndResult)) {
+			// Check if sendspin is using the device
+			$sendspinPids = sysCmd('pgrep -f sendspin 2>/dev/null');
+			foreach ($sendspinPids as $pid) {
+				if (strpos($sndResult[0], $pid) !== false) {
+					return 'streaming';
+				}
+			}
+		}
+		return 'ready';
+	}
+	return 'inactive';
+}
+
+function startSendspin() {
+	// Save MPD state before starting
+	$mpdStatus = sysCmd('mpc status')[0];
+	$mpdWasPlaying = strpos($mpdStatus, 'playing') !== false;
+	
+	// Persist in database (survives PHP-FPM restarts)
+	$dbh = sqlConnect();
+	sqlUpdate('cfg_system', $dbh, 'sendspin_mpd_was_playing', $mpdWasPlaying ? '1' : '0');
+	
+	// Also write to session for immediate access
+	phpSession('write', 'mpd_was_playing', $mpdWasPlaying ? '1' : '0');
+
+	// Stop MPD to release ALSA device
+	sysCmd('mpc stop');
+
+	// Start SendSpin daemon
+	sysCmd('systemctl start sendspin');
+	sysCmd('systemctl enable sendspin');
+
+	// Set active state
+	phpSession('write', 'sspactive', '1');
+	$GLOBALS['sspactive'] = '1';
+	sendFECmd('sspactive1');
+
+	workerLog('startSendspin(): daemon started (MPD was playing: ' . ($mpdWasPlaying ? 'yes' : 'no') . ')');
+}
+
+function stopSendspin() {
+	// Stop SendSpin daemon
+	sysCmd('systemctl stop sendspin');
+	sysCmd('systemctl disable sendspin');
+
+	// Optionally resume MPD if it was playing AND rsmafterss is enabled
+	$dbh = sqlConnect();
+	$result = sqlQuery("SELECT value FROM cfg_system WHERE param='rsmafterss'", $dbh);
+	$rsmafterss = (!empty($result)) ? $result[0]['value'] : 'No';
+	
+	$mpdWasPlaying = $_SESSION['mpd_was_playing'] ?? '0';
+	// Also check database as fallback
+	if ($mpdWasPlaying == '0') {
+		$result = sqlQuery("SELECT value FROM cfg_system WHERE param='sendspin_mpd_was_playing'", $dbh);
+		$mpdWasPlaying = (!empty($result)) ? $result[0]['value'] : '0';
+	}
+
+	if ($mpdWasPlaying == '1' && $rsmafterss == 'Yes') {
+		sleep(1); // Allow SendSpin to release device
+		sysCmd('mpc play');
+		phpSession('write', 'mpd_was_playing', '0');
+		sqlUpdate('cfg_system', $dbh, 'sendspin_mpd_was_playing', '0');
+		workerLog('stopSendspin(): MPD playback resumed (rsmafterss=Yes)');
+	} elseif ($mpdWasPlaying == '1') {
+		// Clear the flag even if not resuming
+		phpSession('write', 'mpd_was_playing', '0');
+		sqlUpdate('cfg_system', $dbh, 'sendspin_mpd_was_playing', '0');
+		workerLog('stopSendspin(): MPD was playing but rsmafterss=No, not resuming');
+	}
+
+	workerLog('stopSendspin(): daemon stopped');
+
+	// Local: restore volume knob
+	sysCmd('/var/www/util/vol.sh -restore');
+	if (CamillaDSP::isMPD2CamillaDSPVolSyncEnabled()) {
+		sysCmd('systemctl restart mpd2cdspvolume');
+	}
+
+	// Clear active state
+	phpSession('write', 'sspactive', '0');
+	$GLOBALS['sspactive'] = '0';
+	sendFECmd('sspactive0');
+}
+
+// === SendSpin Advanced Functions (Release 2) ===
+
+function getSendspinVersion() {
+    $result = sysCmd('sudo /root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
+    $version = (!empty($result) && isset($result[0])) ? trim($result[0]) : 'unknown';
+    return $version;
+}
+
+function getSendspinMetadata() {
+    if (file_exists(SENDSPINMETA_FILE)) {
+        $meta = file_get_contents(SENDSPINMETA_FILE);
+        return $meta;
+    }
+    return '';
+}
+
+function checkSendspinUpdate() {
+    $result = sysCmd('sendspin-version-check.sh 2>/dev/null');
+    $json = (!empty($result) && isset($result[0])) ? $result[0] : '{}';
+    return $json;
+}
+
+function updateSendspin() {
+    sysCmd('sudo -u root bash -c "/root/.local/share/uv/tools/sendspin/bin/python -m uv tool upgrade sendspin 2>&1 && systemctl restart sendspin" > /tmp/sendspin-update.log 2>&1 &');
+    workerLog('updateSendspin(): upgrade launched in background');
+    return true;
+}
+
+function generateSendspinService($dbh = null) {
+    if ($dbh === null) {
+        $dbh = sqlConnect();
+    }
+    $result = sqlRead('cfg_sendspin', $dbh);
+    $cfg = array();
+    foreach ($result as $row) {
+        $cfg[$row['param']] = $row['value'];
+    }
+
+    $codec = in_array($cfg['audio_codec'] ?? '', ['flac', 'pcm']) ? $cfg['audio_codec'] : 'flac';
+    $rate = in_array($cfg['audio_rate'] ?? '', ['44100', '48000', '96000']) ? $cfg['audio_rate'] : '48000';
+    $depth = in_array($cfg['audio_depth'] ?? '', ['16', '24', '32']) ? $cfg['audio_depth'] : '16';
+        $log_level = in_array($cfg['log_level'] ?? '', ['DEBUG', 'INFO', 'WARNING', 'ERROR']) ? $cfg['log_level'] : 'INFO';
+
+        $audio_format = "{$codec}:{$rate}:{$depth}:2";
+
+        $service = <<<SVC
+    [Unit]
+    Description=SendSpin Audio Receiver
+    After=network-online.target sound.target avahi-daemon.service
+    Wants=network-online.target
+
+    [Service]
+    Type=simple
+    ExecStartPre=/var/local/www/commandw/sendspin-spspre.sh
+    ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-device _audioout --audio-format {$audio_format} --name moode-sendspin \\
+        --log-level {$log_level} \\
+        --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
+        --hook-stop /var/local/www/commandw/sendspin-metadata.sh
+    ExecStopPost=/var/local/www/commandw/spspost.sh
+    Restart=on-failure
+    RestartSec=5
+    TimeoutStartSec=30
+    Environment="HOME=/root"
+
+LimitRTPRIO=99
+LimitMEMLOCK=8388608
+
+[Install]
+WantedBy=multi-user.target
+SVC;
+
+    $file = '/etc/systemd/system/sendspin.service';
+    $tmpfile = '/tmp/sendspin.service.tmp';
+    $result = file_put_contents($tmpfile, $service);
+    if ($result !== false) {
+        chmod($tmpfile, 0644);
+        sysCmd("sudo cp {$tmpfile} {$file}");
+        sysCmd('sudo systemctl daemon-reload');
+        @unlink($tmpfile);
+
+        workerLog('generateSendspinService(): service regenerated from DB config');
+        return true;
+    }
+    workerLog('generateSendspinService(): failed to write temp service file');
+    return false;
 }

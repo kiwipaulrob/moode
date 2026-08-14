@@ -47,7 +47,11 @@ $disableSync = sqlQuery("SELECT value FROM cfg_airplay WHERE param='disable_sync
 if ($btActive === true && $_SESSION['audioout'] == 'Local') {
 	$_file = 'Bluetooth stream';
 	$_encoded_at = sysCmd("bluealsa-cli -v list-pcms | awk -F\": \" '/Selected codec/ {print $2}' | cut -d\":\" -f1")[0];
-	$_decoded_to = 'PCM 16 bit 44.1 kHz, Stereo';
+	$pcms = sysCmd('bluealsa-cli list-pcms')[0];
+	$info = sysCmd('bluealsa-cli info ' . $pcms . " | grep \"Sampling\|Format\" | awk -F\" \" '{print $2}'");
+	$bits = substr($info[0], 1, 2);
+	$rate = formatRate($info[1]);
+	$_decoded_to = 'PCM ' . $bits . ' bit ' . $rate . ' kHz, Stereo';
 	$_decode_rate = '';
 } else if ($aplActive == '1') {
 	$_file = 'AirPlay stream' . ($disableSync == 'yes' ? ' (sync disabled)' : '');
@@ -210,20 +214,7 @@ if ($_SESSION['invert_polarity'] == '1') {
 	$outputMode = $_SESSION['alsa_output_mode'];
 }
 
-// Bluetooth overrides
-if ($btActive === true) {
-	// Bluetooth inbound
-	if ($_SESSION['alsa_output_mode'] == 'iec958') {
-		$outputModeName = ALSA_OUTPUT_MODE_NAME[$_SESSION['alsa_output_mode']];
-	} else {
-		$outputModeName = ALSA_OUTPUT_MODE_BT_NAME[$_SESSION['alsa_output_mode_bt']];
-		$outputMode = $_SESSION['alsa_output_mode_bt'] == '_audioout' ?
-			$_SESSION['alsa_output_mode'] :
-			'plughw';
-	}
-} else {
-	$outputModeName = ALSA_OUTPUT_MODE_NAME[$_SESSION['alsa_output_mode']];
-}
+$outputModeName = ALSA_OUTPUT_MODE_NAME[$_SESSION['alsa_output_mode']];
 
 // Peppy ALSA
 $peppyAlsa = ($_SESSION['peppy_display'] == '1' || $_SESSION['enable_peppyalsa'] == '1') ? 'PeppyALSA &rarr; ' : '';

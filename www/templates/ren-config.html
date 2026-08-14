@@ -37,17 +37,17 @@
 				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_bt_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
 			</div>
 
-			<label class="control-label" for="bt-pin-code">PIN code</label>
+			<label class="control-label">Pairing confirmation</label>
 			<div class="controls">
-				<input class="config-input-large" type="$_pwd_input_format" id="bt-pin-code" name="bt_pin_code" value="$_bt_pin_code" placeholder="None">
-				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_bt_pin_code" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
-				<a aria-label="Help" class="config-info-toggle" data-cmd="info-bt-pin-code" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
-				<a class="show-hide-password" href="#notarget" data-id="bt-pin-code"><i class="fa-regular fa-sharp fa-eye"></i></a>
-				<span class="config-help-static">
-					This is an experimental feature. Developer interest is welcome!
-				</span>
-				<span id="info-bt-pin-code" class="config-help-info">
-					Set a 6 digit numeric PIN code that clients are required to enter before the initial connection request is accepted. Subsequent connection requests are then verified and accepted without needing to re-enter the PIN code.
+				<div class="toggle">
+					<label class="toggle-radio toggle-btpairconfirm" for="toggle-btpairconfirm-2">ON </label>$_select[bt_pairing_confirm_on]
+					<label class="toggle-radio toggle-btpairconfirm" for="toggle-btpairconfirm-1">OFF</label>$_select[bt_pairing_confirm_off]
+				</div>
+				<button id="btn-set-btpairconfirm" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_bt_pairing_confirm" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-btpairconfirm" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-btpairconfirm" class="config-help-info">
+					- On: Pairing a device shows a 6-digit code that must be confirmed on both devices before the connection is accepted.<br/>
+					- Off: Devices pair without confirmation.
 				</span>
 			</div>
 
@@ -137,9 +137,22 @@
 
 			<label class="control-label" for="airplayname">Name</label>
 			<div class="controls">
-				<input class="config-input-large" type="text" id="airplayname" name="airplayname" value="$_select[airplayname]" required">
+				<input class="config-input-large" type="text" id="airplayname" name="airplayname" value="$_select[airplayname]" required>
 				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_airplay_settings" value="novalue" $_airplay_svcbtn_disable><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
 			</div>
+
+			<label class="control-label" for="airplaysvc-type">Protocol</label>
+			<div class="controls">
+                <select id="airplaysvc-type" name="airplaysvc_type" class="config-select-large" onchange="autoClick('#btn-set-airplaysvc-type');">
+					$_select[airplaysvc_type]
+                </select>
+				<button id="btn-set-airplaysvc-type" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_airplaysvc_type" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-airplaysvc-type" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-airplaysvc-type" class="config-help-info">
+					Select the AirPlay protocol. AirPlay 2 provides native multi-receiver streaming from iOS devices. AirPlay 1 can be used to send lossless ALAC 16/44.1K to a single receiver from iOS devices.
+				</span>
+			</div>
+
 			<label class="control-label">Resume MPD</label>
 			<div class="controls">
 				<div class="toggle">
@@ -295,7 +308,7 @@
 
 			<label class="control-label" for="upnpname">Name</label>
 			<div class="controls">
-				<input class="config-input-large" type="text" id="upnpname" name="upnpname" value="$_select[upnpname]" required">
+				<input class="config-input-large" type="text" id="upnpname" name="upnpname" value="$_select[upnpname]" required>
 				<button class="btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_upnp_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
 			</div>
 
@@ -402,8 +415,60 @@
 			</div>
 		</div>
 
+		<div class="control-group $_feat_sendspin">
+			<legend>SendSpin</legend>
+			<p class="sub-legend">
+				Requires sendspin-cli, view the <a href="./setup_3rdparty_sendspin.txt" class="target-blank-link" target="_blank">setup guide</a>.
+			</p>
+			<label class="control-label">Service</label>
+			<div class="controls">
+				<div class="toggle">
+					<label class="toggle-radio toggle-sendspinsvc" for="toggle-sendspinsvc-2">ON </label>$_select[sendspinsvc_on]
+					<label class="toggle-radio toggle-sendspinsvc" for="toggle-sendspinsvc-1">OFF</label>$_select[sendspinsvc_off]
+				</div>
+				<button id="btn-set-sendspinsvc" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_sendspin_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-sendspinsvc" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-sendspinsvc" class="config-help-info">
+					SendSpin Multi-Room Audio Client.
+                </span>
+			</div>
+
+			<label class="control-label">Name</label>
+			<div class="controls">
+				<input class="config-input-large" type="text" id="sendspinname" name="sendspinname" value="$_select[sendspinname]" onchange="autoClick('#btn-set-sendspinname');">
+				<button id="btn-set-sendspinname" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_sendspin_settings" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-sendspinname" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-sendspinname" class="config-help-info">
+					The name that appears in multi-room controller.
+                </span>
+			</div>
+
+			<div class="controls">
+				<a href="ssp-config.php" $_sendspin_link_disable><button class="btn btn-medium btn-primary config-btn" $_sendspin_btn_disable>Edit</button></a>
+				<span class="config-btn-after">SendSpin</span>
+			</div>
+			<div class="controls">
+				<a data-toggle="modal" href="#sendspin-restart" $_sendspin_link_disable><button class="btn btn-medium btn-primary config-btn" $_sendspin_btn_disable>Restart</button></a>
+				<span class="config-btn-after">SendSpin</span>
+			</div>
+
+			<label class="control-label">Resume MPD</label>
+			<div class="controls">
+				<div class="toggle">
+					<label class="toggle-radio toggle-rsmafterss" for="toggle-rsmafterss-2">ON </label>$_select[rsmafterss_on]
+					<label class="toggle-radio toggle-rsmafterss" for="toggle-rsmafterss-1">OFF</label>$_select[rsmafterss_off]
+				</div>
+				<button id="btn-set-rsmafterss" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_rsmafterss" value="novalue" $_sendspin_btn_disable><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-rsmafterss" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-rsmafterss" class="config-help-info">
+					Resume MPD playback after SendSpin streaming stops.
+                </span>
+			</div>
+		</div>
+
 		<div class="control-group $_feat_roonbridge">
-			<legend>RoonBridge</legend>
+
+					<legend>RoonBridge</legend>
 			<p class="sub-legend $_rb_not_installed_msg">
 				This service is not installed.<br>
 				View the <a href="./setup_3rdparty_roonbridge.txt" class="target-blank-link" target="_blank">Setup guide</a> and then visit the manufacturer website for the latest information on installing and configuring this component.
@@ -588,6 +653,19 @@
 		<div class="modal-footer">
 			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
 			<button class="btn btn-primary btn-submit" type="submit" name="rbrestart" value="1">Yes</button>
+		</div>
+	</div>
+</form>
+
+<form class="form-horizontal" method="post">
+	<div id="sendspin-restart" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="sendspin-restart-label" aria-hidden="true">
+		<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+			<h3>Restart SendSpin renderer?</h3>
+		</div>
+		<div class="modal-body"></div>
+		<div class="modal-footer">
+			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+			<button class="btn btn-primary btn-submit" type="submit" name="sendspinrestart" value="1">Yes</button>
 		</div>
 	</div>
 </form>

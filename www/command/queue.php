@@ -8,6 +8,7 @@ require_once __DIR__ . '/../inc/common.php';
 require_once __DIR__ . '/../inc/mpd.php';
 require_once __DIR__ . '/../inc/music-library.php';
 require_once __DIR__ . '/../inc/queue.php';
+require_once __DIR__ . '/../inc/radio-browser.php';
 require_once __DIR__ . '/../inc/session.php';
 require_once __DIR__ . '/../inc/sql.php';
 
@@ -46,6 +47,10 @@ switch ($_GET['cmd']) {
 	case 'delete_playqueue_item':
 		sendMpdCmd($sock, 'delete ' . $_GET['range']);
 		$resp = readMpdResp($sock);
+		// A transient radio-browser station (cfg_radio type='rb') exists only while its
+		// stream is queued; once removed from the queue, prune its row from the DB.
+		// Favorites (type='f' or type='fb') and native stations (type='r') are kept untouched.
+		rbPruneOrphanStations();
 		break;
 	case 'move_playqueue_item':
 		sendMpdCmd($sock, 'move ' . $_GET['range'] . ' ' . $_GET['newpos']);
@@ -123,7 +128,7 @@ switch ($_GET['cmd']) {
 	case 'play_group':
 	case 'play_group_next':
     	// Search the Queue for the group
-		sendMpdCmd($sock, 'lsinfo "' . $_POST['path'][0] . '"');
+		sendMpdCmd($sock, 'lsinfo "' . escapeDblQuotes($_POST['path'][0]) . '"');
 		$album = parseDelimFile(readMpdResp($sock), ': ')['Album'];
 		$result = findInQueue($sock, 'album', $album);
 		$last = count($_POST['path']) - 1;
@@ -151,7 +156,7 @@ switch ($_GET['cmd']) {
 		}
         putToggleSongId($pos);
 		break;
-	/*case 'clear_add_group':*/
+	// case 'clear_add_group':
 	case 'clear_play_group':
 		$cmds = array_merge(array('clear'), addGroupToQueue($_POST['path']));
 		updLibRecentPlaylistVar('None');

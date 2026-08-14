@@ -34,28 +34,45 @@ const MPD_LOG = '/var/log/mpd/log';
 // Currentsong / Now playing
 const CURRENTSONG_TXT = '/var/local/www/currentsong.txt';
 const CURRENTSONG_TXT_TMP = '/tmp/currentsong.txt';
+// Radiocover plus
+const RADIOCOVER_PLUS_CFG = '/etc/radiocover-plus/config.txt';
+const RADIOCOVER_PLUS_LOG = '/var/log/moode_radiocover_plus.log';
+// Radio Browser (radio-browser.info)
+const RADIOBROWSER_API_PRIMARY = 'all.api.radio-browser.info'; // round-robin alias: bootstrap + last resort
+const RADIOBROWSER_API_SRV = '_api._tcp.radio-browser.info';   // DNS SRV record for server discovery
+const RADIOBROWSER_UA = 'moode-radio-browser/1.0';
+const RADIOBROWSER_CACHE = '/var/local/www/rb-cache';
+const RADIOBROWSER_RECENT_FILE = '/var/local/www/rb-cache/recently_played.json';
+const RADIOBROWSER_IMAGE_CACHE = '/var/local/www/imagesw/rb-logos';
+const RADIOBROWSER_IMAGE_MIN_SIZE = 100; // bytes
+const RADIOBROWSER_IMAGE_MAX_SIZE = 1000000; // bytes
+const RADIOBROWSER_CACHE_TTL = 1800; // Search results (30 min)
+const RADIOBROWSER_CACHE_TTL_STATIC = 43200; // Countries/genres/topclick (12 hr)
+const RADIOBROWSER_RECENT_MAX = 50;
+const RADIOBROWSER_LIMIT = 28; // Fixed search/page size
 // AirPlay, Deezer Connect and Spotify Connect
 const APLMETA_CACHE_FILE = '/var/local/www/aplmeta.json';
 const DEEZMETA_CACHE_FILE = '/var/local/www/deezmeta.json';
 const DEEZ_CREDENTIALS_FILE = '/etc/deezer/deezer.toml';
 const SPOTMETA_CACHE_FILE = '/var/local/www/spotmeta.json';
+const SENDSPINMETA_FILE = '/var/local/www/sendspinmeta.txt';
 const ITUNES_API_BASE_URL = 'https://itunes.apple.com/search';
 // SQLite
 const SQLDB = 'sqlite:/var/local/www/db/moode-sqlite3.db';
 const SQLDB_PATH = '/var/local/www/db/moode-sqlite3.db';
 // Dashboard
 const DASHBOARD_CACHE_FILE = '/var/local/www/dashboard.txt';
+// Default titles and covers
+const DEFAULT_STATION_NAME = 'Radio station';
+const DEFAULT_ALBUM_COVER = 'images/default-album-cover.jpg';
+const DEFAULT_RADIO_COVER = 'images/default-radio-cover.jpg';
+const DEFAULT_PLAYLIST_COVER = '/var/www/images/default-playlist-cover.jpg';
+const DEFAULT_NOTFOUND_COVER = '/var/www/images/default-notfound-cover.jpg';
+const DEFAULT_UPNP_COVER = 'images/default-upnp-cover.jpg';
+const DEFAULT_RX_COVER = 'images/default-rx-cover.jpg'; // DEPRECATED
 // Library/Playback
 const LIBCACHE_BASE = '/var/local/www/libcache';
 const ROOT_DIRECTORIES = array('NAS', 'NVME', 'OSDISK', 'RADIO', 'SATA', 'USB');
-const DEFAULT_STATION_NAME = 'Radio station';
-const DEFAULT_RADIO_COVER = 'images/default-album-cover.png';
-const DEFAULT_ALBUM_COVER = 'images/default-album-cover.png';
-const DEFAULT_UPNP_COVER = 'images/default-upnp-cover.jpg';
-const DEFAULT_RX_COVER = 'images/default-rx-cover.jpg';
-const DEFAULT_PLAYLIST_COVER = '/var/www/images/default-playlist-cover.jpg';
-const DEFAULT_NOTFOUND_COVER = '/var/www/images/default-notfound-cover.jpg';
-const DEFAULT_WEBUI_DISPLAY_URL = 'http://localhost/';
 const AIRPLAY_COVERS_ROOT = '/var/local/www/imagesw/airplay-covers/';
 const PLAYLIST_COVERS_ROOT = '/var/local/www/imagesw/playlist-covers/';
 const RADIO_LOGOS_ROOT = '/var/local/www/imagesw/radio-logos/';
@@ -94,7 +111,8 @@ const BOOT_CONFIG_TXT = BOOT_DIR . '/config.txt';
 const BOOT_CMDLINE_TXT = BOOT_DIR . '/cmdline.txt';
 const BOOT_MOODEBACKUP_ZIP = '/boot/moodebackup.zip';
 const BOOT_MOODECFG_INI = '/boot/moodecfg.ini';
-const BT_PINCODE_CONF = '/etc/bluetooth/pin.conf';
+const BT_AGENT_SOCK = '/tmp/moode-btagent.sock'; // bt-pairing-agent.py response socket
+const BT_AGENT_ENV = '/var/local/www/btagent.env'; // bt-agent.service capability (BT_AGENT_CAPABILITY)
 const ETC_MACHINE_INFO = '/etc/machine-info';
 const CHROMIUM_DOWNGRADE_VER = '126.0.6478.164-rpt1';
 const NO_USERID_DEFINED = 'userid does not exist';
@@ -103,14 +121,24 @@ const READY_CHIME_URI = 'OSDISK/System Sounds/ReadyChime.flac';
 const READY_CHIME_TITLE = 'moOde audio - Ready Chime';
 // File sharing
 const FS_SMB_CONF = '/etc/samba/smb.conf';
+// WebUI display
+const DEFAULT_WEBUI_DISPLAY_URL = 'http://localhost/';
 // Peppy display
 const PEPPY_METER_ETC_DIR = '/etc/peppymeter';
 const PEPPY_METER_OPT_DIR = '/opt/peppymeter';
 const PEPPY_SPECTRUM_ETC_DIR = '/etc/peppyspectrum';
 const PEPPY_SPECTRUM_OPT_DIR = '/opt/peppyspectrum';
+// Live meter gain source: peppy-gain.php writes the current hardware attenuation (dB)
+// here and PeppyMeter (volume.gain.db.source) scales its needles by 10^(dB/20). /tmp,
+// alongside the existing /tmp/peppymeter FIFO.
+const PEPPY_GAIN_DB_FILE = '/tmp/peppy_gain_db';
+// Seconds before retrying the ALSA monitor after the card goes away (DAC unplugged)
+const PEPPY_GAIN_MON_RETRY = 5;
+const PEPPY_GAIN_MON_LOG = '/tmp/moode_peppy_gain.log';
 // Peppy touch monitor
 const TOUCHMON_LOG = '/tmp/moode_touchmon.log';
 const TOUCHMON_TIMEOUT_DEFAULT = 15;
+const TOUCHMON_CLOSED_COUNT = 3;
 // Notifications
 const NOTIFY_TITLE_INFO = '<i class="fa fa-solid fa-sharp fa-circle-check" style="color:#27ae60;"></i> Info';
 const NOTIFY_TITLE_ALERT = '<i class="fa fa-solid fa-sharp fa-circle-xmark" style="color:#e74c3c;"></i> Alert';
@@ -215,6 +243,7 @@ const FEAT_BLUETOOTH    = 16384;	// y Bluetooth renderer
 const FEAT_DEVTWEAKS    = 32768;	//   Developer tweaks
 const FEAT_MULTIROOM    = 65536;	// y Multiroom audio
 const FEAT_PEPPYDISPLAY = 131072;	// y Peppy display
+const FEAT_SENDSPIN      = 262144;	// x SendSpin multi-room audio
 //						-------
 //						  228279
 
@@ -268,7 +297,6 @@ const ALSA_DEFAULT_MIXER_NAME_I2S = 'Digital';
 const ALSA_DEFAULT_MIXER_NAME_INTEGRATED = 'PCM';
 // ALSA output mode names
 const ALSA_OUTPUT_MODE_NAME = array('plughw' => 'Default', 'hw' => 'Direct', 'iec958' => 'IEC958');
-const ALSA_OUTPUT_MODE_BT_NAME = array('_audioout' => 'Standard', 'plughw' => 'Compatibility');
 // ALSA HDMI IEC958
 const ALSA_IEC958_DEVICE = 'default:vc4hdmi';
 const ALSA_IEC958_FORMAT = 'IEC958_SUBFRAME_LE';

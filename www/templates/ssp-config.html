@@ -1,0 +1,104 @@
+<!--
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright 2024 SendSpin moOde integration
+*/
+-->
+<div id="container">
+<div class="container">
+	<h1 class="ren-config">SendSpin</h1>
+
+    <form class="form-horizontal" action="" method="post">
+    	<legend>Settings
+			<button class="legend-config btn btn-medium btn-primary btn-submit" type="submit" name="save" value="1">Save</button>
+		</legend>
+
+		<div class="control-group">
+
+			<div class="config-horiz-rule">Version</div>
+
+			<label class="control-label" for="installed-version">Installed</label>
+			<div class="controls">
+				<input class="config-input-large" type="text" id="installed-version" name="installed_version" value="$_select[installed_version]" readonly>
+			</div>
+
+			<label class="control-label" for="latest-version">Latest</label>
+			<div class="controls">
+				<input class="config-input-large" type="text" id="latest-version" name="latest_version" value="$_select[latest_version]" readonly>
+			</div>
+
+			<div class="controls" id="sendspin-update-row">
+				$_select[sendspin_update_btn]
+				<span class="config-btn-after">Update SendSpin</span>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-sendspin-update" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-sendspin-update" class="config-help-info">
+					Updates the SendSpin CLI to the latest version using uv tool upgrade. The SendSpin service will be restarted after the update.
+                </span>
+			</div>
+
+			<div class="config-horiz-rule">Audio format</div>
+
+			<label class="control-label" for="audio-codec">Codec</label>
+			<div class="controls">
+				<select id="audio-codec" class="config-select-large" name="config[audio_codec]">
+					$_select[audio_codec]
+				</select>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-audio-codec" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-audio-codec" class="config-help-info">
+					Audio codec for the SendSpin stream. FLAC is lossless and recommended. PCM is uncompressed but uses more bandwidth.
+				</span>
+			</div>
+
+			<label class="control-label" for="audio-rate">Sample rate</label>
+			<div class="controls">
+				<select id="audio-rate" class="config-select-large" name="config[audio_rate]">
+					$_select[audio_rate]
+				</select>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-audio-rate" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-audio-rate" class="config-help-info">
+					Sample rate in Hz. 48000 is the default and recommended for most setups. Higher rates increase bandwidth but may improve quality with capable DACs.
+				</span>
+			</div>
+
+			<label class="control-label" for="audio-depth">Bit depth</label>
+			<div class="controls">
+				<select id="audio-depth" class="config-select-large" name="config[audio_depth]">
+					$_select[audio_depth]
+				</select>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-audio-depth" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-audio-depth" class="config-help-info">
+					Bit depth for audio samples. 16 bit is CD quality. 24 bit provides more headroom. Higher values may not be supported by all DACs.
+				</span>
+			</div>
+
+			<div class="config-horiz-rule">Logging</div>
+
+			<label class="control-label" for="log-level">Log level</label>
+			<div class="controls">
+				<select id="log-level" class="config-select-large" name="config[log_level]">
+					$_select[log_level]
+				</select>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-log-level" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-log-level" class="config-help-info">
+					Verbosity of the SendSpin daemon log. DEBUG for troubleshooting, INFO for normal operation, WARNING/ERROR to reduce log noise.
+				</span>
+			</div>
+
+
+			<div class="config-horiz-rule">Audio output</div>
+
+			<label class="control-label">Audio device</label>
+			<div class="controls">
+				<span class="config-help-static">
+					_audioout (moOde's shared ALSA device → plughw:$_select[alsa_cardnum],0 → $_select[alsa_devname])
+				</span>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-alsa-device" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-alsa-device" class="config-help-info">
+					The audio output chain: moOde's shared <code>_audioout</code> device routes through the ALSA plug layer (<code>plughw:$_select[alsa_cardnum],0</code>) to the physical DAC. This is the same device used by AirPlay, Spotify, and MPD — volume is controlled by moOde's integrated knob.
+				</span>
+			</div>
+
+		</div>
+	</form>
+</div>
+</div>

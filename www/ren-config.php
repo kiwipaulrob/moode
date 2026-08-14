@@ -35,12 +35,11 @@ if (isset($_POST['update_bt_settings'])) {
 if (isset($_POST['btrestart']) && $_POST['btrestart'] == 1 && $_SESSION['btsvc'] == '1') {
 	submitJob('btsvc', '', NOTIFY_TITLE_INFO, NAME_BLUETOOTH . NOTIFY_MSG_SVC_MANUAL_RESTART);
 }
-if (isset($_POST['update_bt_pin_code']) && $_POST['update_bt_pin_code'] != 'Pincode set') {
-	phpSession('write', 'bt_pin_code', $_POST['bt_pin_code']);
-	$notify = $_SESSION['btsvc'] == '1' ?
-		array('title' => NOTIFY_TITLE_INFO, 'msg' => NAME_BLUETOOTH_PAIRING_AGENT . NOTIFY_MSG_SVC_RESTARTED) :
-		array('title' => '', 'msg' => '');
-	submitJob('bt_pin_code', $_SESSION['bt_pin_code'], $notify['title'], $notify['msg']);
+if (isset($_POST['update_bt_pairing_confirm']) && isset($_POST['bt_pairing_confirm'])
+		&& $_POST['bt_pairing_confirm'] != $_SESSION['bt_pairing_confirm']) {
+	$_SESSION['bt_pairing_confirm'] = $_POST['bt_pairing_confirm'];
+	$msg = 'Pairing confirmation ' . ($_POST['bt_pairing_confirm'] == '1' ? 'enabled' : 'disabled');
+	submitJob('bt_pairing_confirm', '', NOTIFY_TITLE_INFO, $msg);
 }
 if (isset($_POST['update_alsavolume_max_bt'])) {
 	$_SESSION['alsavolume_max_bt'] = $_POST['alsavolume_max_bt'];
@@ -74,6 +73,17 @@ if (isset($_POST['update_airplay_settings'])) {
 	if (isset($update)) {
 		submitJob('airplaysvc');
 	}
+}
+if (isset($_POST['update_airplaysvc_type'])) {
+	$_SESSION['airplaysvc_type'] = $_POST['airplaysvc_type'];
+	if ($_SESSION['airplaysvc'] == '1') {
+		$title = NOTIFY_TITLE_INFO;
+		$msg = NAME_AIRPLAY . NOTIFY_MSG_SVC_RESTARTED;
+	} else {
+		$title = '';
+		$msg = '';
+	}
+	submitJob('airplaysvc', '', $title, $msg);
 }
 if (isset($_POST['update_rsmafterapl'])) {
 	phpSession('write', 'rsmafterapl', $_POST['rsmafterapl']);
@@ -208,6 +218,37 @@ if (isset($_POST['rbrestart']) && $_POST['rbrestart'] == 1) {
 	submitJob('rbrestart', '', NOTIFY_TITLE_INFO, NAME_ROONBRIDGE . NOTIFY_MSG_SVC_MANUAL_RESTART);
 }
 
+// SendSpin Multi-Room Audio
+if (isset($_POST['update_sendspin_settings'])) {
+	if (isset($_POST['sendspinsvc']) && $_POST['sendspinsvc'] != $_SESSION['sendspinsvc']) {
+		$update = true;
+		phpSession('write', 'sendspinsvc', $_POST['sendspinsvc']);
+	}
+	if (isset($_POST['sendspinname']) && $_POST['sendspinname'] != $_SESSION['sendspinname']) {
+		$update = true;
+		phpSession('write', 'sendspinname', $_POST['sendspinname']);
+	}
+	if (isset($_POST['rsmafterss']) && $_POST['rsmafterss'] != $_SESSION['rsmafterss']) {
+		$update = true;
+		phpSession('write', 'rsmafterss', $_POST['rsmafterss']);
+	}
+	if (isset($update)) {
+		// Worker handles service regeneration + start/stop via submitJob
+		submitJob('sendspinsvc');
+	}
+}
+if (isset($_POST['sendspinrestart']) && $_POST['sendspinrestart'] == 1 && $_SESSION['sendspinsvc'] == '1') {
+	submitJob('sendspinrestart', '', NOTIFY_TITLE_INFO, 'SendSpin' . NOTIFY_MSG_SVC_MANUAL_RESTART);
+}
+
+// Preserve cfg_system params (feat_bitmask) before closing shared session.
+// header.php opens the worker's shared session. phpSession('close')
+// writes $_SESSION back to disk. If a page doesn't load feat_bitmask,
+// it gets wiped from the session file, hiding all renderer sections.
+if (!isset($_SESSION['feat_bitmask'])) {
+	$stmt = $dbh->query("SELECT value FROM cfg_system WHERE param='feat_bitmask'");
+	$_SESSION['feat_bitmask'] = $stmt ? $stmt->fetchColumn() : '0';
+}
 phpSession('close');
 
 // Bluetooth
@@ -218,13 +259,9 @@ $autoClick = " onchange=\"autoClick('#btn-set-btsvc');\"";
 $_select['btsvc_on']  .= "<input type=\"radio\" name=\"btsvc\" id=\"toggle-btsvc-1\" value=\"1\" " . (($_SESSION['btsvc'] == '1') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['btsvc_off'] .= "<input type=\"radio\" name=\"btsvc\" id=\"toggle-btsvc-2\" value=\"0\" " . (($_SESSION['btsvc'] == '0') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['btname'] = $_SESSION['btname'];
-if (empty($_SESSION['bt_pin_code'])) {
-	$_bt_pin_code = '';
-	$_pwd_input_format = 'password';
-} else {
-	$_bt_pin_code = 'Pincode set';
-	$_pwd_input_format = 'text';
-}
+$autoClick = " onchange=\"autoClick('#btn-set-btpairconfirm');\"";
+$_select['bt_pairing_confirm_on']  = "<input type=\"radio\" name=\"bt_pairing_confirm\" id=\"toggle-btpairconfirm-1\" value=\"1\" " . (($_SESSION['bt_pairing_confirm'] == '1') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
+$_select['bt_pairing_confirm_off'] = "<input type=\"radio\" name=\"bt_pairing_confirm\" id=\"toggle-btpairconfirm-2\" value=\"0\" " . (($_SESSION['bt_pairing_confirm'] == '0') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 
 if ($_SESSION['alsavolume'] == 'none') {
 	$_alsavolume_max_bt = '';
@@ -276,6 +313,8 @@ $autoClick = " onchange=\"autoClick('#btn-set-airplaysvc');\" " . $_airplay_svcb
 $_select['airplaysvc_on']  .= "<input type=\"radio\" name=\"airplaysvc\" id=\"toggle-airplaysvc-1\" value=\"1\" " . (($_SESSION['airplaysvc'] == '1') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['airplaysvc_off'] .= "<input type=\"radio\" name=\"airplaysvc\" id=\"toggle-airplaysvc-2\" value=\"0\" " . (($_SESSION['airplaysvc'] == '0') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['airplayname'] = $_SESSION['airplayname'];
+$_select['airplaysvc_type'] .= "<option value=\"2\" " . (($_SESSION['airplaysvc_type'] == '2') ? "selected" : "") . ">AirPlay 2 (Default)</option>\n";
+$_select['airplaysvc_type'] .= "<option value=\"1\" " . (($_SESSION['airplaysvc_type'] == '1') ? "selected" : "") . ">AirPlay 1</option>\n";
 $autoClick = " onchange=\"autoClick('#btn-set-rsmafterapl');\" " . $_airplay_btn_disable;
 $_select['rsmafterapl_on'] .= "<input type=\"radio\" name=\"rsmafterapl\" id=\"toggle-rsmafterapl-1\" value=\"Yes\" " . (($_SESSION['rsmafterapl'] == 'Yes') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 $_select['rsmafterapl_off']  .= "<input type=\"radio\" name=\"rsmafterapl\" id=\"toggle-rsmafterapl-2\" value=\"No\" " . (($_SESSION['rsmafterapl'] == 'No') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
@@ -412,6 +451,23 @@ if (($_SESSION['feat_bitmask'] & FEAT_ROONBRIDGE)) {
 	$_feat_roonbridge = 'hide';
 }
 
+
+if (($_SESSION['feat_bitmask'] & FEAT_SENDSPIN)) {
+	$_feat_sendspin = '';
+	$_SESSION['sendspin_installed'] == 'yes' ? $_sendspin_svcbtn_disable = '' : $_sendspin_svcbtn_disable = 'disabled';
+	$_SESSION['sendspinsvc'] == '1' ? $_sendspin_btn_disable = '' : $_sendspin_btn_disable = 'disabled';
+	$_SESSION['sendspinsvc'] == '1' ? $_sendspin_link_disable = '' : $_sendspin_link_disable = 'onclick="return false;"';
+	$autoClick = " onchange=\"autoClick('#btn-set-sendspinsvc');\"";
+	$_select['sendspinsvc_on']  = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-1\" value=\"1\" " . (($_SESSION['sendspinsvc'] == '1') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+	$_select['sendspinsvc_off'] = "<input type=\"radio\" name=\"sendspinsvc\" id=\"toggle-sendspinsvc-2\" value=\"0\" " . (($_SESSION['sendspinsvc'] == '0') ? "checked=\"checked\"" : "") . $_sendspin_svcbtn_disable . $autoClick . ">\n";
+	$_select['sendspinname'] = $_SESSION['sendspinname'];
+	$autoClick = " onchange=\"autoClick('#btn-set-rsmafterss');\" " . $_sendspin_btn_disable;
+	$_select['rsmafterss_on'] = "<input type=\"radio\" name=\"rsmafterss\" id=\"toggle-rsmafterss-1\" value=\"Yes\" " . (($_SESSION['rsmafterss'] == 'Yes') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
+	$_select['rsmafterss_off'] = "<input type=\"radio\" name=\"rsmafterss\" id=\"toggle-rsmafterss-2\" value=\"No\" " . (($_SESSION['rsmafterss'] == 'No') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
+} else {
+	$_feat_sendspin = 'hide';
+}
+
 waitWorker('ren-config');
 
 $tpl = "ren-config.html";
@@ -420,4 +476,4 @@ storeBackLink($section, $tpl);
 
 include('header.php');
 eval("echoTemplate(\"" . getTemplate("templates/$tpl") . "\");");
-include('footer.php');
+include('footer.min.php');
