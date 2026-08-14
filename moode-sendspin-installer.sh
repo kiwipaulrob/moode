@@ -440,7 +440,7 @@ INSERT INTO cfg_system (param, value) SELECT 'sendspin_installed', 'yes' WHERE N
 INSERT INTO cfg_system (param, value) SELECT 'sendspinname', 'moode-sendspin' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspinname');
 INSERT INTO cfg_system (param, value) SELECT 'rsmafterss', 'No' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='rsmafterss');
 INSERT INTO cfg_system (param, value) SELECT 'sendspin_mpd_was_playing', '0' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspin_mpd_was_playing');
-CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
+CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param TEXT UNIQUE NOT NULL, value CHAR (128));
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_depth', '16');
@@ -1148,8 +1148,11 @@ install_commandw_scripts() {
             all_ok=false
         fi
     done
-    
-    $all_ok
+
+    if [[ "$all_ok" == "true" ]]; then
+        return 0
+    fi
+    return 1
 }
 
 install_sendspin_meta_php() {
@@ -1496,7 +1499,7 @@ INSERT INTO cfg_system (param, value) SELECT 'sendspin_installed', 'yes' WHERE N
 INSERT INTO cfg_system (param, value) SELECT 'sendspinname', 'moode-sendspin' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspinname');
 INSERT INTO cfg_system (param, value) SELECT 'rsmafterss', 'No' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='rsmafterss');
 INSERT INTO cfg_system (param, value) SELECT 'sendspin_mpd_was_playing', '0' WHERE NOT EXISTS (SELECT 1 FROM cfg_system WHERE param='sendspin_mpd_was_playing');
-CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param CHAR (32), value CHAR (128));
+CREATE TABLE IF NOT EXISTS cfg_sendspin (id INTEGER PRIMARY KEY, param TEXT UNIQUE NOT NULL, value CHAR (128));
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_codec', 'flac');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_rate', '48000');
 INSERT OR IGNORE INTO cfg_sendspin (param, value) VALUES ('audio_depth', '16');
@@ -2019,8 +2022,14 @@ run_installation() {
     echo ""
     if [[ "$verify_passed" == "true" ]]; then
         log_success "SendSpin installation completed successfully!"
-        # Regenerate service file from DB defaults so it stays in sync
-        install_regenerate_service
+        # Regenerate service file from DB defaults so it stays in sync.
+        # Full mode only: the regenerated unit references the commandw hook
+        # scripts (ExecStartPre/--hook-start/ExecStopPost) which minimal
+        # mode never installs -- regenerating there would break the service
+        # that install_systemd_service wrote correctly.
+        if [[ "$INSTALL_MODE" == "full" ]]; then
+            install_regenerate_service
+        fi
     else
         log_warn "Installation completed with some verification failures."
     fi
