@@ -434,7 +434,7 @@
 
 		<legend>CoreDSP</legend>
 		<p class="sub-legend">
-			CoreDSP supports MPD, Bluetooth, AirPlay, Spotify Connect, Deezer Connect and Squeezelite renderers.
+			CoreDSP supports MPD, Bluetooth, AirPlay, Spotify Connect and Squeezelite renderers.
 			It is not available if Multiroom Sender or Receiver are On.
 			Note that CoreDSP and MPD Crossfeed and Polarity inversion are mutually exclusive. Enabling one will disable the others.
 		</p>
@@ -524,12 +524,12 @@
 
 <form class="form-horizontal" method="post">
 	<div id="mpd-restart" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="mpd-restart-label" aria-hidden="true">
-		<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+		<div class="modal-header"><button aria-label="Close" type="button" class="close" data-dismiss="modal">&times;</button>
 			<h3>Restart MPD service?</h3>
 		</div>
 		<div class="modal-body"></div>
 		<div class="modal-footer">
-			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+			<button class="btn" data-dismiss="modal">Cancel</button>
 			<button class="btn btn-primary btn-submit" type="submit" name="mpdrestart" value="1">Yes</button>
 		</div>
 	</div>

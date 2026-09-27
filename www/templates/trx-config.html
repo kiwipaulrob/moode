@@ -172,7 +172,7 @@
 				<a aria-label="Help" class="config-info-toggle" data-cmd="info-multiroom-rx-alsavol" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
 				$_multiroom_rx_alsavol_msg
 				<span id="info-multiroom-rx-alsavol" class="config-help-info">
-					This establishes the ALSA 0dB level for this receiver when Bluetooth, AirPlay, Spotify or Deezer clients connect to the Sender.
+					This establishes the ALSA 0dB level for this receiver when Bluetooth, AirPlay or Spotify clients connect to the Sender.
 					Alsamixer volume units (1 to 100) are used.
 				</span>
 			</div>
@@ -247,12 +247,12 @@
 
 <form class="form-horizontal" method="post">
 	<div id="restart-tx" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="restart-tx-label" aria-hidden="true">
-		<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+		<div class="modal-header"><button aria-label="Close" type="button" class="close" data-dismiss="modal">&times;</button>
 			<h3>Restart Sender?</h3>
 		</div>
 		<div class="modal-body"></div>
 		<div class="modal-footer">
-			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+			<button class="btn" data-dismiss="modal">Cancel</button>
 			<button class="btn btn-primary btn-submit" type="submit" name="multiroom_tx_restart" value="1">Yes</button>
 		</div>
 	</div>
@@ -260,12 +260,12 @@
 
 <form class="form-horizontal" method="post">
 	<div id="restart-rx" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="restart-rx-label" aria-hidden="true">
-		<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+		<div class="modal-header"><button aria-label="Close" type="button" class="close" data-dismiss="modal">&times;</button>
 			<h3>Restart Receiver?</h3>
 		</div>
 		<div class="modal-body"></div>
 		<div class="modal-footer">
-			<button class="btn" data-dismiss="modal" aria-hidden="true">Cancel</button>
+			<button class="btn" data-dismiss="modal">Cancel</button>
 			<button class="btn btn-primary btn-submit" type="submit" name="multiroom_rx_restart" value="1">Yes</button>
 		</div>
 	</div>

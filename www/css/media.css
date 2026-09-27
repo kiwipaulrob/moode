@@ -175,20 +175,26 @@ body {
 	#inpsrc-indicator {font-size:3.5em;}
 	#inpsrc-msg {top:50%;width:100%;padding-bottom:calc(.5em + env(safe-area-inset-bottom))}
 	#inpsrc-metadata {
-		position:relative;
-		font-size:.65em;
-		text-overflow:ellipsis;
-		white-space:nowrap;
-		overflow:hidden;
+		position:relative!important;
+		font-size:.65em!important;
 		margin-top:.5em;
-		width:auto;
-		margin-left:.75em;
-		margin-right:.75em;
+		width:auto!important;
+		margin-left:.75em!important;
+		margin-right:.75em!important;
 	}
 	#inpsrc-metadata-refresh {padding-bottom:calc(.5em + env(safe-area-inset-bottom));}
 	.inpsrc-metadata-cover {
-		height:auto;
+		height:auto!important;
 		width:95%;
+	}
+	body.rmwide .inpsrc-metadata-cover {height:auto!important;width:85%;margin:1em 1em 0 1em;}
+	body.rmwide #inpsrc-metadata-parent {display:block;width:90vw;float:left;margin: .25em .5em 0 .5em;}
+	body.rmwide #inpsrc-metadata-title,
+	body.rmwide #inpsrc-metadata-artist,
+	body.rmwide #inpsrc-metadata-album {
+		text-overflow:ellipsis;
+		white-space:nowrap;
+		overflow:hidden;
 	}
 
 	/* Shutdown, Restart, Reconnect */
@@ -360,7 +366,7 @@ body {
 	.cv-playqueue .pll2 {font-size:1rem;margin-left:calc(2.5em + 1vmin)!important}
 	/* Coverview metadata */
 	body.cvpb:not(.cvwide) #playbar-timeline {top:75%;}
-
+	body.cv #ss-currentsong {margin-top:.2em;}
 	/* Time knob */
 	#countdown {height:17vw;width:17vw;}
     #countdown div {margin:0 auto;} /* Needed to center the knob */
@@ -449,10 +455,13 @@ body {
 
 	/* Renderer active overlays: Text and button */
 	#inpsrc-indicator {font-size:2.85em;}
-	#inpsrc-metadata {font-size:.55em;padding-bottom:calc(.5em + env(safe-area-inset-bottom));}
+	#inpsrc-metadata {font-size:.55em!important;padding-bottom:calc(.5em + env(safe-area-inset-bottom));}
 	#inpsrc-metadata-refresh i,
 	#inpsrc-msg i {font-size:1.25em;}
-	.inpsrc-metadata-cover {height:calc(75vh - .5rem);}
+	.inpsrc-metadata-cover {height:calc(75vh - 2rem)!important;}
+	body.rmwide #inpsrc-indicator {font-size:2.85em;}
+	body.rmwide #inpsrc-metadata {font-size:.85em;}
+	body.rmwide .inpsrc-metadata-cover {height:calc(75vh - .5rem);margin:1em 1.25em 0 1.25em}
 
 	/* For the configs */
 	#panel-header,
@@ -763,7 +772,9 @@ body {
 	.viewswitch .btn {line-height:2.75rem;font-size:1.15em;}
 
 	/* Renderer active overlays: Text and button */
-	#inpsrc-indicator {font-size:2.85em;}
+	body.rmwide #inpsrc-indicator {font-size:2.85em;}
+	body.rmwide #inpsrc-metadata {font-size:1.5em;}
+	body.rmwide .inpsrc-metadata-cover {height:calc(75vh + .5em);margin:1em 1.25em 0 1.25em}
 
 	/* For the configs */
 	.container {margin-left:25vw;margin-right:25vw;}
@@ -804,6 +815,11 @@ body {
 
 	/* Play and toggle buttons under the time knob */
 	#togglebtns {padding-top:0;}
+
+	/* Renderer active overlays: Text and button */
+	body.rmwide #inpsrc-indicator {font-size:2.85em;}
+	body.rmwide #inpsrc-metadata {font-size:1.5em;}
+	body.rmwide .inpsrc-metadata-cover {height:calc(75vh + .5em);margin:1em 1.25em 0 1.25em}
 }
 
 /* Specifically for 400 x 1280 */
@@ -881,7 +897,9 @@ body {
 	#ra-search {font-size:1.25em;}
 
 	/* Renderer active overlays: Text and button */
-	#inpsrc-indicator {font-size:2.85em;}
+	body.rmwide #inpsrc-indicator {font-size:2.85em;}
+	body.rmwide #inpsrc-metadata {font-size:1.5em;}
+	body.rmwide .inpsrc-metadata-cover {height:calc(75vh + .5em);margin:1em 1.25em 0 1.25em}
 
 	/* Dropdown and context menus */
 	.dropdown-menu>li>a {line-height:2.25rem;font-size:1.15em;padding:0.35em 0.5em;}

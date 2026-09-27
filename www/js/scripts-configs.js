@@ -282,10 +282,20 @@ jQuery(document).ready(function($){ 'use strict';
 		$('#manualserver').val($('#address').val().trim());
 	});
 
-	// View MPD db regen status
-	$('#view-dbupdate-status').click(function(e) {
-		$.getJSON('command/music-library.php?cmd=get_dbupdate_count', function(count) {
-			$('#dbupdate-status').html('Files indexed: ' + count);
+	// Display MPD db regen status
+	$('#view-dbregen-status').click(function(e) {
+		$.getJSON('command/music-library.php?cmd=get_dbregen_count', function(count) {
+			$('#dbregen-status').html('Files processed: ' + count);
+		});
+	});
+
+	// Display MPD db analyze status
+	$('#view-dbanalyze-status').click(function(e) {
+		$.getJSON('command/music-library.php?cmd=get_dbanalyze_count', function(results) {
+			var msg = String(results).includes('Artists') ?
+				results :
+				'Files processed: ' + results;
+			$('#dbanalyze-status').html(msg);
 		});
 	});
 
