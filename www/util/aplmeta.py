@@ -58,11 +58,13 @@ oformat = DEFAULT_OFORMAT
 volume = None
 bundle = None
 session = None
+playstate = None
 # Last
 last_artist = None
 last_title = None
 last_album = None
 last_sformat = None
+last_playstate = None
 
 #
 # Functions
@@ -156,6 +158,17 @@ def get_metadata(line):
 	if match:
 		return match.group(1), match.group(2)
 
+	# Pause
+	# - 'Pause. (AirPlay 2 only.)'
+	match = re.match(r'^(Pause)', line)
+	if match:
+		return match.group(1), 'No value'
+	# Resume
+	# - 'Resume. (AirPlay 2 only.)'
+	match = re.match(r'^(Resume)', line)
+	if match:
+		return match.group(1), 'No value'
+
 	# Unknown
 	# - 'XXX Could not decipher:'
 	# - 'XXX Could not recognize:'
@@ -167,7 +180,7 @@ def get_metadata(line):
 
 # Update global vars
 def update_globals(key, val):
-	global state, title, artist, album, duration, sformat, oformat, bundle, session, volume
+	global state, title, artist, album, duration, sformat, oformat, volume, bundle, session, playstate
 	if key == 'Enter Active State':
 		state = 'active'
 		bundle = None
@@ -180,11 +193,11 @@ def update_globals(key, val):
 	elif key == 'Track length':
 		duration = val
 	elif key == 'Source Format':
-		sformat = val
+		sformat = val.replace('K', ' kHz')
 		if state != 'active':
 			bundle = 'end'
 	elif key == 'Output Format':
-		oformat = val
+		oformat = 'PCM ' + val.replace('K', ' kHz')
 	elif key == 'Volume':
 		volume = val
 	elif key == 'Metadata bundle':
@@ -195,6 +208,10 @@ def update_globals(key, val):
 			duration = DEFAULT_DURATION
 			sformat = DEFAULT_SFORMAT
 			oformat = DEFAULT_OFORMAT
+	elif key == 'Pause':
+		playstate = key
+	elif key == 'Resume':
+		playstate = key
 
 #
 # Main
@@ -238,7 +255,11 @@ try:
 			debug_msg('- title|artist|album: (' + title + '|' + artist + '|' + album + ')')
 
 			# Send to front-end if changed from last
-			if title != last_title or artist != last_artist or album != last_album or sformat != last_sformat:
+			if (title != last_title or
+				artist != last_artist or
+				album != last_album or
+				sformat != last_sformat or
+				playstate != last_playstate):
 				# Get cover file:
 				# - Only one file will exist because retain_cover_art = "no"
 				# - Delay to allow shairport-sync time to write the file
@@ -254,6 +275,11 @@ try:
 					cover_url = COVERS_WEB_ROOT + cover_file
 					debug_msg('- Cover: ' + cover_file)
 
+					# Get ALSA output format
+					cmd = '/var/www/util/get-oformat.php'
+					oformat = subprocess.run(cmd, shell=True, text=True, capture_output=True).stdout.rstrip()
+					debug_msg('- Oformat: ' + oformat)
+
 					# Write metadata cache file
 					debug_msg('- Write metadata to cache file')
 					metadata = {
@@ -264,7 +290,8 @@ try:
 						'duration': duration,
 						'cover_url': cover_url,
 						'sformat': sformat,
-						'oformat': oformat
+						'oformat': oformat,
+						'playstate': playstate
 					}
 					metadata_json = json.dumps(metadata)
 					file = open(APLMETA_CACHE_FILE, 'w')
@@ -284,6 +311,7 @@ try:
 					last_artist = artist
 					last_album = album
 					last_sformat = sformat
+					last_playstate = playstate
 
 except KeyboardInterrupt:
 	debug_msg('Exception branch')

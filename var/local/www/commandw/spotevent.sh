@@ -22,6 +22,9 @@ PLAYER_EVENTS=(
 session_connected
 session_disconnected
 track_changed
+playing
+paused
+stopped
 )
 
 MATCH=0
@@ -52,14 +55,18 @@ INPACTIVE=${arr[7]}
 VOLKNOB_MPD=${arr[8]}
 MULTIROOM_TX=${arr[9]}
 RX_ADDRESSES=$(sudo moodeutl -d -gv rx_addresses)
-# cfg_spotify
-BITRATE=$(sqlite3 $SQLDB "SELECT value FROM cfg_spotify WHERE param='bitrate'")"K"
-CFG_SPOTIFY_FORMAT="Vorbis "$BITRATE
+
+# Source format
+BITRATE=$(sqlite3 $SQLDB "SELECT value FROM cfg_spotify WHERE param='bitrate'")
+SFORMAT="Vorbis "$BITRATE" kbps"
+# Initial playstate
+PLAYSTATE="Pause"
 
 if [[ $INPACTIVE == '1' ]]; then
 	exit 1
 fi
 
+# Connect
 if [[ $PLAYER_EVENT == "session_connected" ]]; then
 	$(sqlite3 $SQLDB "UPDATE cfg_system SET value='1' WHERE param='spotactive'")
 	/usr/bin/mpc stop > /dev/null
@@ -89,6 +96,7 @@ if [[ $PLAYER_EVENT == "session_connected" ]]; then
 	fi
 fi
 
+# Disconnect
 if [[ $PLAYER_EVENT == "session_disconnected" ]]; then
 	# Worker picks this up and sends spotactive0 to front-end
 	$(sqlite3 $SQLDB "UPDATE cfg_system SET value='0' WHERE param='spotactive'")
@@ -122,10 +130,11 @@ if [[ $PLAYER_EVENT == "session_disconnected" ]]; then
 	fi
 fi
 
-# Update metadata and send to front
+# Track change
 if [[ $PLAYER_EVENT == "track_changed" ]]; then
 	ARTIST=$(echo -e -n "$ARTISTS" | tr "\n" ";" | cut -d';' -f1)
 	COVER=$(echo -e -n "$COVERS" | tr "\n" ";" | cut -d';' -f1)
+	OFORMAT=$(/var/www/util/get-oformat.php)
 	METADATA_JSON=$(jq -n -c \
 		--arg a "update_spotmeta" \
 		--arg b "$NAME" \
@@ -133,8 +142,47 @@ if [[ $PLAYER_EVENT == "track_changed" ]]; then
 		--arg d "$ALBUM" \
 		--arg e "$DURATION_MS" \
 		--arg f "$COVER" \
-		--arg g "$CFG_SPOTIFY_FORMAT" \
-		'{fecmd: $a, title: $b, artist: $c, album: $d, duration: $e, cover_url: $f, sformat: $g}')
+		--arg g "$SFORMAT" \
+		--arg h "$OFORMAT" \
+		--arg i "$PLAYSTATE" \
+		'{fecmd: $a, title: $b, artist: $c, album: $d, duration: $e, cover_url: $f, sformat: $g, oformat: $h, playstate: $i}')
 	echo -e "$METADATA_JSON" > $SPOTMETA_CACHE_FILE
 	/var/www/util/send-fecmd.php "$METADATA_JSON"
+fi
+
+# Playstate
+if [[ $PLAYER_EVENT == "paused" || $PLAYER_EVENT == "playing" ]]; then
+	if [[ $PLAYER_EVENT == "paused" ]]; then
+		PLAYSTATE="Pause"
+	else
+		PLAYSTATE="Resume"
+	fi
+	# Read cache into env vars
+	while IFS== read -r key value; do
+		export "$key=$value"
+		debug_log "- Read cache: $key=$value"
+	done < <(jq -r 'to_entries[] | "\(.key)=\(.value)"' $SPOTMETA_CACHE_FILE)
+
+	# Update cache/send to front-end
+	if [[ "$cover_url" == "" ]]; then
+		debug_log "- Cover URL: empty"
+		debug_log "- Update cache: skipped"
+	else
+		OFORMAT=$(/var/www/util/get-oformat.php)
+		METADATA_JSON=$(jq -n -c \
+			--arg a "update_spotmeta" \
+			--arg b "$title" \
+			--arg c "$artist" \
+			--arg d "$album" \
+			--arg e "$duration" \
+			--arg f "$cover_url" \
+			--arg g "$SFORMAT" \
+			--arg h "$OFORMAT" \
+			--arg i "$PLAYSTATE" \
+			'{fecmd: $a, title: $b, artist: $c, album: $d, duration: $e, cover_url: $f, sformat: $g, oformat: $h, playstate: $i}')
+		debug_log "- Update cache: playstate=$PLAYSTATE"
+		echo -e "$METADATA_JSON" > $SPOTMETA_CACHE_FILE
+		debug_log "- Send to front-end"
+		/var/www/util/send-fecmd.php "$METADATA_JSON"
+	fi
 fi

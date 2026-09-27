@@ -11,7 +11,7 @@ const FEAT_MINIDLNA     = 4;        // y DLNA server
 const FEAT_RECORDER     = 8;        //   Stream recorder
 const FEAT_SQUEEZELITE  = 16;       // y Squeezelite renderer
 const FEAT_UPMPDCLI     = 32;       // y UPnP client for MPD
-const FEAT_DEEZER       = 64;       // n Deezer Connect renderer
+const FEAT_QOBUZ        = 64;       // n Qobuz Connect renderer
 const FEAT_ROONBRIDGE   = 128;      // y RoonBridge renderer
 const FEAT_LOCALDISPLAY = 256;      // y Local display
 const FEAT_INPSOURCE    = 512;      // y Input source select
@@ -23,7 +23,7 @@ const FEAT_BLUETOOTH    = 16384;    // y Bluetooth renderer
 const FEAT_DEVTWEAKS    = 32768;	//   Developer tweaks
 const FEAT_MULTIROOM    = 65536;	// y Multiroom audio
 const FEAT_PEPPYDISPLAY = 131072;	// y Peppy display
-//						-------
+//						 -------
 //						  228279
 
 const VOL_KNOB_DEBOUNCE = 150; // ms, coalesce a knob drag's intermediate values
@@ -576,16 +576,16 @@ function engineCmd() {
                     break;
                 case 'aplactive1':
                 case 'aplactive0':
-                case 'deezactive1':
-                case 'deezactive0':
+                case 'qbzactive1':
+                case 'qbzactive0':
                 case 'spotactive1':
                 case 'spotactive0':
                     if (cmd[0].includes('apl')) {
                         var rendererName = 'AirPlay';
                         SESSION.json['aplactive'] = cmd[0].slice(-1);
-                    } else if (cmd[0].includes('deez')){
-                        var rendererName = 'Deezer';
-                        SESSION.json['deezactive'] = cmd[0].slice(-1);
+                    } else if (cmd[0].includes('qbz')){
+                        var rendererName = 'Qobuz';
+                        SESSION.json['qbzactive'] = cmd[0].slice(-1);
                     } else if (cmd[0].includes('spot')) {
                         var rendererName = 'Spotify';
                         SESSION.json['spotactive'] = cmd[0].slice(-1);
@@ -605,7 +605,7 @@ function engineCmd() {
                     $('#inpsrc-metadata-refresh').html('');
                     break;
                 case 'update_aplmeta':
-                case 'update_deezmeta':
+                case 'update_qbzmeta':
                 case 'update_spotmeta':
 					// cmd[1]: '"{"fecmd": "cmd", "key1": "value1", ..., "keyN": "valueN"}"'
                     updateInpsrcMeta(cmd[0], cmd[1]);
@@ -740,7 +740,9 @@ function engineCmdLite() {
             switch (cmd[0]) {
                 case 'libregen_done':
                     $('.busy-spinner').hide();
-                    loadLibrary();
+                    break;
+				case 'libanalyze_done':
+                    $('.busy-spinner').hide();
                     break;
                 case 'nvme_formatting_drive':
                     notify(NOTIFY_TITLE_INFO, 'nvme_formatting_drive', NOTIFY_DURATION_INFINITE);
@@ -893,8 +895,8 @@ function inpSrcIndicator(cmd, msgText) {
 function refreshInpsrcMeta() {
     if (SESSION.json['aplactive'] == '1') {
         cmd = 'get_aplmeta';
-    } else if (SESSION.json['deezactive'] == '1') {
-        cmd = 'get_deezmeta';
+    } else if (SESSION.json['qbzactive'] == '1') {
+        cmd = 'get_qbzmeta';
     } else if (SESSION.json['spotactive'] == '1') {
         cmd = 'get_spotmeta';
     } else {
@@ -921,10 +923,9 @@ function updateInpsrcMeta(cmd, data) {
     $('#inpsrc-backdrop').css('transform', 'scale(1.0)');
 
 	// Formats
-	// - AirPlay: title, artist, album, duration (in ms),  cover_url, sformat, oformat
-	// - Deezer:  title, artist, album, duration (in sec), cover_url, sformat, decoder
-	// - Spotify: title, artist, album, duration (in ms),  cover_url, sformat
-
+	// - AirPlay: title, artist, album, duration (in ms), cover_url, sformat, oformat, playstate
+	// - Qobuz:   title, artist, album, duration (in ms), cover_url, sformat, oformat, playstate
+	// - Spotify: title, artist, album, duration (in ms), cover_url, sformat, oformat, playstate
 	try {
 		var metadata = JSON.parse(data);
 		// DEBUG:
@@ -939,19 +940,59 @@ function updateInpsrcMeta(cmd, data) {
 		return;
 	}
 
+	// Standard metadata
 	var title = metadata['title'];
 	var artist = metadata['artist'];
-    var album = metadata['album'];
-	var timeDivisor = (cmd.includes('_aplmeta') || cmd.includes('_spotmeta')) ? 1000 : 1;
-    var duration = formatSongTime(Math.round(parseInt(metadata['duration']) / timeDivisor));
+	var album = metadata['album'];
 	var coverURL = metadata['cover_url'];
-    var sformat = metadata['sformat'];
+	// Source and output format
+	var sformat = metadata['sformat'];
+	var oformat = metadata['oformat'];
+	// Playstate/now-playing icon
+	var playstate = typeof(metadata['playstate']) == 'undefined' ? '' : metadata['playstate'];
+	if (playstate == 'Pause') {
+		oformat = 'Not playing';
+		var npicon = '';
+	} else if (playstate == 'Resume') {
+		var npicon = 'ss-npicon';
+	} else {
+		var npicon = '';
+	}
+	// Duration (not used at this time)
+	var timeDivisor = (cmd.includes('_aplmeta') || cmd.includes('_spotmeta')) ? 1000 : 1;
+	var duration = formatSongTime(Math.round(parseInt(metadata['duration']) / timeDivisor));
+
+	// Display metadata and cover
     if (title == '' || duration == '') {
-        // Radio station
-        var metadataHTML = '<b>' + artist  + '</b>' + '<br><span id="renderer-format-badge">' + sformat + '</span><br><span>Live</span>';
-    } else {
-        // Song file (NOTE: duration not being displayed at this time)
-        var metadataHTML = '<b>' + artist + ' - ' + title + '</b>' + '<br><span id="renderer-format-badge">' + sformat + '</span><br><span>' + album + '</span>';
+		// Radio station
+		if (SESSION.json['scnsaver_layout'] == 'Default') {
+			$('body').removeClass('rmwide');
+			var metadataHTML = '<b>' + artist  + '</b>' +
+				'<br><span id="renderer-format-badge">' + sformat + '</span><br><span>Live</span>';
+		} else {
+			$('body').addClass('rmwide');
+			var metadataHTML = '<div id="inpsrc-metadata-artist">' + artist + '</div>' +
+				'<div id="inpsrc-metadata-album">' + 'Live' + '</div>' +
+				'<div id="renderer-sformat">' + sformat + '</div>' +
+				'<div id="renderer-oformat" class="' + npicon + '">' + oformat + '</div>';
+		}
+	} else {
+		// Song file
+		if (SESSION.json['scnsaver_layout'] == 'Default') {
+			$('body').removeClass('rmwide');
+			var metadataHTML = '<b>' + artist + ' - ' + title + '</b>' +
+				'<br>' +
+				'<span id="renderer-format-badge">' + sformat + '</span>' +
+				'<br>' +
+				'<span>' + album + '</span>';
+		} else {
+			$('body').addClass('rmwide');
+			var metadataHTML = '<div id="inpsrc-metadata-title">' + title + '</div>' +
+				'<div id="inpsrc-metadata-artist">' + artist + '</div>' +
+				'<div id="inpsrc-metadata-album">' + album + '</div>' +
+				'<div id="renderer-sformat">' + sformat + '</div>' +
+				'<div id="renderer-oformat" class="' + npicon + '">' + oformat + '</div>';
+		}
     }
 
     $('#inpsrc-cover').html('<img class="inpsrc-metadata-cover" ' + 'src="' + coverURL + '">');
@@ -1575,13 +1616,13 @@ function renderUI() {
 
             refreshInpsrcMeta();
     	}
-        // Deezer Connect renderer
-    	if (SESSION.json['deezactive'] == '1') {
-            inpSrcIndicator('deezactive1',
-                '<span id="inpsrc-msg-text">Deezer Active</span>' +
-                '<button class="btn renderer-btn disconnect-deezer" data-job="deezersvc"><i class="fa-regular fa-sharp fa-xmark"></i></button>' +
-                receiversBtn('deezactive1') +
-                audioInfoBtn('deezactive1') +
+        // Qobuz Connect renderer
+    	if (SESSION.json['qbzactive'] == '1') {
+            inpSrcIndicator('qbzactive1',
+                '<span id="inpsrc-msg-text">Qobuz Active</span>' +
+                '<button class="btn renderer-btn disconnect-qobuz" data-job="qobuzsvc"><i class="fa-regular fa-sharp fa-xmark"></i></button>' +
+                receiversBtn('qbzactive1') +
+                audioInfoBtn('qbzactive1') +
                 rendererRefreshBtn()
             );
 
@@ -1642,7 +1683,7 @@ function renderUI() {
 // Multiroom receivers
 function receiversBtn(rendererActive = '') {
     if (SESSION.json['multiroom_tx'] == 'On') {
-        if (rendererActive == 'aplactive1' || rendererActive == 'deezactive1' || rendererActive == 'spotactive1') {
+        if (rendererActive == 'aplactive1' || rendererActive == 'qbzactive1' || rendererActive == 'spotactive1') {
             // data-cmd: multiroom_rx_modal (full modal), multiroom_rx_modal_limited (just the on/off checkbox)
             var html = '<span class="context-menu"><a class="btn renderer-btn" href="#notarget" data-cmd="multiroom_rx_modal"><i class="fa-regular fa-sharp fa-speakers"></i></a></span>';
         } else {
@@ -1656,7 +1697,7 @@ function receiversBtn(rendererActive = '') {
 }
 // Audio info
 function audioInfoBtn(rendererActive = '') {
-    if (rendererActive == 'aplactive1' || rendererActive == 'deezactive1' || rendererActive == 'spotactive1') {
+    if (rendererActive == 'aplactive1' || rendererActive == 'qbzactive1' || rendererActive == 'spotactive1') {
         var html = '<span><a class="btn renderer-btn" href="javascript:audioInfoPlayback()"><i class="fa-regular fa-sharp fa-music"></i></a></span>';
     } else {
         var html = '<br><span><a class="btn audioinfo-renderer" href="javascript:audioInfoPlayback()">Audio info</a></span>';
@@ -3146,10 +3187,10 @@ $(document).on('click', '.context-menu a', function(e) {
             }
             break;
         case 'player_info':
-			$.getJSON('command/music-library.php?cmd=get_db_stats', function(results) {
-				var stats = results == 'none' ?
-					['Artists:Analyze has not been run', 'Albums: ', 'Tracks: '] :
-					results.split(' ');
+			$.getJSON('command/music-library.php?cmd=get_dbanalyze_count', function(results) {
+				var count = String(results).includes('Artists') ?
+					results.split(' ') :
+					['Artists:Use <a href="lib-config.php#music-database">ANALYZE</a> for counts', 'Albums: ', 'Tracks: '];
 		        var networkIface = SESSION.json['wlanssid'] == '' ?
 					'Ethernet' :
 					'Wireless (' + SESSION.json['wlanssid'] + ')';
@@ -3163,9 +3204,9 @@ $(document).on('click', '.context-menu a', function(e) {
 		            'Kernel:&nbsp;&nbsp;' + SESSION.json['kernelver'] + '<br>' +
 		            'MPD:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + SESSION.json['mpdver'] + '<br>' +
 					'Audio:&nbsp;&nbsp;&nbsp;' + SESSION.json['adevname'] + '<br>' +
-					'Artists:&nbsp' + stats[0].split(':')[1]  + '<br>' +
-					'Albums:&nbsp&nbsp' + stats[1].split(':')[1]  + '<br>' +
-					'Tracks:&nbsp&nbsp' + stats[2].split(':')[1],
+					'Artists:&nbsp' + count[0].split(':')[1]  + '<br>' +
+					'Albums:&nbsp&nbsp' + count[1].split(':')[1]  + '<br>' +
+					'Tracks:&nbsp&nbsp' + count[2].split(':')[1],
 		            NOTIFY_DURATION_INFINITE);
 		            // Styling (gets automatically reset by pnotify for other notifications)
 		            $('.ui-pnotify-text').attr('style', 'text-align:left;font-family:monospace;font-size:.85em');
@@ -5385,16 +5426,17 @@ function itemInfoModal(id, data) {
 
 // Renderer active test
 function rendererActive() {
-    return (
-        SESSION.json['aplactive'] == '1' ||
-        SESSION.json['btactive'] == '1' ||
-        SESSION.json['deezactive'] == '1' ||
-        SESSION.json['inpactive'] == '1' ||
-        SESSION.json['paactive'] == '1' ||
-        SESSION.json['rbactive'] == '1' ||
-        SESSION.json['rxactive'] == '1' ||
-        SESSION.json['slactive'] == '1'
-    )
+	return (
+		SESSION.json['btactive'] == '1' ||
+		SESSION.json['aplactive'] == '1' ||
+		SESSION.json['spotactive'] == '1' ||
+		SESSION.json['qbzactive'] == '1' ||
+		SESSION.json['slactive'] == '1' ||
+		SESSION.json['paactive'] == '1' ||
+		SESSION.json['rbactive'] == '1' ||
+		SESSION.json['rxactive'] == '1' ||
+		SESSION.json['inpactive'] == '1'
+	)
 }
 
 // Now-playing icon

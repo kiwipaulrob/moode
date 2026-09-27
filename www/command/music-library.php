@@ -32,8 +32,11 @@ switch ($_GET['cmd']) {
 	case 'get_dbupdate_count':
 		echo json_encode($_SESSION['mpd_dbupdate_count']);
 		break;
-	case 'get_db_stats':
-		echo json_encode($_SESSION['mpd_db_stats']);
+	case 'get_dbregen_count':
+		echo json_encode($_SESSION['mpd_dbregen_count']);
+		break;
+	case 'get_dbanalyze_count':
+		echo json_encode($_SESSION['mpd_dbanalyze_count']);
 		break;
 	case 'lsinfo':
 		$path = isset($_GET['path']) && $_GET['path'] != '' ? $_GET['path'] : '';

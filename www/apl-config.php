@@ -53,7 +53,7 @@ $_select['disable_standby_mode'] .= "<option value=\"auto\" " . (($cfgAirplay['d
 $_select['disable_standby_mode'] .= "<option value=\"never\" " . (($cfgAirplay['disable_standby_mode'] == 'never') ? "selected" : "") . ">Never (Default)</option>\n";
 // Not user configurable
 $_select['cover_art_cache_directory'] = $cfgAirplay['cover_art_cache_directory'];
-//
+
 // Audio
 $_select['audio_backend_latency_offset_in_seconds'] = $cfgAirplay['audio_backend_latency_offset_in_seconds'];
 $_select['audio_backend_buffer_desired_length_in_seconds'] = $cfgAirplay['audio_backend_buffer_desired_length_in_seconds'];
@@ -89,6 +89,9 @@ if ($majorVersion > 4) {
 	$_select['output_channel_mapping'] .= "<option value=\"5.1\" " . (($cfgAirplay['output_channel_mapping'] == '5.1') ? "selected" : "") . ">5.1 Channel</option>\n";
 	$_select['output_channel_mapping'] .= "<option value=\"7.1\" " . (($cfgAirplay['output_channel_mapping'] == '7.1') ? "selected" : "") . ">7.1 Channel</option>\n";
 }
+$_select['ignore_volume_control'] .= "<option value=\"yes\" " . (($cfgAirplay['ignore_volume_control'] == 'yes') ? "selected" : "") . ">Yes</option>\n";
+$_select['ignore_volume_control'] .= "<option value=\"no\" " . (($cfgAirplay['ignore_volume_control'] == 'no') ? "selected" : "") . ">No</option>\n";
+
 // Session
 // Not user configurable
 $_select['run_this_before_entering_active_state'] = $cfgAirplay['run_this_before_entering_active_state'];

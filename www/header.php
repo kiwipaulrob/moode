@@ -150,7 +150,9 @@
 		<div id="inpsrc-style"></div>
 		<div id="inpsrc-cover"></div>
 		<div id="inpsrc-msg" class="inpsrc-msg-default"></div>
-		<div id="inpsrc-metadata"></div>
+		<div id=inpsrc-metadata-parent>
+			<div id="inpsrc-metadata"></div>
+		</div>
 		<div id="inpsrc-metadata-refresh"></div>
 	</div>
 
