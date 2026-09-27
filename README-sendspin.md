@@ -16,7 +16,7 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 
 ## Requirements
 
-- moOde 9.x or later — verified against the current release, moOde 10.3.2 (r1032, Trixie), and the r1033 development tree; the fork is re-merged with every new upstream release
+- moOde 9.x or later — verified against the current release, moOde 10.3.4 (r1034, Trixie); the fork is re-merged with every new upstream release
 - Raspberry Pi 3/4/5
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
@@ -25,14 +25,14 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 ## Key Design Decisions
 
-1. **No custom overlay HTML/CSS** — The metadata display uses moOde's built-in `#inpsrc-indicator` element (already in `header.php`), matching AirPlay/Spotify/Deezer display pattern exactly. Zero additional HTML/CSS footprint.
+1. **No custom overlay HTML/CSS** — The metadata display uses moOde's built-in `#inpsrc-indicator` element (already in `header.php`), matching the AirPlay/Spotify display pattern exactly. Zero additional HTML/CSS footprint.
 2. **Uses moOde's `_audioout` device** — Same ALSA path as AirPlay, Spotify, MPD. No separate ALSA config needed. Volume knob works natively without attenuation hacks.
-3. **Minimal playerlib.js change** — the installer adds only a `FEAT_SENDSPIN` feature-flag constant to `playerlib.js` (falling back to `lib.min.js` on older moOde). The renderer switch and FECmd path are untouched — `sendspinactive` FECmd is unused; the frontend JS polls the metadata API directly instead.
+3. **Minimal playerlib.js change** — the installer adds only a `FEAT_SENDSPIN` feature-flag constant to the JS library (`playerlib.js` where present, `lib.min.js` on minified 10.x deploys). The renderer switch and FECmd path are untouched — `sendspinactive` FECmd is unused; the frontend JS polls the metadata API directly instead.
 4. **Stop/start matches other renderers** — Calls `vol.sh -restore`, CamillaDSP volume sync, and `sendFECmd('sspactive0')` on stop, exactly like AirPlay/Spotify/RoonBridge.
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.4** (moOde 10.3.2 / r1033 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.4** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
 
 ### Installation
 
