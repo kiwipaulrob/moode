@@ -22,8 +22,8 @@ if (isset($_POST['save']) && $_POST['save'] == '1') {
 	generateSendspinService($dbh);
 	
 	// Restart service if running
-	if ($_SESSION['sendspinsvc'] == '1') {
-		sysCmd('sudo systemctl restart sendspin');
+	if (($_SESSION['sendspinsvc'] ?? '0') == '1') {
+		sysCmd('sudo systemctl restart sendspin >/dev/null 2>&1 &');
 		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin settings applied and service restarted');
 	} else {
 		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin settings saved (service not running)');
@@ -33,7 +33,7 @@ if (isset($_POST['save']) && $_POST['save'] == '1') {
 
 // Handle update request
 if (isset($_POST['update_sendspin']) && $_POST['update_sendspin'] == '1') {
-	if ($_SESSION['sendspinsvc'] == '1') {
+	if (($_SESSION['sendspinsvc'] ?? '0') == '1') {
 		updateSendspin();
 		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin updated and restarted');
 	} else {
@@ -114,7 +114,7 @@ if ($pypi_json !== false) {
 }
 
 // Build selects
-$_select['sendspin_update_btn'] = $_SESSION['sendspinsvc'] == '1' && $_update_available ?
+$_select['sendspin_update_btn'] = (($_SESSION['sendspinsvc'] ?? '0') == '1') && $_update_available ?
 	'<button class="btn btn-medium btn-primary config-btn" type="submit" name="update_sendspin" value="1">Update</button>' :
 	'';
 

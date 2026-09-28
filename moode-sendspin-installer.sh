@@ -23,6 +23,7 @@ SCRIPT_VERSION="4.1.4"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
+SENDSPIN_VERSION="7.5.0"
 BASE_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}"
 
 # File locations on moOde
@@ -128,7 +129,11 @@ verify_php_syntax() {
 detect_php_fpm() {
     local fpm_service
     fpm_service=$(systemctl list-units --type=service --state=active 2>/dev/null | grep -oP 'php\d+\.\d+-fpm\.service' | head -1)
-    echo "${fpm_service:-php8.2-fpm.service}"
+    if [[ -z "$fpm_service" ]]; then
+        log_error "Could not detect an active PHP-FPM service (is PHP-FPM running?)" >&2
+        return 1
+    fi
+    echo "$fpm_service"
 }
 
 # Download file from GitHub with retry
@@ -362,18 +367,29 @@ install_prerequisites() {
         pip3 install uv --break-system-packages -q
     fi
     
-    # Check/install sendspin CLI
+    # Check/install sendspin CLI (pinned: fresh installs are reproducible;
+    # deliberate upgrades go through the ssp-config Update button)
     if ! command -v sendspin &>/dev/null; then
-        log_info "  Installing sendspin CLI via uv..."
-        uv tool install sendspin -q
+        log_info "  Installing sendspin CLI v${SENDSPIN_VERSION} via uv..."
+        uv tool install "sendspin==${SENDSPIN_VERSION}" -q
         log_success "  sendspin CLI installed ($(sendspin --version 2>/dev/null || echo 'unknown'))"
     else
-        log_info "  sendspin CLI already installed ($(sendspin --version 2>/dev/null || echo 'unknown'))"
+        local installed_version
+        installed_version=$(sendspin --version 2>/dev/null || echo 'unknown')
+        if [[ "$installed_version" != *"$SENDSPIN_VERSION"* ]]; then
+            log_warn "  sendspin CLI is ${installed_version} (installer pin is v${SENDSPIN_VERSION}); leaving as-is"
+        else
+            log_info "  sendspin CLI already installed (${installed_version})"
+        fi
     fi
     
     # Tune PHP-FPM pool for better responsiveness with SendSpin metadata polling
-    local fpm_pool="/etc/php/$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo '8.2')/fpm/pool.d/www.conf"
-    if [[ -f "$fpm_pool" ]]; then
+    local php_ver
+    php_ver=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null)
+    if [[ -z "$php_ver" ]]; then
+        log_warn "  Could not determine PHP version; skipping PHP-FPM pool tuning"
+    elif [[ -f "/etc/php/${php_ver}/fpm/pool.d/www.conf" ]]; then
+        local fpm_pool="/etc/php/${php_ver}/fpm/pool.d/www.conf"
         log_info "  Tuning PHP-FPM pool for responsiveness..."
         sed -i 's/^pm.start_servers = .*/pm.start_servers = 8/' "$fpm_pool" 2>/dev/null || true
         sed -i 's/^pm.min_spare_servers = .*/pm.min_spare_servers = 4/' "$fpm_pool" 2>/dev/null || true
@@ -1035,6 +1051,19 @@ install_ren_config_html() {
 			<div class="controls">
 				<a data-toggle="modal" href="#sendspin-restart" $_sendspin_link_disable><button class="btn btn-medium btn-primary config-btn" $_sendspin_btn_disable>Restart</button></a>
 				<span class="config-btn-after">SendSpin</span>
+			</div>
+
+			<label class="control-label">Resume MPD</label>
+			<div class="controls">
+				<div class="toggle">
+					<label class="toggle-radio toggle-rsmafterss" for="toggle-rsmafterss-2">ON </label>$_select[rsmafterss_on]
+					<label class="toggle-radio toggle-rsmafterss" for="toggle-rsmafterss-1">OFF</label>$_select[rsmafterss_off]
+				</div>
+				<button id="btn-set-rsmafterss" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_rsmafterss" value="novalue" $_sendspin_btn_disable><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-rsmafterss" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-rsmafterss" class="config-help-info">
+					Resume MPD playback after SendSpin streaming stops.
+                </span>
 			</div>
 		</div>
 EOF
@@ -1860,7 +1889,7 @@ uninstall_sendspin() {
     
     echo ""
     log_info "Restart services to complete cleanup:"
-    echo "  sudo systemctl restart $(detect_php_fpm)"
+    echo "  sudo systemctl restart $(detect_php_fpm || echo '<php-fpm-service>')"
 }
 
 # ============================================================================
@@ -1958,35 +1987,40 @@ run_installation() {
     echo ""
     log_section "Starting Installation"
     
-    # Enable strict error handling for installation phase
-    set -e
+    # No set -e here: aborting mid-patch would leave a half-patched tree.
+    # Each step reports; the run stops cleanly at the gate below.
+    local install_failed=false
     
     # Install prerequisites (Python, uv, sendspin CLI)
-    install_prerequisites
+    install_prerequisites || { log_error "install_prerequisites failed"; install_failed=true; }
     
     # Install based on mode
     if [[ "$INSTALL_MODE" == "minimal" ]]; then
-        install_systemd_service
-        install_database_entries_minimal
+        install_systemd_service || { log_error "install_systemd_service failed"; install_failed=true; }
+        install_database_entries_minimal || { log_error "install_database_entries_minimal failed"; install_failed=true; }
     else
-        install_systemd_service
-        install_constants_php
-        install_renderer_php
-        install_playerlib_js
-        install_worker_php
-        install_ren_config_php
-        install_ren_config_html
-        install_ssp_config
-        install_commandw_scripts
-        install_sendspin_meta_php
-        install_sendspin_display_js
-        install_header_php_meta
-        install_sendspin_metadata_sink
-        install_sendspin_metadata_sink_service
-        install_setup_txt
-        install_database_entries_full
+        install_systemd_service || { log_error "install_systemd_service failed"; install_failed=true; }
+        install_constants_php || { log_error "install_constants_php failed"; install_failed=true; }
+        install_renderer_php || { log_error "install_renderer_php failed"; install_failed=true; }
+        install_playerlib_js || { log_error "install_playerlib_js failed"; install_failed=true; }
+        install_worker_php || { log_error "install_worker_php failed"; install_failed=true; }
+        install_ren_config_php || { log_error "install_ren_config_php failed"; install_failed=true; }
+        install_ren_config_html || { log_error "install_ren_config_html failed"; install_failed=true; }
+        install_ssp_config || { log_error "install_ssp_config failed"; install_failed=true; }
+        install_commandw_scripts || { log_error "install_commandw_scripts failed"; install_failed=true; }
+        install_sendspin_meta_php || { log_error "install_sendspin_meta_php failed"; install_failed=true; }
+        install_sendspin_display_js || { log_error "install_sendspin_display_js failed"; install_failed=true; }
+        install_header_php_meta || { log_error "install_header_php_meta failed"; install_failed=true; }
+        install_sendspin_metadata_sink || { log_error "install_sendspin_metadata_sink failed"; install_failed=true; }
+        install_sendspin_metadata_sink_service || { log_error "install_sendspin_metadata_sink_service failed"; install_failed=true; }
+        install_setup_txt || { log_error "install_setup_txt failed"; install_failed=true; }
+        install_database_entries_full || { log_error "install_database_entries_full failed"; install_failed=true; }
     fi
     
+    if [[ "$install_failed" == "true" ]]; then
+        log_error "Installation aborted: one or more steps failed. Restore from ${BACKUP_DIR} if needed."
+        exit 1
+    fi
     log_section "Post-Installation Verification"
     
     # Verify installation
@@ -2020,7 +2054,7 @@ run_installation() {
     if [[ "$verify_passed" == "true" ]]; then
         log_success "SendSpin installation completed successfully!"
         # Regenerate service file from DB defaults so it stays in sync
-        install_regenerate_service
+        install_regenerate_service || log_warn "service regeneration failed (non-fatal)"
     else
         log_warn "Installation completed with some verification failures."
     fi
@@ -2041,7 +2075,7 @@ run_installation() {
         echo "  Files installed but SendSpin service is NOT running yet."
         echo ""
         echo "  To activate:"
-        echo "    1. Restart PHP:  sudo systemctl restart $(detect_php_fpm)"
+        echo "    1. Restart PHP:  sudo systemctl restart $(detect_php_fpm || echo '<php-fpm-service>')"
         echo "    2. Open moOde web UI → Configure → Renderers"
         echo "    3. Find the \"SendSpin\" section"
         echo "    4. Toggle Service to ON and click the save arrow"
