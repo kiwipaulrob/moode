@@ -1011,11 +1011,15 @@ install_ren_config_html() {
     
     backup_file "$target" "ren-config.html"
     
-    # Find the RoonBridge section end and insert after it
+    # Find the RoonBridge section START and insert BEFORE it, so SendSpin is a
+    # sibling control-group rather than a child of RoonBridge. Inserting after the
+    # anchor nested it inside RoonBridge, and moOde sets
+    # $_feat_roonbridge = 'hide' when the RoonBridge feature bit is clear, which
+    # hid the whole SendSpin UI via .hide{display:none}.
     local line=$(grep -n '_feat_roonbridge' "$target" | tail -1 | cut -d: -f1)
     
     if [[ -z "$line" ]]; then
-        # Try to find the closing </form> after RoonBridge
+        # Fallback: insert before the third </form>
         line=$(grep -n '</form>' "$target" | head -3 | tail -1 | cut -d: -f1)
     fi
     
@@ -1024,8 +1028,8 @@ install_ren_config_html() {
         return 1
     fi
     
-    # Insert SendSpin UI section
-    head -n $((line)) "$target" > /tmp/ren-config-new.html
+    # Insert SendSpin UI section immediately BEFORE the anchor line
+    head -n $((line-1)) "$target" > /tmp/ren-config-new.html
     
     cat >> /tmp/ren-config-new.html << 'EOF'
 
@@ -1081,7 +1085,7 @@ install_ren_config_html() {
 		</div>
 EOF
     
-    tail -n +$((line+1)) "$target" >> /tmp/ren-config-new.html
+    tail -n +$((line)) "$target" >> /tmp/ren-config-new.html
     
     # Also add the restart modal at the end
     cat >> /tmp/ren-config-new.html << 'EOF'
