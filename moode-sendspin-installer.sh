@@ -549,8 +549,10 @@ function getSendspinStatus() {
 
 function startSendspin() {
 	// Save MPD state before starting
-	$mpdStatus = sysCmd('mpc status')[0];
-	$mpdWasPlaying = strpos($mpdStatus, 'playing') !== false;
+	// moOde pattern: grep the state line. `mpc status` line[0] is the CURRENT
+	// SONG, not the state, so indexing [0] always reported "not playing" and
+	// the Resume-MPD feature could never fire.
+	$mpdWasPlaying = !empty(sysCmd('mpc status | grep -F "[playing]"'));
 	
 	// Persist in database (survives PHP-FPM restarts)
 	$dbh = sqlConnect();
@@ -815,8 +817,7 @@ sendspin_cases = '''
 		break;
 	case 'sendspinrestart':
 		// Save MPD state before stopping
-		$mpdStatus = sysCmd('mpc status');
-		$mpdWasPlaying = (!empty($mpdStatus) && strpos($mpdStatus[0], 'playing') !== false);
+		$mpdWasPlaying = !empty(sysCmd('mpc status | grep -F "[playing]"'));
 		phpSession('write', 'mpd_was_playing', $mpdWasPlaying ? '1' : '0');
 		sysCmd('mpc stop');
 		stopSendspin();
