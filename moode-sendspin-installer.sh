@@ -344,6 +344,11 @@ check_installation() {
 install_prerequisites() {
     log_info "Checking and installing prerequisites..."
     
+    # uv installs CLI tools into /root/.local/bin, which is NOT on root's PATH in a
+    # non-login shell. `command -v sendspin` therefore always failed here, so the CLI
+    # was reinstalled on every run and the "already installed" branch was dead code.
+    export PATH="/root/.local/bin:${PATH}"
+    
     # Check/install system dependencies
     if ! dpkg -l libportaudio2 2>/dev/null | grep -q '^ii'; then
         log_info "  Installing libportaudio2 (audio library)..."
@@ -379,6 +384,14 @@ install_prerequisites() {
         sed -i 's/^pm.min_spare_servers = .*/pm.min_spare_servers = 4/' "$fpm_pool" 2>/dev/null || true
         sed -i 's/^pm.max_spare_servers = .*/pm.max_spare_servers = 12/' "$fpm_pool" 2>/dev/null || true
         log_success "  PHP-FPM pool tuned (more idle children for responsiveness)"
+    fi
+    
+    # The CLI must exist at the absolute path the systemd unit uses, or nothing
+    # downstream can work. Fail loudly instead of reporting success with a dead
+    # renderer (the caller turns a non-zero return into an aborted install).
+    if [[ ! -x /root/.local/share/uv/tools/sendspin/bin/sendspin ]]; then
+        log_error "  sendspin CLI not found at /root/.local/share/uv/tools/sendspin/bin/sendspin"
+        return 1
     fi
     
     record_install "prerequisites"
@@ -1472,8 +1485,13 @@ COMMAND REFERENCE
 ################################################################################
 EOF
     
-    chown www-data:www-data "$target"
-    chmod 644 "$target"
+    chown www-data:www-data "$target" || { log_error "  Failed to chown ${target}"; return 1; }
+    chmod 644 "$target" || { log_error "  Failed to chmod ${target}"; return 1; }
+    
+    if [[ ! -s "$target" ]]; then
+        log_error "  Setup guide write produced no output: ${target}"
+        return 1
+    fi
     
     record_install "setup_txt"
     log_success "Documentation installed"
@@ -1562,8 +1580,13 @@ LimitMEMLOCK=8388608
 WantedBy=multi-user.target
 SVCEOF
     
-    chmod 644 "$service_file"
-    systemctl daemon-reload
+    if [[ ! -s "$service_file" ]]; then
+        log_error "  Service file regeneration produced no output: ${service_file}"
+        return 1
+    fi
+    
+    chmod 644 "$service_file" || { log_error "  chmod failed on ${service_file}"; return 1; }
+    systemctl daemon-reload || { log_error "  systemctl daemon-reload failed"; return 1; }
     log_success "Service file regenerated from DB defaults"
 }
 
