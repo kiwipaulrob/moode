@@ -19,7 +19,7 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.4"
+SCRIPT_VERSION="4.1.5"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
@@ -643,7 +643,7 @@ function checkSendspinUpdate() {
 }
 
 function updateSendspin() {
-    sysCmd('sudo -u root bash -c "/root/.local/share/uv/tools/sendspin/bin/python -m uv tool upgrade sendspin 2>&1 && systemctl restart sendspin" > /tmp/sendspin-update.log 2>&1 &');
+    sysCmd('sudo -u root bash -c "uv tool upgrade sendspin 2>&1 && systemctl restart sendspin" > /tmp/sendspin-update.log 2>&1 &');
     workerLog('updateSendspin(): upgrade launched in background');
     return true;
 }
@@ -2102,8 +2102,13 @@ run_installation() {
         echo ""
         echo "  Files installed but SendSpin service is NOT running yet."
         echo ""
+        echo "  REBOOT REQUIRED BEFORE TESTING"
+        echo "  The moOde worker is a long-running PHP daemon that loads renderer.php"
+        echo "  only at startup, so the SendSpin service controls and Resume MPD stay"
+        echo "  inert until the worker restarts. A reboot also restarts PHP."
+        echo ""
         echo "  To activate:"
-        echo "    1. Restart PHP:  sudo systemctl restart $(detect_php_fpm || echo '<php-fpm-service>')"
+        echo "    1. Reboot:  sudo reboot"
         echo "    2. Open moOde web UI → Configure → Renderers"
         echo "    3. Find the \"SendSpin\" section"
         echo "    4. Toggle Service to ON and click the save arrow"

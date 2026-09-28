@@ -32,7 +32,7 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.4** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.5** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
 
 ### Installation
 
@@ -160,6 +160,16 @@ cd moode && git pull && sudo bash moode-sendspin-installer.sh
 ```
 
 The installer detects partial installations (components missing after a moOde update) and reinstalls **only** the missing components — including re-patching `worker.php` and repairing the boot-time startup block. Re-running is safe and idempotent: database settings and custom files (config page, metadata overlay) survive and are never duplicated or reset.
+
+### Reboot is required
+
+After installing (or re-running the installer after a moOde update) you **must reboot the Pi**:
+
+```bash
+sudo reboot
+```
+
+The moOde worker is a long-running PHP daemon started from `/etc/rc.local` that loads `renderer.php` **only at startup**. Until it restarts, the SendSpin service controls and the Resume MPD feature are inert even though every file is correctly installed — the installer patches the files, not the running process. moOde's own updater behaves the same way ("Update installed, restart required"). A reboot also restarts PHP-FPM, so it replaces the PHP restart step entirely.
 
 ## Uninstall
 
