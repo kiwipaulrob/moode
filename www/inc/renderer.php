@@ -661,7 +661,7 @@ function checkSendspinUpdate() {
 }
 
 function updateSendspin() {
-    sysCmd('sudo -u root bash -c "/root/.local/share/uv/tools/sendspin/bin/python -m uv tool upgrade sendspin 2>&1 && systemctl restart sendspin" > /tmp/sendspin-update.log 2>&1 &');
+    sysCmd('sudo -u root bash -c "uv tool upgrade sendspin 2>&1 && systemctl restart sendspin" > /tmp/sendspin-update.log 2>&1 &');
     workerLog('updateSendspin(): upgrade launched in background');
     return true;
 }
