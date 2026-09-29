@@ -109,7 +109,7 @@ function sqlUpdate($table, $dbh, $key = '', $value) {
 		// Standard param|value tables
 		default:
 			$queryStr = "UPDATE " . $table .
-				" SET value='" . $value .
+				" SET value='" . SQLite3::escapeString($value) .
 				"' WHERE param='" . $key . "'";
 			break;
 	}
