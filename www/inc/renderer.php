@@ -545,17 +545,22 @@ function stopAllRenderers() {
 // SendSpin Multi-Room Audio renderer functions
 
 function getSendspinStatus() {
-	// Check systemd service status safely
+	// Streaming if any sendspin process holds a PCM device open.
+	// NOTE: do not hardcode /dev/snd/pcmC0D0p (wrong on any non-card-0
+	// device) and do not substring-match PIDs (PID 12 matches PID 123).
+	// /proc/<pid>/fd gives exact per-process device ownership instead.
 	$result = sysCmd('systemctl is-active sendspin 2>/dev/null');
 	$status = (!empty($result) && isset($result[0])) ? $result[0] : 'inactive';
 	if ($status === 'active') {
-		// Check if actually streaming (process using audio)
-		$sndResult = sysCmd('fuser /dev/snd/pcmC0D0p 2>/dev/null');
-		if (!empty($sndResult)) {
-			// Check if sendspin is using the device
-			$sendspinPids = sysCmd('pgrep -f sendspin 2>/dev/null');
-			foreach ($sendspinPids as $pid) {
-				if (strpos($sndResult[0], $pid) !== false) {
+		$sendspinPids = sysCmd('pgrep -x sendspin 2>/dev/null');
+		foreach ($sendspinPids as $pid) {
+			$pid = trim($pid);
+			if ($pid === '' || !ctype_digit($pid)) {
+				continue;
+			}
+			foreach (glob('/proc/' . $pid . '/fd/*') ?: array() as $fd) {
+				$target = @readlink($fd);
+				if (is_string($target) && strncmp($target, '/dev/snd/pcm', 13) === 0) {
 					return 'streaming';
 				}
 			}
