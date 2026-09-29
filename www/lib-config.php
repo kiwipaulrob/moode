@@ -20,10 +20,6 @@ chkVariables($_POST, array('password'));
 
 // For "save/remove" actions
 $initiateLibraryUpd = false;
-// For "Analyze music database"
-$_mpd_db_stats = '<span class="config-help-static">' .
-	($_SESSION['mpd_db_stats'] == 'none' ? 'Analyze has not been run' : $_SESSION['mpd_db_stats']) .
-	'</span>';
 
 //----------------------------------------------------------------------------//
 // Library Config
@@ -49,15 +45,6 @@ if (isset($_POST['update_fs_mountmon'])) {
 		submitJob('fs_mountmon', $_POST['fs_mountmon']);
 	}
 }
-// Folder view only
-if (isset($_POST['update_lib_fv_only'])) {
-	unset($_GET['cmd']);
-	if ($_POST['lib_fv_only'] == 'on') {
-		clearLibCacheAll();
-		phpSession('write', 'current_view', 'folder');
-	}
-	$_SESSION['lib_fv_only'] = $_POST['lib_fv_only'];
-}
 // Regenerate MPD database and library tag cache
 if (isset($_POST['regen_library'])) {
 	unset($_GET['cmd']);
@@ -68,15 +55,9 @@ if (isset($_POST['regen_library'])) {
 // Analyze MPD database
 if (isset($_POST['analyze_mpd_db'])) {
 	unset($_GET['cmd']);
-	if (false === ($sock = openMpdSock('localhost', 6600))) {
-		$msg = 'CRITICAL ERROR: lib-config.php: Connection to MPD failed';
-		workerLog($msg);
-	} else {
-		$msg = getLibraryStats($sock);
-		closeMpdSock($sock);
-		$_SESSION['mpd_db_stats'] = $msg;
-	}
-	$_mpd_db_stats = '<span class="config-help-static">' . $msg . '</span>';
+	submitJob('analyze_library', '', NOTIFY_TITLE_INFO,
+		'Analyzing the database. Stay on this screen until the progress spinner disappears.<br><br>Click VIEW STATUS for progress.',
+		NOTIFY_DURATION_INFINITE);
 }
 // Clear library cache
 if (isset($_POST['clear_libcache'])) {
@@ -85,7 +66,16 @@ if (isset($_POST['clear_libcache'])) {
 	$_SESSION['notify']['title'] = NOTIFY_TITLE_INFO;
 	$_SESSION['notify']['msg'] = 'Library tag cache has been cleared. It will be created when returning to Playback or Library view.';
 }
-// Scan or ignore .cue files by adding or removing *.cue from /var/lib/mpd/music/.mpdignore
+// Folder view only
+if (isset($_POST['update_lib_fv_only'])) {
+	unset($_GET['cmd']);
+	if ($_POST['lib_fv_only'] == 'on') {
+		clearLibCacheAll();
+		phpSession('write', 'current_view', 'folder');
+	}
+	$_SESSION['lib_fv_only'] = $_POST['lib_fv_only'];
+}
+// Ignore/scan .cue files by removing/adding *.cue from /var/lib/mpd/music/.mpdignore
 if (isset($_POST['update_cuefiles_ignore'])) {
 	unset($_GET['cmd']);
 	if (isset($_POST['cuefiles_ignore']) && $_POST['cuefiles_ignore'] != $_SESSION['cuefiles_ignore']) {
@@ -93,7 +83,7 @@ if (isset($_POST['update_cuefiles_ignore'])) {
 		submitJob('mpd_ignore', ($_POST['cuefiles_ignore'] . ',cue'), NOTIFY_TITLE_INFO, NOTIFY_MPD_UPDATE_LIBRARY);
 	}
 }
-// Scan or ignore moode files by adding or removing the filenames from /var/lib/mpd/music/.mpdignore
+// Ignore/scan moode files by removing/adding the filenames from /var/lib/mpd/music/.mpdignore
 if (isset($_POST['update_moodefiles_ignore'])) {
 	unset($_GET['cmd']);
 	if (isset($_POST['moodefiles_ignore']) && $_POST['moodefiles_ignore'] != $_SESSION['moodefiles_ignore']) {
@@ -449,6 +439,14 @@ if (!isset($_GET['cmd'])) {
 		$_usb_mounts .= '<span class="btn-large config-btn config-btn-music-source config-btn-music-source-none">None auto-mounted</span>';
 	}
 
+	// DB update status
+	$_dbregen_status = 'Files processed: ' . $_SESSION['mpd_dbregen_count'];
+
+	// DB analyze status
+	$_dbanalyze_status = str_contains($_SESSION['mpd_dbanalyze_count'], 'Artists') ?
+		$_SESSION['mpd_dbanalyze_count'] :
+		'Files processed: ' . $_SESSION['mpd_dbanalyze_count'];
+
 	// Folder view only
 	$autoClick = " onchange=\"autoClick('#btn-set-lib-fv-only');\"";
 	$_select['lib_fv_only_on'] = "<input type=\"radio\" name=\"lib_fv_only\" id=\"toggle-lib-fv-only-1\" value=\"on\" " . (($_SESSION['lib_fv_only'] == 'on') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
@@ -463,9 +461,6 @@ if (!isset($_GET['cmd'])) {
 	$autoClick = " onchange=\"autoClick('#btn-set-moodefiles-ignore');\"";
 	$_select['moodefiles_ignore_on'] = "<input type=\"radio\" name=\"moodefiles_ignore\" id=\"toggle-moodefiles-ignore-1\" value=\"1\" " . (($_SESSION['moodefiles_ignore'] == '1') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
 	$_select['moodefiles_ignore_off'] = "<input type=\"radio\" name=\"moodefiles_ignore\" id=\"toggle-moodefiles-ignore-2\" value=\"0\" " . (($_SESSION['moodefiles_ignore'] == '0') ? "checked=\"checked\"" : "") . $autoClick . ">\n";
-
-	// DB update status
-	$_dbupdate_status = 'Files indexed: ' . $_SESSION['mpd_dbupdate_count'];
 
 	// Thumbcache status
 	$_thmcache_status = $_SESSION['thmcache_status'];
