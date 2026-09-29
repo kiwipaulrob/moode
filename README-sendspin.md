@@ -171,6 +171,31 @@ sudo reboot
 
 The moOde worker is a long-running PHP daemon started from `/etc/rc.local` that loads `renderer.php` **only at startup**. Until it restarts, the SendSpin service controls and the Resume MPD feature are inert even though every file is correctly installed — the installer patches the files, not the running process. moOde's own updater behaves the same way ("Update installed, restart required"). A reboot also restarts PHP-FPM, so it replaces the PHP restart step entirely.
 
+### Never restore moOde files from the GitHub repo
+
+The repo and a running Pi do **not** hold the same files. The GitHub repo contains **pre-build source**; a Pi holds **post-build output** produced by moOde's gulp build. The filenames are identical, so fetching a "stock" file from the repo silently downgrades the built one.
+
+Two files the SendSpin patch touches differ, and restoring either breaks the web UI:
+
+| File | Repo (source) | Deployed (built) |
+|---|---|---|
+| `www/header.php` | `<!-- build:css ... -->` markers plus ~39 individual `css/*.css` / `js/*.js` links | `css/styles.min.css` + `js/lib.min.js` (+ `main.min.*`, `config.min.js`) |
+| `www/ren-config.php` | `include('footer.php')` | `include('footer.min.php')` |
+
+Those ~39 individual assets and `footer.php` are **never deployed** — only the `.min` bundles ship. moOde answers a missing asset with **302**, not 404, so the browser receives HTML where CSS/JS was expected: every page renders completely unstyled, with nothing in the browser console or the server log to explain it. `www/js/lib.min.js` is the build artifact most people remember to exclude; it is not the only one.
+
+Any procedure that stages "stock" files onto a Pi — including an in-place-update simulation — must skip build outputs entirely. Only build-free files are safe to restore from the repo: `www/inc/constants.php`, `www/inc/renderer.php`, `www/daemon/worker.php`, `www/templates/*.html`.
+
+**If it has already happened**, the built file is in the automatic pre-change backup:
+
+```bash
+sudo cp -a /home/<user>/pre-update-<timestamp>/live-before-restore-header.php /var/www/header.php
+sudo chown root:root /var/www/header.php && sudo chmod 755 /var/www/header.php
+sudo systemctl restart php8.4-fpm     # match your Pi's PHP version
+```
+
+A built `header.php` already carries the SendSpin `<script src="js/sendspin-display.js" defer>` line, so restoring it keeps the integration intact. The installer refuses to patch a source-variant `header.php` and tells you why.
+
 ### Known upstream issue: aiosendspin pinned below 6.1
 
 `sendspin` 7.5.0 declares `aiosendspin[server]~=6.0.1`, which PEP 440 resolves to `>=6.0.1,<6.1.0`. `aiosendspin` 6.1.0 added `seek` and `seek_relative` to `MediaCommand`, and servers now advertise them — **Music Assistant 2.10.x** sends `seek_relative` in `supported_commands`, as does Loxone/Sonn Core 4.0.0-beta.21. On 6.0.x that value cannot be parsed, and because `supported_commands` is typed `list[MediaCommand]` the **entire `server/state` message is discarded**:
