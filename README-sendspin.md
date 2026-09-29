@@ -149,6 +149,10 @@ After installation:
 5. Toggle **Resume MPD** if desired (restores MPD after SendSpin stops)
 6. Click **Edit** for advanced settings (audio format, log level, updates)
 
+The section looks like this once installed (Service ON, Resume MPD ON):
+
+![SendSpin section of the moOde Renderers page](docs/sendspin-renderers.png)
+
 Your SendSpin endpoint appears automatically via mDNS on your network. Controllers like Music Assistant discover it without additional configuration.
 
 ## Post-Install: moOde Updates
