@@ -19,7 +19,7 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.6"
+SCRIPT_VERSION="4.1.7"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
@@ -282,6 +282,22 @@ detect_sendspin_meta_php() {
 
 detect_sendspin_display_js() {
     [[ -f "${WWW_DIR}/js/sendspin-display.js" ]]
+}
+
+# moOde ships gulp-BUILT files; the GitHub repo holds the pre-build SOURCE. Same
+# filename, different file: the built header.php emits <link>/<script> tags for
+# the .min bundles, while the source one links ~39 individual css/js files that
+# are never deployed -- each answers 302 (not 404), so the entire web UI renders
+# unstyled with no browser error. Restoring "stock" files from the repo, or any
+# in-place-update simulation, produces exactly that.
+#
+# BOTH conditions are required. The source file still NAMES the bundles, but only
+# inside its `<!-- build:css ... -->` / `<!-- build:js ... -->` marker comments,
+# so a plain grep for "styles.min.css" matches the broken file as well.
+verify_header_php_built() {
+    [[ -f "${WWW_DIR}/header.php" ]] || return 0
+    grep -qE '<(link|script)[^>]*(styles\.min\.css|lib\.min\.js)' "${WWW_DIR}/header.php" \
+        && ! grep -qE '<!--[[:space:]]*build:(css|js)' "${WWW_DIR}/header.php"
 }
 
 detect_header_php_meta() {
@@ -1298,6 +1314,16 @@ install_header_php_meta() {
     
     local target="${WWW_DIR}/header.php"
     
+    # Refuse to patch a source-variant header.php: the UI is already unstyled, and
+    # inserting the script tag would make detect_header_php_meta report success,
+    # hiding the real fault behind a passing check.
+    if ! verify_header_php_built; then
+        log_error "header.php is the UNBUILT source variant (no reference to css/styles.min.css or js/lib.min.js)."
+        log_error "The moOde web UI will render unstyled. Restore the built header.php, e.g.:"
+        log_error "  cp -a <backup>/live-before-restore-header.php ${WWW_DIR}/header.php"
+        return 1
+    fi
+    
     if detect_header_php_meta; then
         log_warn "sendspin-display.js already in header.php"
         return 0
@@ -2122,6 +2148,7 @@ run_installation() {
         detect_sendspin_meta_php || { log_error "sendspin-meta.php verification failed"; verify_passed=false; }
         detect_sendspin_display_js || { log_error "sendspin-display.js verification failed"; verify_passed=false; }
         detect_header_php_meta || { log_warn "header.php JS include may be missing"; }
+        verify_header_php_built || { log_error "header.php is the UNBUILT source variant - the web UI will render unstyled"; verify_passed=false; }
         detect_aiosendspin_override || { log_warn "aiosendspin override missing - MA controller state may not sync (upstream sendspin#280)"; }
         detect_sendspin_metadata_sink || { log_warn "sendspin-metadata-sink.py not deployed (HA metadata requires it)"; }
         detect_sendspin_metadata_sink_service || { log_warn "sendspin-metadata-sink.service not installed"; }
