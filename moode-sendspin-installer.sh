@@ -19,11 +19,15 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.5"
+SCRIPT_VERSION="4.1.6"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
 SENDSPIN_VERSION="7.5.0"
+# aiosendspin workaround — see ensure_aiosendspin_override() and README (upstream sendspin#280)
+AIOSENDSPIN_OVERRIDE_SPEC=">=6.1.1,<6.2"
+AIOSENDSPIN_MIN_VERSION="6.1.1"
+AIOSENDSPIN_OVERRIDE_FILE="/etc/moode-sendspin-aiosendspin.overrides.txt"
 BASE_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}"
 
 # File locations on moOde
@@ -284,6 +288,13 @@ detect_header_php_meta() {
     [[ -f "${WWW_DIR}/header.php" ]] && grep -q "sendspin-display.js" "${WWW_DIR}/header.php"
 }
 
+detect_aiosendspin_override() {
+    local sp cur
+    sp=$(ls -d /root/.local/share/uv/tools/sendspin/lib/python*/site-packages 2>/dev/null | head -1)
+    cur=$(ls "$sp" 2>/dev/null | sed -n 's/^aiosendspin-\([0-9][0-9.]*\)\.dist-info$/\1/p' | head -1)
+    [[ -n "$cur" ]] && [[ "$(printf '%s\n%s\n' "$AIOSENDSPIN_MIN_VERSION" "$cur" | sort -V | head -1)" == "$AIOSENDSPIN_MIN_VERSION" ]]
+}
+
 # ============================================================================
 # CHECK / STATUS FUNCTION
 # ============================================================================
@@ -346,6 +357,45 @@ check_installation() {
 # PREREQUISITES (Python, uv, sendspin CLI)
 # ============================================================================
 
+# Apply the aiosendspin override (upstream Sendspin-Protocol/sendspin#280).
+# sendspin 7.5.0 declares aiosendspin[server]~=6.0.1, i.e. >=6.0.1,<6.1.0.
+# aiosendspin 6.1.0 added seek/seek_relative to MediaCommand, and servers now
+# advertise them (Music Assistant 2.10.x sends seek_relative). On 6.0.x the
+# value cannot be parsed and, because supported_commands is typed
+# list[MediaCommand], the WHOLE server/state message is discarded — so
+# controller state (volume/mute/repeat/shuffle) silently stops syncing while
+# audio keeps playing and the client still looks alive.
+#
+# The override is recorded in the uv tool receipt, which makes it a declared
+# part of the resolution rather than a hand-patched environment — so it also
+# survives `uv tool upgrade` (which would otherwise re-resolve back to 6.0.x).
+# Remove it once upstream relaxes the pin.
+ensure_aiosendspin_override() {
+    local sp cur new
+    sp=$(ls -d /root/.local/share/uv/tools/sendspin/lib/python*/site-packages 2>/dev/null | head -1)
+    cur=$(ls "$sp" 2>/dev/null | sed -n 's/^aiosendspin-\([0-9][0-9.]*\)\.dist-info$/\1/p' | head -1)
+
+    if detect_aiosendspin_override; then
+        log_info "  aiosendspin ${cur} satisfies the override (${AIOSENDSPIN_OVERRIDE_SPEC})"
+        return 0
+    fi
+
+    log_info "  Applying aiosendspin override ${AIOSENDSPIN_OVERRIDE_SPEC} (upstream sendspin#280)"
+    printf 'aiosendspin%s\n' "$AIOSENDSPIN_OVERRIDE_SPEC" > "$AIOSENDSPIN_OVERRIDE_FILE" || {
+        log_warn "  Could not write ${AIOSENDSPIN_OVERRIDE_FILE}"
+        return 1
+    }
+
+    if uv tool install "sendspin==${SENDSPIN_VERSION}" --overrides "$AIOSENDSPIN_OVERRIDE_FILE" -q; then
+        new=$(ls "$sp" 2>/dev/null | sed -n 's/^aiosendspin-\([0-9][0-9.]*\)\.dist-info$/\1/p' | head -1)
+        log_success "  aiosendspin override applied (${cur:-none} -> ${new:-unknown})"
+        return 0
+    fi
+
+    log_warn "  Could not apply the aiosendspin override"
+    return 1
+}
+
 install_prerequisites() {
     log_info "Checking and installing prerequisites..."
     
@@ -387,7 +437,9 @@ install_prerequisites() {
             log_info "  sendspin CLI already installed (${installed_version})"
         fi
     fi
-    
+
+    ensure_aiosendspin_override || log_warn "  aiosendspin override not applied - Music Assistant controller state may not sync"
+
     # Tune PHP-FPM pool for better responsiveness with SendSpin metadata polling
     local php_ver
     php_ver=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null)
@@ -2070,6 +2122,7 @@ run_installation() {
         detect_sendspin_meta_php || { log_error "sendspin-meta.php verification failed"; verify_passed=false; }
         detect_sendspin_display_js || { log_error "sendspin-display.js verification failed"; verify_passed=false; }
         detect_header_php_meta || { log_warn "header.php JS include may be missing"; }
+        detect_aiosendspin_override || { log_warn "aiosendspin override missing - MA controller state may not sync (upstream sendspin#280)"; }
         detect_sendspin_metadata_sink || { log_warn "sendspin-metadata-sink.py not deployed (HA metadata requires it)"; }
         detect_sendspin_metadata_sink_service || { log_warn "sendspin-metadata-sink.service not installed"; }
     fi
