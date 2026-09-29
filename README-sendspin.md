@@ -32,7 +32,7 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.5** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.6** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
 
 ### Installation
 
@@ -170,6 +170,27 @@ sudo reboot
 ```
 
 The moOde worker is a long-running PHP daemon started from `/etc/rc.local` that loads `renderer.php` **only at startup**. Until it restarts, the SendSpin service controls and the Resume MPD feature are inert even though every file is correctly installed — the installer patches the files, not the running process. moOde's own updater behaves the same way ("Update installed, restart required"). A reboot also restarts PHP-FPM, so it replaces the PHP restart step entirely.
+
+### Known upstream issue: aiosendspin pinned below 6.1
+
+`sendspin` 7.5.0 declares `aiosendspin[server]~=6.0.1`, which PEP 440 resolves to `>=6.0.1,<6.1.0`. `aiosendspin` 6.1.0 added `seek` and `seek_relative` to `MediaCommand`, and servers now advertise them — **Music Assistant 2.10.x** sends `seek_relative` in `supported_commands`, as does Loxone/Sonn Core 4.0.0-beta.21. On 6.0.x that value cannot be parsed, and because `supported_commands` is typed `list[MediaCommand]` the **entire `server/state` message is discarded**:
+
+```
+ERROR:aiosendspin.client.client:Failed to parse server message: {"type":"server/state",...}
+mashumaro.exceptions.InvalidFieldValue: Field "supported_commands" of type list[MediaCommand] has invalid value [...]
+```
+
+Audio keeps playing (a different message), so the client still looks healthy while controller state — volume, mute, repeat, shuffle — silently stops syncing. Streams with no duration are unaffected, which makes it look source-specific rather than protocol-specific.
+
+Tracked upstream as **Sendspin-Protocol/sendspin#280** and **#278**; no fix released yet.
+
+**What the installer does:** it records an `--overrides` entry for `aiosendspin>=6.1.1,<6.2` in the uv tool receipt. This is a *declared* override, not a hand-patched environment, so it also survives `uv tool upgrade` (which otherwise re-resolves straight back to 6.0.x). Check it with:
+
+```bash
+grep overrides /root/.local/share/uv/tools/sendspin/uv-receipt.toml
+```
+
+The upper bound is deliberately narrow: `aiosendspin` 9.x required code migration in `sendspin` (see upstream PR #276), so 6.1.x — the additive delta verified in #280 — is the safe range. Drop the override once upstream relaxes the pin.
 
 ## Uninstall
 
