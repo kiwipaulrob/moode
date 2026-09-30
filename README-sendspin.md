@@ -32,7 +32,7 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.6** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, component detection, and all features. **Current version: v4.1.7** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
 
 ### Installation
 
@@ -148,6 +148,8 @@ After installation:
 4. Toggle **Service** ON and click the save arrow
 5. Toggle **Resume MPD** if desired (restores MPD after SendSpin stops)
 6. Click **Edit** for advanced settings (audio format, log level, updates)
+
+On a fresh install, reboot first (`sudo reboot`): the moOde worker loads `renderer.php` only at startup, so toggling ON before a reboot silently does nothing. See "Reboot is required" below.
 
 ### Screenshots
 
