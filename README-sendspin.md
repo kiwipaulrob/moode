@@ -32,7 +32,7 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, 19-component detection, and all features. **Current version: v4.1.6** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, component detection, and all features. **Current version: v4.1.7** (moOde 10.3.4 / r1034 support; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
 
 ### Installation
 
@@ -44,6 +44,8 @@ sudo bash moode-sendspin-installer.sh
 ```
 
 The installer auto-detects the PHP version and automatically installs Python 3, `uv`, and the `sendspin` CLI if not already present. It then creates all necessary files, configures the database, enables systemd services, and creates a timestamped backup of all modified files.
+
+You can paste either command block into moOde's built-in SSH terminal (web UI → System → SSH Terminal) instead of a separate SSH session — enter your password when prompted.
 
 ### Install from URL
 
@@ -75,13 +77,36 @@ sudo bash moode-sendspin-installer.sh --check
 sudo bash moode-sendspin-installer.sh --uninstall
 ```
 
-### Running from moOde's Built-in SSH Terminal
+## Usage
 
-moOde has a built-in SSH terminal (System → SSH Terminal). You can run the installer directly from there:
+> **Reboot the Pi first.** After installing — or re-running the installer after a moOde update — run `sudo reboot` and wait for the Pi to come back **before** touching the UI. The moOde worker is a long-running daemon that loads `renderer.php` only at startup: until it restarts, the SendSpin controls are inert even though every file is installed. The reboot also restarts PHP-FPM, so no separate PHP restart is needed. (Technical details under "Post-Install" below.)
 
-1. Open moOde web UI → System → SSH Terminal
-2. Paste the commands above
-3. Enter your password when prompted
+1. `sudo reboot`, wait for the Pi to come back
+2. Open moOde web UI → Configure → Renderers
+3. Find the **SendSpin** section
+4. Toggle **Service** ON and click the save arrow
+5. Toggle **Resume MPD** if desired (restores MPD after SendSpin stops)
+6. Click **Edit** for advanced settings (audio format, log level, updates)
+
+### Screenshots
+
+The SendSpin section of the Renderers page once installed (Service ON, Resume MPD ON):
+
+![SendSpin section of the moOde Renderers page](docs/sendspin-renderers.png)
+
+The **Edit** settings page (installed version, audio format, log level, audio device):
+
+![SendSpin settings page](docs/sendspin-settings.png)
+
+The metadata overlay while streaming (cover art, title/artist, label via moOde's now-playing display):
+
+![SendSpin now-playing metadata overlay](docs/sendspin-now-playing.jpg)
+
+The endpoint as it appears in Music Assistant's Players panel:
+
+![moode-sendspin in Music Assistant](docs/sendspin-music-assistant.png)
+
+Your SendSpin endpoint appears automatically via mDNS on your network. Controllers like Music Assistant discover it without additional configuration.
 
 ## Backup System
 
@@ -137,38 +162,6 @@ The `--uninstall` command finds the **most recent** backup and restores all file
 | `audio_depth` | `16` | 16, 24, 32 |
 | `log_level` | `INFO` | DEBUG, INFO, WARNING, ERROR |
 
-## Usage
-
-The installer deploys files but does NOT start the SendSpin service automatically.
-After installation:
-
-1. Restart PHP: `sudo systemctl restart php*-fpm`
-2. Open moOde web UI → Configure → Renderers
-3. Find the **SendSpin** section
-4. Toggle **Service** ON and click the save arrow
-5. Toggle **Resume MPD** if desired (restores MPD after SendSpin stops)
-6. Click **Edit** for advanced settings (audio format, log level, updates)
-
-### Screenshots
-
-The SendSpin section of the Renderers page once installed (Service ON, Resume MPD ON):
-
-![SendSpin section of the moOde Renderers page](docs/sendspin-renderers.png)
-
-The **Edit** settings page (installed version, audio format, log level, audio device):
-
-![SendSpin settings page](docs/sendspin-settings.png)
-
-The metadata overlay while streaming (cover art, title/artist, label via moOde's now-playing display):
-
-![SendSpin now-playing metadata overlay](docs/sendspin-now-playing.jpg)
-
-The endpoint as it appears in Music Assistant's Players panel:
-
-![moode-sendspin in Music Assistant](docs/sendspin-music-assistant.png)
-
-Your SendSpin endpoint appears automatically via mDNS on your network. Controllers like Music Assistant discover it without additional configuration.
-
 ## Post-Install: moOde Updates
 
 If you update moOde (via System → Check for Update), core files are replaced with stock moOde versions. Re-run the installer afterward:
@@ -181,7 +174,7 @@ The installer detects partial installations (components missing after a moOde up
 
 ### Reboot is required
 
-After installing (or re-running the installer after a moOde update) you **must reboot the Pi**:
+After installing (or re-running the installer after a moOde update) you **must reboot the Pi** — the same reboot required in Usage above:
 
 ```bash
 sudo reboot
