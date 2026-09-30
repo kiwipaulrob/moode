@@ -53,6 +53,8 @@ You can paste either command block into moOde's built-in SSH terminal (web UI â†
 curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-advanced/moode-sendspin-installer.sh | sudo bash
 ```
 
+> **When the installer finishes, reboot the Pi (`sudo reboot`) before doing anything else.** The installer only writes files; the running moOde worker loads them once at startup, so without a reboot the new SendSpin controls are inert and toggling them ON silently does nothing. The reboot also restarts PHP-FPM â€” no separate PHP restart is needed. Continue with Usage below once the Pi is back.
+
 ### Command Line Options
 
 | Option | Description |
