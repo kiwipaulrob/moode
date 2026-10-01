@@ -19,7 +19,7 @@ FPM_CNT=$(pgrep -c -f "php-fpm: pool www")
 MPD_RUNNING=$(pgrep -c -x "mpd")
 AIRPLAY_RUNNING=$(pgrep -c -f "LC_ALL=C /usr/bin/shairport-sync")
 SPOTIFY_RUNNING=$(pgrep -c -x "librespot")
-QOBUZ_RUNNING=$(pgrep -c -x "qbzd")
+QOBUZ_RUNNING=$(pgrep -c -x "pibuz")
 TRX_RX_RUNNING=$(pgrep -c -x "trx-rx")
 
 message_log () {
@@ -131,7 +131,7 @@ while true; do
 			counter=0
 			while [ $counter -lt 3 ]; do
 				sleep 1
-				QOBUZ_RUNNING=$(pgrep -c -x "qbzd")
+				QOBUZ_RUNNING=$(pgrep -c -x "pibuz")
 				if [[ $QOBUZ_RUNNING != "0" ]]; then break; fi
 				((counter++))
 			done
@@ -150,7 +150,7 @@ while true; do
 			while [ $counter -lt 3 ]; do
 				sleep 1
 				TRX_RX_RUNNING=$(pgrep -c -x "trx-rx")
-				if [[ $TRX_RUNNING != "0" ]]; then break; fi
+				if [[ $TRX_RX_RUNNING != "0" ]]; then break; fi
 				((counter++))
 			done
 			if [[ $TRX_RX_RUNNING == "0" ]]; then
@@ -164,7 +164,7 @@ while true; do
 	WEBUI_DISPLAY=$(sqlite3 $SQLDB "SELECT value FROM cfg_system WHERE param='local_display'")
 	PEPPY_DISPLAY=$(sqlite3 $SQLDB "SELECT value FROM cfg_system WHERE param='peppy_display'")
 	if [[ $WEBUI_DISPLAY == '1' || $PEPPY_DISPLAY == '1' ]]; then
-		MULTIROOM_TX=$(sqlite3 $SQLDB "SELECT value FROM cfg_system WHERE param='multiroom_tx")
+		MULTIROOM_TX=$(sqlite3 $SQLDB "SELECT value FROM cfg_system WHERE param='multiroom_tx'")
 		if [[ $MULTIROOM_TX = "On" ]]; then
 			# Card2 will be Loopback or Dummy depending on whether there are 1 or 2 HDMI ports
 			TX_CARD_NUM="card2"
@@ -202,7 +202,7 @@ while true; do
 	MPD_RUNNING=$(pgrep -c -x "mpd")
 	AIRPLAY_RUNNING=$(pgrep -c -f "LC_ALL=C /usr/bin/shairport-sync")
 	SPOTIFY_RUNNING=$(pgrep -c -x "librespot")
-	QOBUZ_RUNNING=$(pgrep -c -x "qbzd")
+	QOBUZ_RUNNING=$(pgrep -c -x "pibuz")
 	TRX_RX_RUNNING=$(pgrep -c -x "trx-rx")
 
 done > /dev/null 2>&1 &

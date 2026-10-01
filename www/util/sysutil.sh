@@ -159,7 +159,7 @@ if [[ $1 = "clear-syslogs" ]]; then
 	truncate /var/log/moode_playhistory.log --size 0
 	truncate /var/log/moode_plugin.log --size 0
 	#truncate /var/log/moode_prevlog.log --size 0
-	truncate /var/log/moode_qbzd.log --size 0
+	truncate /var/log/moode_pibuz.log --size 0
 	truncate /var/log/moode_qbzevent.log --size 0
 	truncate /var/log/moode_radiocover_plus.log --size 0
 	truncate /var/log/moode_shairport-sync.log --size 0
@@ -256,6 +256,7 @@ if [[ $1 = "upd-shairport-sync-conf" ]]; then
 	# wait_for_completion = yes
 	# allow_session_interruption = no
 	# session_timeout = 60
+	# ignore_volume_control = no
 	sed -i -e 's/\/\/.*\(service_type =\)/\1/' \
 		-e 's/\/\/.*\(interpolation =\)/\1/' \
 		-e 's/\/\/.*\(disable_synchronization =\)/\1/' \

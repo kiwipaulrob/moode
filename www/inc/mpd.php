@@ -33,9 +33,6 @@ function updMpdConf() {
 			case 'stop_dsd_silence':
 				$stopDsdSilence = $cfg['value'];
 				break;
-			case 'thesycon_dsd_workaround':
-				$thesyconDsdWorkaround = $cfg['value'];
-				break;
             case 'close_on_pause':
                 $closeOnPause = $cfg['value'];
                 break;
@@ -108,7 +105,9 @@ function updMpdConf() {
 				break;
 			// Default param handling
 			default:
-				$data .= $cfg['param'] . " \"" . $cfg['value'] . "\"\n";
+				if (!str_contains($cfg['param'], 'RESERVED')) {
+					$data .= $cfg['param'] . " \"" . $cfg['value'] . "\"\n";
+				}
 				break;
 		}
 	}
@@ -192,7 +191,6 @@ function updMpdConf() {
         '';
 	$data .= "dop \"" . $dop . "\"\n";
 	$data .= "stop_dsd_silence \"" . $stopDsdSilence . "\"\n";
-	$data .= "thesycon_dsd_workaround \"" . $thesyconDsdWorkaround . "\"\n";
     $data .= "close_on_pause \"" . $closeOnPause . "\"\n";
 	$data .= $bufferTime == $bufferTimeDefault ? '' : "buffer_time \"" . $bufferTime . "\"\n";
 	$data .= "}\n\n";
@@ -324,7 +322,11 @@ function scanForMPDHosts($retryCount = 2) {
 // Low-level MPD socket routines
 function getMpdSock($caller = 'unknown caller') {
 	if (false === ($sock = openMpdSock('localhost', 6600))) {
-		workerLog('CRITICAL ERROR: getMpdSock(): Connection to MPD failed, caller (' . $caller . ')');
+		$wrkReady = sqlQuery("SELECT value FROM cfg_system WHERE param='wrkready'", sqlConnect())[0]['value'];
+		// Only report after startup has finished
+		if ($wrkReady == '1') {
+			workerLog('CRITICAL ERROR: getMpdSock(): Connection to MPD failed, caller (' . $caller . ')');
+		}
 		exit(0);
 	} else {
 		return $sock;
