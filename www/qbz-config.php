@@ -22,13 +22,24 @@ if (isset($_POST['download_qbz_logs']) && $_POST['download_qbz_logs'] == '1') {
 // Save settings
 if (isset($_POST['save']) && $_POST['save'] == '1') {
 	$msg = '';
+	// The daemon reads these two only when it starts, so changing either one
+	// still needs the restart path.
+	$restartReqd = false;
+	$currentCfg = array();
+	foreach (sqlRead('cfg_qobuz', $dbh) as $row) {
+		$currentCfg[$row['param']] = $row['value'];
+	}
 	foreach ($_POST['config'] as $key => $value) {
 		chkValue($key, $value);
+		if (($key == 'alsa_buffer_ms' || $key == 'memory_cache_mb') && $value != $currentCfg[$key]) {
+			$restartReqd = true;
+		}
 		sqlUpdate('cfg_qobuz', $dbh, $key, $value);
 	}
 	if ($_SESSION['qobuzsvc'] == '1') {
-		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => NAME_QOBUZ . NOTIFY_MSG_SVC_RESTARTED);
-		submitJob('qobuzsvc', '', $notify['title'], $notify['msg']);
+		$msg = $restartReqd ? NOTIFY_MSG_SVC_RESTARTED : NOTIFY_MSG_SVC_SETTINGS_APPLIED;
+		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => NAME_QOBUZ . $msg);
+		submitJob('qobuzsvc', $restartReqd ? '' : 'apply_settings', $notify['title'], $notify['msg']);
 	}
 }
 
@@ -74,9 +85,6 @@ $_select['stream_first_track'] .= "<option value=\"false\" "  . (($cfgQobuz['str
 // Track cache
 $_select['streaming_only'] .= "<option value=\"true\" " . (($cfgQobuz['streaming_only'] == 'true') ? "selected" : "") . ">Disable</option>\n";
 $_select['streaming_only'] .= "<option value=\"false\" "  . (($cfgQobuz['streaming_only'] == 'false')  ? "selected" : "") . ">Enable (Default)</option>\n";
-// Cache location
-$_select['cache_to_disk'] .= "<option value=\"false\" " . (($cfgQobuz['cache_to_disk'] == 'false') ? "selected" : "") . ">Memory (Default)</option>\n";
-$_select['cache_to_disk'] .= "<option value=\"true\" " . (($cfgQobuz['cache_to_disk'] == 'true') ? "selected" : "") . ">Disk</option>\n";
 // Cache size (for memory cache)
 $_select['memory_cache_mb'] .= "<option value=\"auto\" " . (($cfgQobuz['memory_cache_mb'] == 'auto') ? "selected" : "") . ">Auto (Default)</option>\n";
 $_select['memory_cache_mb'] .= "<option value=\"512\" " . (($cfgQobuz['memory_cache_mb'] == '512') ? "selected" : "") . ">512 MB</option>\n";
@@ -92,9 +100,6 @@ if ($_gapless_disabled == '') {
 	$_select['gapless_enabled'] .= "<option value=\"false\" selected>No</option>\n";
 	$_gapless_hint = '<span class="config-help-static">Gapless playback requires the Track cache to be enabled.</span>';
 }
-// Quality fallback
-$_select['quality_fallback_behavior'] .= "<option value=\"always_fallback\" " . (($cfgQobuz['quality_fallback_behavior'] == 'always_fallback') ? "selected" : "") . ">Always fallback (Default)</option>\n";
-$_select['quality_fallback_behavior'] .= "<option value=\"always_skip\" "     . (($cfgQobuz['quality_fallback_behavior'] == 'always_skip')     ? "selected" : "") . ">Always skip</option>\n";
 // ALSA buffer length (ms)
 $_select['alsa_buffer_ms'] .= "<option value=\"auto\" " . (($cfgQobuz['alsa_buffer_ms'] == 'auto') ? "selected" : "") . ">Auto (Default)</option>\n";
 $_select['alsa_buffer_ms'] .= "<option value=\"250\" " . (($cfgQobuz['alsa_buffer_ms'] == '250') ? "selected" : "") . ">250 ms</option>\n";

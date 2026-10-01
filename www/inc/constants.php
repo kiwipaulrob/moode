@@ -20,7 +20,7 @@ const SHAIRPORT_SYNC_LOG = '/var/log/moode_shairport-sync.log';
 const SPSEVENT_LOG = '/var/log/moode_spsevent.log';
 const LIBRESPOT_LOG = '/var/log/moode_librespot.log';
 const SPOTEVENT_LOG = '/var/log/moode_spotevent.log';
-const QBZD_LOG = '/var/log/moode_qbzd.log';
+const PIBUZ_LOG = '/var/log/moode_pibuz.log';
 const QBZEVENT_LOG = '/var/log/moode_qbzevent.log';
 const SLPOWER_LOG = '/var/log/moode_slpower.log';
 // MPD
@@ -150,6 +150,7 @@ const NOTIFY_DURATION_LONG = 30;
 const NOTIFY_DURATION_INFINITE = 8640000; // 100 days
 const NOTIFY_MSG_SYSTEM_RESTART_REQD = 'Restart the system for the changes to take effect.';
 const NOTIFY_MSG_SVC_RESTARTED = ' has been restarted to make the changes effective.';
+const NOTIFY_MSG_SVC_SETTINGS_APPLIED = ' settings have been applied.';
 const NOTIFY_MSG_SVC_MANUAL_RESTART = ' has been restarted.';
 const NOTIFY_MSG_LOCALDISPLAY_STARTING = 'Local display is starting...';
 const NOTIFY_MSG_PEPPYDISPLAY_STARTING = 'Peppy display is starting...';

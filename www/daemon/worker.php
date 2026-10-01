@@ -188,7 +188,7 @@ sysCmd('touch ' . SHAIRPORT_SYNC_LOG);
 sysCmd('touch ' . SPSEVENT_LOG);
 sysCmd('touch ' . LIBRESPOT_LOG);
 sysCmd('touch ' . SPOTEVENT_LOG);
-sysCmd('touch ' . QBZD_LOG);
+sysCmd('touch ' . PIBUZ_LOG);
 sysCmd('touch ' . QBZEVENT_LOG);
 sysCmd('touch ' . SLPOWER_LOG);
 sysCmd('truncate ' . MOUNTMON_LOG . ' --size 0');
@@ -213,7 +213,7 @@ sysCmd('chmod 0666 ' . SHAIRPORT_SYNC_LOG);
 sysCmd('chmod 0666 ' . SPSEVENT_LOG);
 sysCmd('chmod 0666 ' . LIBRESPOT_LOG);
 sysCmd('chmod 0666 ' . SPOTEVENT_LOG);
-sysCmd('chmod 0666 ' . QBZD_LOG);
+sysCmd('chmod 0666 ' . PIBUZ_LOG);
 sysCmd('chmod 0666 ' . QBZEVENT_LOG);
 sysCmd('chmod 0666 ' . SLPOWER_LOG);
 sysCmd('chmod 0666 ' . MOODE_LOG);
@@ -711,18 +711,14 @@ if ($actualCardNum == ALSA_EMPTY_CARD) {
 	phpSession('write', 'alsavolume_max', $devCache['alsa_max_volume']);
 	sqlUpdate('cfg_mpd', $dbh, 'mixer_type', $devCache['mpd_volume_type']);
 	updMpdConf();
-	sysCmd('systemctl restart mpd');
 	workerLog('worker: MPD config:    updated');
 } else if ($actualCardNum == $_SESSION['cardnum']) {
 	workerLog('worker: ALSA card:     has not been reassigned');
 	if (isHDMIDevice($_SESSION['adevname'])) {
 		phpSession('write', 'alsa_output_mode', 'iec958');
-		updMpdConf();
-		sysCmd('systemctl restart mpd');
 		workerLog('worker: MPD config:    updated (iec958 device)');
-	} else {
-		workerLog('worker: MPD config:    update not needed');
 	}
+	updMpdConf();
 } else {
 	workerLog('worker: ALSA card:     has been reassigned to ' . $actualCardNum . ' from ' . $_SESSION['cardnum']);
 	phpSession('write', 'cardnum', $actualCardNum);
@@ -731,7 +727,6 @@ if ($actualCardNum == ALSA_EMPTY_CARD) {
 		workerLog('worker: MPD config:    update not needed (trx sender on)');
 	} else {
 		updMpdConf();
-		sysCmd('systemctl restart mpd');
 		workerLog('worker: MPD config:    updated');
 	}
 }
@@ -914,13 +909,6 @@ if (!file_exists('/etc/mpd.conf')) {
 	$lines = file(MPD_CONF);
 	if (!str_contains($lines[1], 'This file is managed by moOde')) {
 		workerLog('worker: MPD config:         Creating managed mpd.conf');
-		updMpdConf();
-	}
-	// Device mismatch (can happen after backup restored)
-	$alsaDev = sysCmd('awk -F"\"" ' . "'/slave.pcm/ {print $2}'" . ' /etc/alsa/conf.d/_audioout.conf');
-	debugLog('ALSA conf: ' . $alsaDev[0] . ' | Audio output: ' . $audioOutput);
-	if (str_contains($alsaDev[0], ALSA_IEC958_DEVICE) && $audioOutput != AO_HDMI) {
-		workerLog('worker: MPD config:         Updated (ALSA conf device mismatch)');
 		updMpdConf();
 	}
 }
@@ -1149,6 +1137,10 @@ workerLog('worker: Spotify Connect: ' . $status);
 
 // Start Qobuz Connect renderer
 if ($_SESSION['feat_bitmask'] & FEAT_QOBUZ) {
+	// Set track cache based on physical memory
+	$memMb = sysCmd('/var/www/util/pirev.py --mem_mb')[0];
+	$cacheToDisk = $memMb < 2048 ? 'true' : 'false';
+	sqlQuery("UPDATE cfg_qobuz SET value='" . $cacheToDisk . "' WHERE param='cache_to_disk'", $dbh);
 	if (isset($_SESSION['qobuzsvc']) && $_SESSION['qobuzsvc'] == 1) {
 		$status = 'started';
 		startQobuz();
@@ -1502,9 +1494,16 @@ workerLog('worker: DSI port:         ' . $_SESSION['dsi_port']);
 workerLog('worker: DSI brightness:   ' . $_SESSION['dsi_scn_brightness']);
 workerLog('worker: DSI rotate:       ' . $_SESSION['dsi_scn_rotate']);
 workerLog('worker: --');
-// Log Triggerhappy / USB volume knob on/off state
+// Start Triggerhappy / USB volume knob
 if (!isset($_SESSION['usb_volknob'])) {
 	$_SESSION['usb_volknob'] = '0';
+}
+if ($_SESSION['usb_volknob'] == '1') {
+	sysCmd('systemctl enable triggerhappy');
+	sysCmd('systemctl start triggerhappy');
+} else {
+	sysCmd('systemctl stop triggerhappy');
+	sysCmd('systemctl disable triggerhappy');
 }
 workerLog('worker: Triggerhappy:     ' . ($_SESSION['usb_volknob'] == '1' ? 'on' : 'off'));
 // Start rotary encoder
@@ -1599,7 +1598,7 @@ if (chkRendererActive() === true) {
 	phpSession('write', 'volknob', '0');
 	sysCmd('/var/www/util/vol.sh 0');
 	$result = sqlQuery("UPDATE cfg_system SET value='0' WHERE param='btactive' OR param='aplactive' OR
-		param='spotactive' OR param='qbzctive' OR param='slactive' OR param='paactive' OR param='rbactive' OR
+		param='spotactive' OR param='qbzactive' OR param='slactive' OR param='paactive' OR param='rbactive' OR
 		param='inpactive'", $dbh);
 	workerLog('worker: Active flags:         at least one true');
 	workerLog('worker: Reset flags:          all reset to false');
@@ -3297,9 +3296,20 @@ function runQueuedJob() {
 			break;
 		// Qobuz Connect
 		case 'qobuzsvc':
-			stopQobuz();
-			if ($_SESSION['qobuzsvc'] == 1) {
-				startQobuz();
+			// A settings save does not need the daemon taken down: pibuz writes
+			// its own stores and nudges a running daemon through
+			// POST /api/settings/reload, which reloads in place. Restarting
+			// ends the Qobuz Connect session instead, and the app has to be
+			// pointed at the player again before anything plays. The service
+			// toggle and the manual restart button still go the long way.
+			if ($_SESSION['w_queueargs'] == 'apply_settings' && $_SESSION['qobuzsvc'] == 1 &&
+				!empty(sysCmd('pgrep -x pibuz'))) {
+				cfgQobuz();
+			} else {
+				stopQobuz();
+				if ($_SESSION['qobuzsvc'] == 1) {
+					startQobuz();
+				}
 			}
 			if ($_SESSION['w_queueargs'] == 'disconnect_renderer' && $_SESSION['rsmafterqbz'] == 'Yes') {
 				sysCmd('mpc play');

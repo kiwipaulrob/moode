@@ -379,7 +379,6 @@ function autoConfigSettings() {
 		['requires' => ['close_on_pause'], 'handler' => 'setCfgMpdParams', 'custom_write' => 'getCfgMpdParams'],
 		['requires' => ['log_level'], 'handler' => 'setCfgMpdParams', 'custom_write' => 'getCfgMpdParams'],
 		['requires' => ['stop_dsd_silence'], 'handler' => 'setCfgMpdParams', 'custom_write' => 'getCfgMpdParams'],
-		['requires' => ['thesycon_dsd_workaround'], 'handler' => 'setCfgMpdParams', 'custom_write' => 'getCfgMpdParams'],
 		'MPD Options',
 		['requires' => ['autoplay'], 'handler' => 'setSessVarSql'],
 		['requires' => ['extmeta'], 'handler' => 'setSessVarOnly'],
@@ -537,9 +536,10 @@ function autoConfigSettings() {
 				return getCfgTableParams('cfg_spotify', $values, 'spotify_');
 		}],
 		'Qobuz Connect',
-		['requires' => ['qobuz_quality', 'qobuz_stream_buffer_seconds', 'volume_mode', 'qobuz_normalization_enabled', 'qobuz_stream_first_track',
-			'qobuz_streaming_only', 'qobuz_gapless_enabled', 'qobuz_quality_fallback_behavior', 'cache_to_disk', 'memory_cache_mb', 'alsa_buffer_ms'],
-			'handler' => function($values, $optionals) {
+		['requires' => ['qobuz_quality', 'qobuz_stream_buffer_seconds', 'qobuz_volume_mode', 'qobuz_initial_volume', 'qobuz_normalization_enabled',
+			'qobuz_stream_first_track', 'qobuz_streaming_only', 'qobuz_gapless_enabled', 'qobuz_cache_to_disk', 'qobuz_memory_cache_mb',
+			'qobuz_alsa_buffer_ms', 'qobuz_stream_window_seconds', 'qobuz_dac_keepalive_ms', 'qobuz_pcm_ring_ms', 'qobuz_writer_rt_priority'],
+			'handler' => function($values) {
 				setCfgTableParams('cfg_qobuz', $values, 'qobuz_');
 			}, 'custom_write' => function($values) {
 				return getCfgTableParams('cfg_qobuz', $values, 'qobuz_');
