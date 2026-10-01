@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# moOde SendSpin Integration Installer v4.1.4
+# moOde SendSpin Integration Installer v4.1.8
 # Repository: https://github.com/kiwipaulrob/moode
 # Branch: sendspin-advanced
 #
@@ -19,7 +19,7 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.7"
+SCRIPT_VERSION="4.1.8"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
@@ -60,7 +60,7 @@ FULL_INSTALL_FILES=(
     "${WWW_DIR}/daemon/worker.php"
     "/var/local/www/commandw/sendspin-spspre.sh"
     "/var/local/www/commandw/sendspin-metadata.sh"
-    "/var/local/www/commandw/spspost.sh"
+    "/var/local/www/commandw/sendspin-spspost.sh"
     "/var/local/www/commandw/sendspin-version-check.sh"
     "${WWW_DIR}/command/sendspin-meta.php"
     "${WWW_DIR}/js/sendspin-display.js"
@@ -85,7 +85,7 @@ BACKUP_FILES=(
     "worker.php"
     "sendspin-spspre.sh"
     "sendspin-metadata.sh"
-    "spspost.sh"
+    "sendspin-spspost.sh"
     "sendspin-version-check.sh"
 )
 
@@ -101,6 +101,21 @@ log_success() { echo -e "\e[32m[OK]\e[0m $1"; }
 log_warn() { echo -e "\e[33m[WARN]\e[0m $1"; }
 log_error() { echo -e "\e[31m[ERROR]\e[0m $1"; }
 log_section() { echo -e "\e[35m\n=== $1 ===\e[0m"; }
+
+# Interactive confirmations must read from the controlling terminal, never
+# from stdin: the documented install runs as `curl -fsSL ... | sudo bash`,
+# where stdin is the consumed script pipe, so a bare `read` gets instant EOF
+# and every prompt auto-answers "no" (fork issue #21). With no controlling
+# terminal at all (cron), the read fails and we fail safe to "no" --
+# --force is the automation path.
+confirm_yes() { # $1 = prompt text; exit 0 on an explicit yes
+    local prompt="$1" reply=""
+    if read -r -p "$prompt" reply < /dev/tty 2>/dev/null; then
+        [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]
+    else
+        return 1
+    fi
+}
 
 # Check if running on actual moOde
 is_moode() {
@@ -260,8 +275,12 @@ detect_sendspin_metadata() {
     [[ -f "/var/local/www/commandw/sendspin-metadata.sh" ]]
 }
 
-detect_spspost() {
-    [[ -f "/var/local/www/commandw/spspost.sh" ]]
+# NOTE: moOde ships its own Spotify post-stop script at
+# /var/local/www/commandw/spspost.sh -- that filename must NEVER be treated
+# as a SendSpin component (fork issue #21): detection, install, verify and
+# uninstall all key off sendspin-spspost.sh only.
+detect_sendspin_spspost() {
+    [[ -f "/var/local/www/commandw/sendspin-spspost.sh" ]] && grep -q "SendSpin Post-Stop Hook" "/var/local/www/commandw/sendspin-spspost.sh"
 }
 
 detect_sendspin_version_check() {
@@ -346,7 +365,7 @@ check_installation() {
     check_component "feat_bitmask - Feature enabled" detect_feat_bitmask
     check_component "commandw/sendspin-spspre.sh - Pre-start hook" detect_sendspin_spspre
     check_component "commandw/sendspin-metadata.sh - Metadata hook" detect_sendspin_metadata
-    check_component "commandw/spspost.sh - Post-stop hook" detect_spspost
+    check_component "commandw/sendspin-spspost.sh - Post-stop hook" detect_sendspin_spspost
     check_component "commandw/sendspin-version-check.sh - Version check" detect_sendspin_version_check
     check_component "command/sendspin-meta.php - Metadata endpoint" detect_sendspin_meta_php
     check_component "js/sendspin-display.js - Display JS" detect_sendspin_display_js
@@ -751,7 +770,7 @@ function generateSendspinService($dbh = null) {
         --log-level {$log_level} \\
         --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
         --hook-stop /var/local/www/commandw/sendspin-metadata.sh
-    ExecStopPost=/var/local/www/commandw/spspost.sh
+    ExecStopPost=/var/local/www/commandw/sendspin-spspost.sh
     Restart=on-failure
     RestartSec=5
     TimeoutStartSec=30
@@ -1238,16 +1257,62 @@ install_ssp_config() {
     install_ssp_config_html || return 1
 }
 
+# Installers <=4.1.7 deployed the SendSpin stop hook under moOde's own
+# Spotify post-stop filename (/var/local/www/commandw/spspost.sh), which
+# moOde ships stock (fork issue #21). Move OUR content to the collision-free
+# name; a stock spspost.sh (no SendSpin marker) is moOde's own and is never
+# touched here or by the uninstaller.
+migrate_legacy_spspost() {
+    local legacy="/var/local/www/commandw/spspost.sh"
+    local target="/var/local/www/commandw/sendspin-spspost.sh"
+    if [[ -f "$legacy" ]] && grep -q "SendSpin Post-Stop Hook" "$legacy" 2>/dev/null; then
+        if [[ ! -f "$target" ]]; then
+            mv "$legacy" "$target" && log_success "Migrated legacy spspost.sh -> sendspin-spspost.sh"
+        else
+            rm -f "$legacy" && log_success "Removed redundant legacy spspost.sh (sendspin-spspost.sh already present)"
+        fi
+        restore_stock_spspost
+    fi
+}
+
+# Best-effort restore of moOde's stock Spotify hook after a legacy migration
+# or uninstall removed our copy from the shared filename. The installer keeps
+# no backup of moOde-owned files, so fetch stock from upstream at the running
+# release tag (10.3.4 -> r1034). Never fatal: without it, Spotify stop events
+# just go unlogged until the next moOde update re-lays the file.
+restore_stock_spspost() {
+    local legacy="/var/local/www/commandw/spspost.sh"
+    [[ -f "$legacy" ]] && return 0
+    local rel tag url
+    rel=$(moodeutl --mooderel 2>/dev/null | awk '{print $1}')
+    tag="r$(echo "$rel" | tr -d '.')"
+    if [[ "$tag" =~ ^r[0-9]+$ ]]; then
+        url="https://raw.githubusercontent.com/moode-player/moode/${tag}/var/local/www/commandw/spspost.sh"
+        if curl -fsSL --max-time 25 "$url" -o "$legacy" 2>/dev/null; then
+            chmod 755 "$legacy"
+            chown www-data:www-data "$legacy"
+            log_success "Restored moOde stock spspost.sh (${tag})"
+            return 0
+        fi
+    fi
+    log_warn "Could not restore moOde stock spspost.sh -- Spotify stop events will be unlogged until the next moOde update"
+    return 0
+}
+
 install_commandw_scripts() {
     log_info "Deploying SendSpin commandw scripts..."
     
     local cmdw_dir="/var/local/www/commandw"
     mkdir -p "$cmdw_dir"
     
+    # Migrate pre-4.1.8 installs whose hook lived under moOde's own
+    # Spotify post-stop filename (fork issue #21).
+    migrate_legacy_spspost
+    
     local scripts=(
         "sendspin-spspre.sh"
         "sendspin-metadata.sh"
-        "spspost.sh"
+        "sendspin-spspost.sh"
         "sendspin-version-check.sh"
     )
     
@@ -1684,7 +1749,7 @@ ExecStart=/root/.local/share/uv/tools/sendspin/bin/sendspin daemon --audio-devic
     --log-level ${log_level} \\
     --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
     --hook-stop /var/local/www/commandw/sendspin-metadata.sh
-ExecStopPost=/var/local/www/commandw/spspost.sh
+ExecStopPost=/var/local/www/commandw/sendspin-spspost.sh
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=30
@@ -1751,12 +1816,12 @@ uninstall_sendspin() {
     # Confirm uninstallation
     if [[ "$FORCE" != "true" ]]; then
         echo ""
-        read -r -p "Type 'yes' to uninstall, or 'no' to exit: " REPLY
-        echo ""
-        if [[ ! "$REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        if ! confirm_yes "Type 'yes' to uninstall, or 'no' to exit: "; then
+            echo ""
             log_info "Uninstallation cancelled"
             exit 0
         fi
+        echo ""
     fi
     
     log_info "This will completely remove SendSpin integration..."
@@ -1851,11 +1916,17 @@ uninstall_sendspin() {
                         rm -f "${WWW_DIR}/templates/ssp-config.html"
                         log_success "Removed ssp-config page"
         
-                        # Remove commandw scripts
+                        # Remove commandw scripts (SendSpin-owned names only -- moOde's
+                        # stock spspost.sh is never touched; a legacy SendSpin
+                        # copy under that name is removed and stock restored)
                         rm -f "/var/local/www/commandw/sendspin-spspre.sh"
                         rm -f "/var/local/www/commandw/sendspin-metadata.sh"
-                        rm -f "/var/local/www/commandw/spspost.sh"
+                        rm -f "/var/local/www/commandw/sendspin-spspost.sh"
                         rm -f "/var/local/www/commandw/sendspin-version-check.sh"
+                        if grep -q "SendSpin Post-Stop Hook" "/var/local/www/commandw/spspost.sh" 2>/dev/null; then
+                            rm -f "/var/local/www/commandw/spspost.sh"
+                            restore_stock_spspost
+                        fi
                         rmdir "/var/local/www/commandw" 2>/dev/null || true
                         log_success "Removed commandw scripts"
         
@@ -1890,11 +1961,17 @@ uninstall_sendspin() {
             rm -f "${WWW_DIR}/setup_3rdparty_sendspin.txt"
             rm -f "${WWW_DIR}/ssp-config.php"
             rm -f "${WWW_DIR}/templates/ssp-config.html"
-            # Remove commandw scripts
+            # Remove commandw scripts (SendSpin-owned names only -- moOde's
+            # stock spspost.sh is never touched; a legacy SendSpin copy
+            # under that name is removed and stock restored)
             rm -f "/var/local/www/commandw/sendspin-spspre.sh"
             rm -f "/var/local/www/commandw/sendspin-metadata.sh"
-            rm -f "/var/local/www/commandw/spspost.sh"
+            rm -f "/var/local/www/commandw/sendspin-spspost.sh"
             rm -f "/var/local/www/commandw/sendspin-version-check.sh"
+            if grep -q "SendSpin Post-Stop Hook" "/var/local/www/commandw/spspost.sh" 2>/dev/null; then
+                rm -f "/var/local/www/commandw/spspost.sh"
+                restore_stock_spspost
+            fi
             rmdir "/var/local/www/commandw" 2>/dev/null || true
     
             # Remove database entries
@@ -1971,8 +2048,8 @@ uninstall_sendspin() {
         found_traces=true
     fi
     
-    if detect_spspost; then
-        log_warn "Traces found in spspost.sh"
+    if detect_sendspin_spspost; then
+        log_warn "Traces found in sendspin-spspost.sh"
         found_traces=true
     fi
     
@@ -2047,15 +2124,13 @@ run_installation() {
     
     if [[ $install_status -eq 0 ]]; then
         echo ""
-        log_info "Installation check complete - all 14 components are present and verified."
+        log_info "Installation check complete - all components are present and verified."
         echo ""
         log_info "If you are still experiencing issues with SendSpin, reinstalling"
         log_info "will overwrite all components with fresh copies from the installer."
         echo ""
         if [[ "$FORCE" != "true" ]]; then
-            read -r -p "Type 'yes' to reinstall, or 'no' to exit: " REPLY
-            echo ""
-            if [[ ! "$REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+            if ! confirm_yes "Type 'yes' to reinstall, or 'no' to exit: "; then
                 echo ""
                 log_info "Reinstallation skipped."
                 log_info "If you continue having issues:"
@@ -2077,9 +2152,7 @@ run_installation() {
         log_warn "Continuing will install the missing components; existing components are left intact."
         echo ""
         if [[ "$FORCE" != "true" ]]; then
-            read -r -p "Type 'yes' to continue, or 'no' to exit: " REPLY
-            echo ""
-            if [[ ! "$REPLY" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+            if ! confirm_yes "Type 'yes' to continue, or 'no' to exit: "; then
                 echo ""
                 log_info "Installation cancelled."
                 log_info "Run with --uninstall first for a clean removal, then reinstall."
@@ -2148,7 +2221,7 @@ run_installation() {
         detect_ssp_config_html || { log_error "ssp-config.html verification failed"; verify_passed=false; }
         detect_sendspin_spspre || { log_error "sendspin-spspre.sh verification failed"; verify_passed=false; }
         detect_sendspin_metadata || { log_error "sendspin-metadata.sh verification failed"; verify_passed=false; }
-        detect_spspost || { log_error "spspost.sh verification failed"; verify_passed=false; }
+        detect_sendspin_spspost || { log_error "sendspin-spspost.sh verification failed"; verify_passed=false; }
         detect_sendspin_version_check || { log_error "sendspin-version-check.sh verification failed"; verify_passed=false; }
         detect_sendspin_meta_php || { log_error "sendspin-meta.php verification failed"; verify_passed=false; }
         detect_sendspin_display_js || { log_error "sendspin-display.js verification failed"; verify_passed=false; }
