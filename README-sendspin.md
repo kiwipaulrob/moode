@@ -16,7 +16,7 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 
 ## Requirements
 
-- moOde 9.x or later — verified against the current release, moOde 10.3.5 (r1035, Trixie); the fork is re-merged with every new upstream release
+- moOde 9.x or later — verified against the current release, moOde 10.3.6 (r1036, Trixie); the fork is re-merged with every new upstream release
 - Raspberry Pi 3/4/5
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
@@ -32,7 +32,7 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, component detection, and all features. **Current version: v4.1.8** (moOde 10.3.5 / r1035 support; fork issue #21 fixes: confirmation prompts read from /dev/tty so piped `curl | sudo bash` installs stay answerable, SendSpin stop-hook renamed to `sendspin-spspost.sh` so moOde's stock Spotify `spspost.sh` is never installed over or deleted; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, component detection, and all features. **Current version: v4.1.8** (moOde 10.3.6 / r1036 support; fork issue #21 fixes: confirmation prompts read from /dev/tty so piped `curl | sudo bash` installs stay answerable, SendSpin stop-hook renamed to `sendspin-spspost.sh` so moOde's stock Spotify `spspost.sh` is never installed over or deleted; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
 
 ### Installation
 
