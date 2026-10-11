@@ -28,84 +28,70 @@ from the daemon version.
 6. Best Resolution Selection
 
 Whats different:
-- Not needed			SSE, MPD, Web, Event, related code/libs, segment covers, etc
-- Input args			--title --station [--version]
-- Settings				/etc/radiocover-plus/config.txt
-- Log					/var/log/moode_radiocover_plus.log
-- similarity()			Added test for squashed artist name ex: BistroBoy vs Bistro Boy
-- search_itunes			Limit = 10, 1000x1000 res
-- search_radio_paradise	Use moode station names (Main Mix, World)
-- Formatting			Convert to hard tabs
+- Removed (not needed)		SSE, MPD, Web, Event, related code/libs, segment covers, lru cache, mini log icons etc
+- Input args				--title --station [--version]
+- Config file (settings)	/etc/radiocover-plus/config.txt
+- Log file					/var/log/moode_radiocover_plus.log
+- URL cache					cfg_rcucache (moode-sqlite3.db)
+- similarity()				Add test for squashed artist name ex: BistroBoy vs Bistro Boy
+- search_cover_parallel()	Add check for cover res within min/max
+- normalize_for_search()	Fix the regex for feat/ft
+- search_itunes				Limit = 10, 1000x1000 res
+- search_radio_paradise		Use moode station names (Main Mix, World)
+- Formatting				Convert to hard tabs
 
 """
 import os, sys, time, logging, argparse, signal
 import requests, re, unicodedata, html, json
-import fcntl
+import fcntl, sqlite3
 from PIL import ImageFile
 from threading import Thread, Lock, Event
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from logging.handlers import RotatingFileHandler
 
-__version__ = "9.1.2 CLI utility"
+__version__ = "9.2.0 CLI utility"
 
-# ================= CONFIG GLOBALS (fallback) =================
+# ================= GLOBALS =================
+# Config.txt settings (default)
 SPOTIFY_CLIENT_ID		= None
 SPOTIFY_CLIENT_SECRET	= None
 LASTFM_API_KEY			= None
 DISCOGS_TOKEN			= None
 THEAUDIODB_API_KEY		= "2"
-
-REQUEST_TIMEOUT	= 10.0
-MB_TIMEOUT		= (0.5, 1.5)
-
-MAX_SIZE_PX				= 800
-COVER_QUALITY			= 85
 MIN_SIMILARITY			= 0.75
 MIN_SIMILARITY_ITUNES	= 0.90
-
-# Test values
-FAST_DEADLINE_S=2.0
-TOTAL_DEADLINE_S=3.0
-REQUEST_TIMEOUT=3.0
-# Original values
-#FAST_DEADLINE_S  = 1.5
-#TOTAL_DEADLINE_S = 2.5
-#EARLY_STOP_SCORE = 5.0
-
-CACHE_ENABLED			= False
-PROVIDERS_LIST			= {}
-
-# Noise (non-music) segments
-SEGMENT_WEATHER		= "weather"
-SEGMENT_TRAFFIC		= "traffic"
-SEGMENT_NEWS		= "news"
-SEGMENT_ADVERTISING	= "advertising"
-SEGMENT_FUNDRAISING	= "fundraising"
-
-# ================= PATHS =================
+FAST_DEADLINE_S			= 2.0
+TOTAL_DEADLINE_S		= 3.0
+REQUEST_TIMEOUT			= 3.0
+EARLY_STOP_SCORE 		= 5.0
+MAX_SIZE_PX				= 2000
+MIN_SIZE_PX				= 100
+# File paths
 CONFIG_FILE		= "/etc/radiocover-plus/config.txt"
 LOG_FILE		= "/var/log/moode_radiocover_plus.log"
-
-# ================= LOGGING =================
-# When BACKUP_COUNT=0, the handler will overwrite the existing file from the
-# beginning once it reaches the MAX_LOG_SIZE limit instead of creating new
-# rolled files like .log.1.
-BACKUP_COUNT	= 0
+SQLDB_FILE		= '/var/local/www/db/moode-sqlite3.db'
+# Logging
+BACKUP_COUNT	= 0 # Overwrite file when size limit reached instead of rolling to log.N
 MAX_LOG_SIZE	= 512 * 1024
-LOG_LEVEL_MAP = {
+LOG_LEVELS = {
 	"DEBUG":	logging.DEBUG,
 	"INFO":		logging.INFO,
 	"WARNING":	logging.WARNING,
 	"ERROR":	logging.ERROR,
 	"CRITICAL":	logging.CRITICAL,
 }
-LOG_LEVEL = "INFO"
-
-# ================= GLOBALS =================
+# Miscellaneous
 USER_AGENT				= "moOde audio player/10 ( https://moodeaudio.org )"
 SPOTIFY_TOKEN			= None
 SPOTIFY_TOKEN_EXPIRY	= 0
+MB_TIMEOUT				= (0.5, 1.5)
+PROVIDERS_LIST			= {}
+SEGMENT_WEATHER			= "weather" # Noise segments (non-music)
+SEGMENT_TRAFFIC			= "traffic"
+SEGMENT_NEWS			= "news"
+SEGMENT_ADVERTISING		= "advertising"
+SEGMENT_FUNDRAISING		= "fundraising"
 _shutdown_event			= Event()
 
 # ================= LOGGING =================
@@ -115,30 +101,21 @@ except OSError:
 	pass # file may not exist yet on first run — that's fine
 handler = RotatingFileHandler(LOG_FILE, maxBytes=MAX_LOG_SIZE, backupCount=BACKUP_COUNT)
 logging.basicConfig(
-	level=logging.INFO,
+	level=logging.ERROR,
 	format='%(asctime)s [%(levelname)s] %(message)s',
 	handlers=[handler]
 )
 
 # ================= CONFIG =================
-ALL_LRU_CACHES = []
-
 def read_global():
-	global SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, LASTFM_API_KEY, DISCOGS_TOKEN
-	global THEAUDIODB_API_KEY, LOG_LEVEL
-	#global CACHE_ENABLED
-	#global DEBOUNCE_MS
-	global REQUEST_TIMEOUT, MAX_SIZE_PX, COVER_QUALITY
-	global MIN_SIMILARITY, MIN_SIMILARITY_ITUNES
-	global FAST_DEADLINE_S, TOTAL_DEADLINE_S, EARLY_STOP_SCORE
+	global SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, LASTFM_API_KEY, DISCOGS_TOKEN, THEAUDIODB_API_KEY
+	global MIN_SIMILARITY, MIN_SIMILARITY_ITUNES, REQUEST_TIMEOUT, FAST_DEADLINE_S, TOTAL_DEADLINE_S
+	global EARLY_STOP_SCORE, MAX_SIZE_PX, MIN_SIZE_PX
 	global PROVIDERS_LIST
 
-	valid_levels = {"INFO", "WARNING", "ERROR", "CRITICAL", "DEBUG"}
 	values = {}
-
-	global CONFIG_FILE
 	if not os.path.isfile(CONFIG_FILE):
-		logging.error(f"[read_global] Config file missing: {CONFIG_FILE}")
+		logging(f"[read_global] Config file missing: {CONFIG_FILE}")
 		return
 
 	try:
@@ -148,18 +125,18 @@ def read_global():
 				if not line or line.startswith("#"):
 					continue
 				if "=" not in line:
-					logging.warning(f"[read_global] Invalid line {lineno}: {line}")
+					logging(f"[read_global] Invalid line {lineno}: {line}")
 					continue
 				key, value = line.split("=", 1)
 				values[key.strip()] = value.strip() or None
 	except Exception as e:
-		logging.error(f"[read_global] Error reading config: {e}")
+		logging(f"[read_global] Error reading config: {e}")
 		return
 
 	def load_token(name):
 		val = values.get(name)
 		if not val:
-			logging.error(f"[read_global] Missing or empty token: {name}")
+			logging(f"[read_global] Missing or empty token: {name}")
 		return val
 
 	def load_float(key, fallback):
@@ -170,7 +147,7 @@ def read_global():
 				if val < 0: raise ValueError
 				return val
 		except ValueError:
-			logging.error(f"[read_global] Invalid {key}, fallback={fallback}")
+			logging(f"[read_global] Invalid {key}, fallback={fallback}")
 		return fallback
 
 	def load_int(key, fallback):
@@ -181,28 +158,24 @@ def read_global():
 				if val < 0: raise ValueError
 				return val
 		except ValueError:
-			logging.error(f"[read_global] Invalid {key}, fallback={fallback}")
+			logging(f"[read_global] Invalid {key}, fallback={fallback}")
 		return fallback
 
-	level = values.get("LOG_LEVEL", "").upper()
-	LOG_LEVEL = level if level in valid_levels else "INFO"
-	logging.getLogger().setLevel(LOG_LEVEL_MAP[LOG_LEVEL])
-
-	REQUEST_TIMEOUT			= load_float("REQUEST_TIMEOUT",			10.0)
+	# Search parameters
 	MIN_SIMILARITY			= load_float("MIN_SIMILARITY",			0.75)
 	MIN_SIMILARITY_ITUNES	= load_float("MIN_SIMILARITY_ITUNES",	0.90)
-	FAST_DEADLINE_S			= load_float("FAST_DEADLINE_S",			1.5)
-	TOTAL_DEADLINE_S		= load_float("TOTAL_DEADLINE_S",		2.5)
+	REQUEST_TIMEOUT			= load_float("REQUEST_TIMEOUT",			3.0)
+	FAST_DEADLINE_S			= load_float("FAST_DEADLINE_S",			2.0)
+	TOTAL_DEADLINE_S		= load_float("TOTAL_DEADLINE_S",		3.0)
 	EARLY_STOP_SCORE		= load_float("EARLY_STOP_SCORE",		5.0)
-	MAX_SIZE_PX				= load_int("MAX_SIZE_PX",				800)
-	COVER_QUALITY			= load_int("COVER_QUALITY",				85)
-
+	MAX_SIZE_PX				= load_int("MAX_SIZE_PX",				2000)
+	MIN_SIZE_PX				= load_int("MIN_SIZE_PX",				100)
+	# Search providers
 	PROVIDER_NAMES = ["iTunes","Deezer","MusicBrainz","Spotify","LastFM","Discogs","TheAudioDB"]
 	PROVIDERS_LIST = {
 		n: values.get(n, "False").lower() in ("1","true","yes","on")
 		for n in PROVIDER_NAMES
 	}
-
 	if PROVIDERS_LIST["Spotify"]:
 		SPOTIFY_CLIENT_ID		= load_token("SPOTIFY_CLIENT_ID")
 		SPOTIFY_CLIENT_SECRET	= load_token("SPOTIFY_CLIENT_SECRET")
@@ -212,15 +185,13 @@ def read_global():
 		DISCOGS_TOKEN			= load_token("DISCOGS_TOKEN")
 	if PROVIDERS_LIST["TheAudioDB"]:
 		THEAUDIODB_API_KEY		= values.get("THEAUDIODB_API_KEY", "2") or "2"
+	# Log level
+	level = values.get("LOG_LEVEL").upper()
+	logging.getLogger().setLevel(LOG_LEVELS[level])
 
 def reload_config(signum=None, frame=None):
 	logging.info("[reload_config] Reloading configuration (SIGHUP)")
 	read_global()
-	for c in ALL_LRU_CACHES:
-		info = c.cache_info()
-		logging.warning(f"[reload_config] Clearing cache size={info.currsize} hits={info.hits}")
-		c.cache_clear()
-	logging.info("[reload_config] All LRU caches cleared")
 
 def graceful_exit(signum, frame):
 	logging.info("[graceful_exit] STOP received")
@@ -278,7 +249,7 @@ def split_artist_title(full_title):
 	return "", full_title.strip()
 
 def sanitize(text):
-	"""Light cleanup: & → and."""
+	"""Light cleanup."""
 	if not text: return ""
 	text = unicodedata.normalize('NFKC', text)
 	text = re.sub(r"\s&\s",  " and ", text)
@@ -329,7 +300,7 @@ def normalize_for_search(string):
 	"""Light cleanup for attempt 1: removes feat/with."""
 	t = string
 	t = re.sub(r"\(\s*(feat\.?|ft\.?|featuring|w/|with|voc\.?|voice)\s+[^)]*\)", "", t, flags=re.IGNORECASE)
-	t = re.sub(r"[\-,]?\s*(feat\.?|ft\.?|featuring|w/|voc\.?|voice)\s+.*$", "", t, flags=re.IGNORECASE)
+	t = re.sub(r"(?:\s*[\-,]\s*|\s+)(feat\.?|ft\.?|featuring|w/|voc\.?|voice)\s+.*$", "", t, flags=re.IGNORECASE)
 	t = re.sub(r"\s{2,}", " ", t)
 	return t.strip()
 
@@ -349,7 +320,7 @@ def clean_artist_name(artist):
 	cleaned = re.sub(r'\s+(feat\.?|ft\.?|featuring|with|starring)\s+.*', '', cleaned, flags=re.IGNORECASE)
 	res = cleaned.strip()
 	if raw != res:
-		logging.info(f"[clean_artist_name] '{raw}' → '{res}'")
+		logging.info(f"[clean_artist_name] '{raw}' | '{res}'")
 	return res
 
 def normalize_title(title, artist=None):
@@ -372,7 +343,7 @@ def normalize_title(title, artist=None):
 	title = re.sub(r'[\s\-\.]+$', '', title).strip()
 	res = title.strip()
 	if raw != res:
-		logging.info(f"[normalize_title] '{raw}' → '{res}'")
+		logging.info(f"[normalize_title] '{raw}' | '{res}'")
 	return res
 
 # ================= NOISE / SEGMENT GATE =================
@@ -454,7 +425,7 @@ def is_noise(raw_title, station_name):
 			return True, None
 
 	# Pure noise without dedicated cover
-	# Artist repeated in title with year → station metadata noise
+	# Artist repeated in title with year, station metadata noise
 	year_match = re.match(r'^(.+)\s-\s(\d{4})$', raw_title)
 	if year_match and year_match.group(1).strip().lower() == ti.split(' - ')[0].strip().lower():
 		logging.info(f"[DEBUG year_match] MATCHED: raw='{raw_title}' group1='{year_match.group(1).strip().lower()}' ti_part='{ti.split(' - ')[0].strip().lower()}'")
@@ -576,7 +547,7 @@ def search_musicbrainz(artist, title, album=None):
 									if img_url:
 										return img_url, rel_title, album_type
 					except Exception as e:
-						logging.error(f"[search_musicbrainz] CAA error {mbid}: {e}")
+						logging.warning(f"[search_musicbrainz] CAA error {mbid}: {e}")
 	except Exception as e:
 		logging.error(f"[search_musicbrainz] {e}")
 	return None, None, None
@@ -729,7 +700,7 @@ def search_radio_paradise(station_name, artist, title):
 		cover = data.get("cover") or data.get("cover_med") or data.get("cover_small")
 
 		if artist.lower() != api_artist.lower() or title.lower() != api_title.lower():
-			logging.debug(f"[RadioParadise] Mismatch MPD:'{artist}-{title}' RP:'{api_artist}-{api_title}'")
+			logging.info(f"[RadioParadise] Mismatch MPD:'{artist}-{title}' RP:'{api_artist}-{api_title}'")
 			return None
 
 		if cover:
@@ -743,35 +714,35 @@ def search_radio_paradise(station_name, artist, title):
 def search_cover_parallel(artist, title, attempt=1):
 	"""
 	Parallel cover search across all enabled providers.
-	Timebox: FAST_DEADLINE_S → TOTAL_DEADLINE_S.
+	Timebox: FAST_DEADLINE_S, TOTAL_DEADLINE_S.
 	Early stop if score >= EARLY_STOP_SCORE.
-	Cover selected by resolution: regex → head → pil.
+	Cover selected by resolution: regex, head, pil (3 passes).
 	x1.5 bonus if title exactly matches album name.
 	"""
 	RELEASE_TYPE_WEIGHTS = {
-		"album":	  1.0,
-		"single":	 0.9,
-		"compilation":0.4,
-		"appears_on": 0.5,
-		"ep":		 0.7,
-		"live":	   0.8,
+		"album":		1.0,
+		"single":		0.9,
+		"compilation":	0.4,
+		"appears_on":	0.5,
+		"ep":			0.7,
+		"live":			0.8,
 	}
 
 	all_providers = [
-		("Spotify",	 search_spotify),
-		("iTunes",	  search_itunes),
-		("Deezer",	  search_deezer),
-		("LastFM",	  search_lastfm),
-		("MusicBrainz", search_musicbrainz),
-		("Discogs",	 search_discogs),
-		("TheAudioDB",  search_theaudiodb),
+		("Spotify",		search_spotify),
+		("iTunes",		search_itunes),
+		("Deezer",		search_deezer),
+		("LastFM",		search_lastfm),
+		("MusicBrainz",	search_musicbrainz),
+		("Discogs",		search_discogs),
+		("TheAudioDB",	search_theaudiodb),
 	]
 	providers = [(n, fn) for n, fn in all_providers if PROVIDERS_LIST.get(n, False)]
 
-	results	  = []
-	future_start = {}
-	reason	   = "all_done"
-	stopped_early = False
+	results			= []
+	future_start	= {}
+	reason			= "all_done"
+	stopped_early	= False
 
 	def _compute_best(res):
 		album_groups = defaultdict(list)
@@ -792,17 +763,27 @@ def search_cover_parallel(artist, title, attempt=1):
 		best_album	= max(album_scores.items(), key=lambda x: x[1])[0]
 		best_score	= album_scores[best_album]
 		cover_data	= album_groups[best_album]
-		# Resolution selection: regex → head → pil (3 passes)
+		# Resolution selection: regex, head, pil (3 passes)
 		def _best_res(url):
 			w, h = get_image_resolution(url, "regex")
-			if w > 0: return w * h
+			if w >= MIN_SIZE_PX and w <= MAX_SIZE_PX: return w * h
 			w, h = get_image_resolution(url, "head")
-			if w > 0: return w * h
+			if w >= MIN_SIZE_PX and w <= MAX_SIZE_PX: return w * h
 			w, h = get_image_resolution(url, "pil")
-			return w * h
-		cover_data.sort(key=lambda x: _best_res(x[0]), reverse=True)
-		chosen		  = cover_data[0][0] if cover_data else None
-		chosen_provider = cover_data[0][1] if cover_data else None
+			if w >= MIN_SIZE_PX and w <= MAX_SIZE_PX: return w * h
+			return 0
+
+		# Insert _best_res(url) into the list, 0 means res not within min/max
+		cover_data = [(x, _best_res(x), y) for x,y in cover_data]
+		cover_data.sort(key=lambda x: x[1], reverse=True)
+		if cover_data:
+			if cover_data[0][1] != 0:
+				chosen = cover_data[0][0]
+				chosen_provider = cover_data[0][2]
+			else:
+				logging.error(f"[search_cover_parallel] Cover discarded {chosen_provider}, not within min/max size limit")
+				chosen = None
+				chosen_provider = None
 		return chosen, float(best_score), best_album, chosen_provider
 
 	logging.info(f"[search_cover_parallel] START attempt={attempt} "
@@ -859,9 +840,9 @@ def search_cover_parallel(artist, title, attempt=1):
 						if "best of" in alb_low or "greatest hits" in alb_low:
 							weight = 0.6 if art_low and art_low in alb_low else 0.4
 						results.append((cover, album_found, weight, name))
-						logging.debug(f"[search_cover_parallel] {name}: '{album_found}' type={album_type} w={weight:.2f}")
+						logging.info(f"[search_cover_parallel] {name}: '{album_found}' type={album_type} w={weight:.2f}")
 					else:
-						logging.debug(f"[search_cover_parallel] {name}: no cover")
+						logging.info(f"[search_cover_parallel] {name}: no cover")
 				except Exception as e:
 					logging.error(f"[search_cover_parallel] {name} error: {e}")
 
@@ -890,14 +871,16 @@ def search_cover_parallel(artist, title, attempt=1):
 				 f"best_score={score:.1f} album='{album_name}' provider={provider}")
 
 	if not results or not chosen:
-		logging.info(f"[search_cover_parallel] No cover found")
+		logging.info(f"[search_cover_parallel] Cover discarded or not found")
 		return None, 0.0, None
 
-	logging.info(f"[search_cover_parallel] Album chosen: '{album_name}' "
-				 f"provider={provider} (weighted votes [{score:.1f}])")
+	logging.info(f"[search_cover_parallel] Album:    {album_name}")
+	logging.info(f"[search_cover_parallel] Provider: {provider} (weighted votes [{score:.1f}])")
+	logging.info(f"[search_cover_parallel] Cover:    {chosen}")
 	return chosen, score, provider
 
 def search_for_cover(raw_title, station_name):
+	logging.info(f"[search_for_cover] title={raw_title}, station={station_name}")
 	# Parse raw title
 	artist, title = split_artist_title(raw_title)
 
@@ -922,10 +905,10 @@ def search_for_cover(raw_title, station_name):
 		cover_url = search_radio_paradise(station_name, rp_artist, rp_title)
 		if cover_url:
 			provider = "RadioParadise"
-			logging.info(f"[worker] RadioParadise cover found")
+			logging.info(f"[search] RadioParadise cover found")
 
 	if not cover_url:
-		# ATTEMPT 1 — light cleanup
+		# Attempt 1 — light cleanup
 		artist_1 = artist
 		title_1 = title
 		if not artist_1:
@@ -933,27 +916,27 @@ def search_for_cover(raw_title, station_name):
 			title_1  = raw_title
 		artist_1 = normalize_for_search(artist_1)
 		title_1  = normalize_for_search(title_1)
-		logging.info(f"[worker] ATTEMPT 1: '{artist_1}' - '{title_1}'")
+		logging.info(f"[search] Attempt 1: '{artist_1}' - '{title_1}'")
 		cover_url, score1, provider = search_cover_parallel(artist_1, title_1, attempt=1)
 		if cover_url and score1 >= 1.5:
-			logging.info(f"[worker] Attempt 1 accepted score={score1:.1f} provider={provider}")
+			logging.info(f"[result] Attempt 1: accepted score={score1:.1f} provider={provider}")
 		elif cover_url and score1 < 1.5:
-			logging.info(f"[worker] Attempt 1 score too low ({score1:.1f}), discarding")
+			logging.info(f"[result] Attempt 1: score too low ({score1:.1f}), discarding")
 			cover_url = None
 
-		# ATTEMPT 2 — aggressive cleanup (only if attempt 1 failed)
+		# Attempt 2 — aggressive cleanup (only if attempt 1 failed)
 		if not cover_url:
 			artist_2 = clean_artist_name(raw_artist) if raw_artist else artist_1
 			title_2  = normalize_title(raw_title, artist=raw_artist) if raw_title else title_1
-			logging.info(f"[worker] ATTEMPT 2: '{artist_2}' - '{title_2}'")
+			logging.info(f"[search] Attempt 2: '{artist_2}' - '{title_2}'")
 			cover_url, score2, provider = search_cover_parallel(artist_2, title_2, attempt=2)
 			if cover_url and score2 >= 0.9:
-				logging.info(f"[worker] Attempt 2 accepted score={score2:.1f} provider={provider}")
+				logging.info(f"[result] Attempt 2: accepted score={score2:.1f} provider={provider}")
 			elif cover_url and score2 < 0.9:
-				logging.info(f"[worker] Attempt 2 score too low ({score2:.1f}), discarding")
+				logging.info(f"[result] Attempt 2: score too low ({score2:.1f}), discarding")
 				cover_url = None
 			else:
-				logging.info(f"[worker] No cover after 2 attempts")
+				logging.info(f"[result] No cover after 2 attempts")
 
 	return cover_url
 
@@ -971,21 +954,41 @@ def main():
 	except OSError:
 		pass
 
-	# Setup argument parser
+	# Args
 	parser = argparse.ArgumentParser(
-		description="Fetch album art URL using Title and Name tags from MPD.")
-
-	# Define arguments
-	parser.add_argument("--title", required=True, help="Title tag from MPD enclosed in dbl quotes")
-	parser.add_argument("--station", required=True, help="Name tag from MPD enclosed in dbl quotes")
+		description="Return coverart URL using \"Artist - Title\" and Radio station name.")
+	parser.add_argument("--title", required=True, help="Artist - Title string enclosed in dbl quotes.")
+	parser.add_argument("--station", required=True, help="Radio station name (or blank) enclosed in dbl quotes.")
 	parser.add_argument('--version', action='version', version='%(prog)s {}'.format(__version__))
-
-	# Parse arguments
 	args = parser.parse_args()
 
 	# Search for cover
-	read_global()
-	cover_url = search_for_cover(args.title, args.station)
+	with sqlite3.connect(SQLDB_FILE) as db:
+		db.row_factory = sqlite3.Row
+
+		logging.info(f"[main] Check cache for title={args.title}")
+		row = db.execute("SELECT cover_url FROM cfg_rcucache WHERE title = ?", (args.title,)).fetchone()
+		if row:
+			# Return cached URL
+			logging.info(f"[main] - cached URL found")
+			cover_url = row['cover_url']
+		else:
+			# Search
+			logging.info(f"[main] - not in cache")
+			logging.info(f"[main] Search for cover")
+			read_global()
+			cover_url = search_for_cover(args.title, args.station) # URL or None
+
+			# Update cache
+			if cover_url:
+				logging.info(f"[main] - cover found")
+				logging.info(f"[main] - add URL to cache")
+				db.execute("INSERT INTO cfg_rcucache (title, cover_url) VALUES (?, ?)", (args.title, cover_url))
+			else:
+				logging.info(f"[main] - cover not found")
+
+	# Return URL
+	logging.info(f"[main] - return URL={cover_url}")
 	print(cover_url) # URL or None
 
 if __name__ == "__main__":

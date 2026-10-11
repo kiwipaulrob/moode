@@ -13,11 +13,13 @@ $dbh = sqlConnect();
 phpSession('open');
 
 if (isset($_POST['save']) && $_POST['save'] == '1') {
+	$validKeys = array_column(sqlRead('cfg_airplay', $dbh), 'param');
 	foreach ($_POST['config'] as $key => $value) {
+		chkKey($key, $validKeys);
 		chkValue($key, $value);
 		sqlUpdate('cfg_airplay', $dbh, $key, $value);
 		$value = is_numeric($value) ? $value : '"' . $value . '"';
-		sysCmd("sed -i 's/^" . $key . " = .*;/" . $key . ' = ' . $value . ";/' /etc/shairport-sync.conf");
+		sysCmdSed('s/^' . $key . ' = .*;/' . $key . ' = ' . $value . ';/', '/etc/shairport-sync.conf');
 	}
 	$notify = $_SESSION['airplaysvc'] == '1' ?
 		array('title' => NOTIFY_TITLE_INFO, 'msg' => NAME_AIRPLAY . NOTIFY_MSG_SVC_RESTARTED) :
