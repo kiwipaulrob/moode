@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# moOde SendSpin Integration Installer v4.1.8
+# moOde SendSpin Integration Installer v4.1.9
 # Repository: https://github.com/kiwipaulrob/moode
 # Branch: sendspin-advanced
 #
@@ -19,7 +19,7 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.8"
+SCRIPT_VERSION="4.1.9"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
@@ -576,15 +576,21 @@ install_constants_php() {
     
     local target="${INC_DIR}/constants.php"
     
-    if detect_constants_php; then
+    if ! detect_constants_php; then
+        backup_file "$target" "constants.php"
+
+        # Add FEAT_SENDSPIN after FEAT_PEPPYDISPLAY
+        sed -i '/const FEAT_PEPPYDISPLAY/a const FEAT_SENDSPIN      = 262144;' "$target" 2>/dev/null || true
+    else
         log_warn "FEAT_SENDSPIN already exists in constants.php"
-        return 0
     fi
-    
-    backup_file "$target" "constants.php"
-    
-    # Add FEAT_SENDSPIN after FEAT_PEPPYDISPLAY
-    sed -i '/const FEAT_PEPPYDISPLAY/a const FEAT_SENDSPIN      = 262144;' "$target" 2>/dev/null || true
+
+    # Renderer functions reference SENDSPINMETA_FILE (getSendspinMetadata).
+    # A stock tree defines no such constant, and pre-4.1.9 installs added
+    # the feat bit without it -- ensure it idempotently so reinstalls heal.
+    if ! grep -q "SENDSPINMETA_FILE" "$target" 2>/dev/null; then
+        sed -i "/const FEAT_SENDSPIN/a const SENDSPINMETA_FILE = '/var/local/www/sendspinmeta.txt';" "$target" 2>/dev/null || true
+    fi
     
     if verify_php_syntax "$target"; then
         record_install "constants_php"
@@ -1777,12 +1783,15 @@ SVCEOF
 # ============================================================================
 
 find_and_restore_backup() {
-    log_info "Searching for backup files..."
-    
+    # NOTE: callers capture stdout as the backup path, so all diagnostics
+    # here must go to stderr -- anything on stdout pollutes $backup_dir and
+    # silently disables every restore below.
+    log_info "Searching for backup files..." >&2
+
     local backup_dirs=(/var/backups/moode-sendspin-*/)
-    
+
     if [[ ${#backup_dirs[@]} -eq 0 ]]; then
-        log_warn "No backup directories found"
+        log_warn "No backup directories found" >&2
         return 1
     fi
     
@@ -1797,7 +1806,7 @@ find_and_restore_backup() {
     done
     
     if [[ -n "$latest_backup" ]]; then
-        log_info "Using backup: $latest_backup"
+        log_info "Using backup: $latest_backup" >&2
         echo "$latest_backup"
         return 0
     fi
@@ -1853,6 +1862,7 @@ uninstall_sendspin() {
             log_success "Restored constants.php"
         else
             sed -i '/FEAT_SENDSPIN/d' "${INC_DIR}/constants.php" 2>/dev/null || true
+            sed -i '/SENDSPINMETA_FILE/d' "${INC_DIR}/constants.php" 2>/dev/null || true
         fi
         
         # Restore renderer.php
@@ -1915,6 +1925,32 @@ uninstall_sendspin() {
                         rm -f "${WWW_DIR}/ssp-config.php"
                         rm -f "${WWW_DIR}/templates/ssp-config.html"
                         log_success "Removed ssp-config page"
+
+                        # Restore header.php (the installer only ever appends
+                        # one script tag, so a missing backup degrades to a
+                        # targeted removal instead of a full-file guess)
+                        if [[ -f "${backup_dir}/header.php" ]]; then
+                            cp "${backup_dir}/header.php" "${WWW_DIR}/header.php"
+                            log_success "Restored header.php"
+                        else
+                            sed -i '/sendspin-display.js/d' "${WWW_DIR}/header.php" 2>/dev/null || true
+                        fi
+
+                        # Remove installer-owned web files (new files, never backed up)
+                        rm -f "${WWW_DIR}/js/sendspin-display.js"
+                        rm -f "${WWW_DIR}/command/sendspin-meta.php"
+                        log_success "Removed SendSpin web files"
+
+                        # Stop/disable and remove the metadata sink
+                        systemctl stop sendspin-metadata-sink 2>/dev/null || true
+                        systemctl disable sendspin-metadata-sink 2>/dev/null || true
+                        rm -f "/var/local/www/commandw/sendspin-metadata-sink.py"
+                        rm -f "${SYSTEMD_DIR}/sendspin-metadata-sink.service"
+                        systemctl daemon-reload 2>/dev/null || true
+                        log_success "Removed metadata sink"
+
+                        # Remove the aiosendspin override pin
+                        rm -f "${AIOSENDSPIN_OVERRIDE_FILE}"
         
                         # Remove commandw scripts (SendSpin-owned names only -- moOde's
                         # stock spspost.sh is never touched; a legacy SendSpin
@@ -1948,6 +1984,7 @@ uninstall_sendspin() {
     
             # Manual cleanup attempts
             sed -i '/FEAT_SENDSPIN/d' "${INC_DIR}/constants.php" 2>/dev/null || true
+            sed -i '/SENDSPINMETA_FILE/d' "${INC_DIR}/constants.php" 2>/dev/null || true
             sed -i '/SendSpin Multi-Room Audio/,/^}/d' "${INC_DIR}/renderer.php" 2>/dev/null || true
             sed -i '/FEAT_SENDSPIN/d' "${WWW_DIR}/js/playerlib.js" 2>/dev/null || true
                 sed -i '/FEAT_SENDSPIN/d' "${WWW_DIR}/js/lib.min.js" 2>/dev/null || true
@@ -1961,6 +1998,21 @@ uninstall_sendspin() {
             rm -f "${WWW_DIR}/setup_3rdparty_sendspin.txt"
             rm -f "${WWW_DIR}/ssp-config.php"
             rm -f "${WWW_DIR}/templates/ssp-config.html"
+            # No backup here by definition -- drop just the installer script tag
+            sed -i '/sendspin-display.js/d' "${WWW_DIR}/header.php" 2>/dev/null || true
+            # Remove installer-owned web files (new files, never backed up)
+            rm -f "${WWW_DIR}/js/sendspin-display.js"
+            rm -f "${WWW_DIR}/command/sendspin-meta.php"
+            log_success "Removed SendSpin web files"
+            # Stop/disable and remove the metadata sink
+            systemctl stop sendspin-metadata-sink 2>/dev/null || true
+            systemctl disable sendspin-metadata-sink 2>/dev/null || true
+            rm -f "/var/local/www/commandw/sendspin-metadata-sink.py"
+            rm -f "${SYSTEMD_DIR}/sendspin-metadata-sink.service"
+            systemctl daemon-reload 2>/dev/null || true
+            log_success "Removed metadata sink"
+            # Remove the aiosendspin override pin
+            rm -f "${AIOSENDSPIN_OVERRIDE_FILE}"
             # Remove commandw scripts (SendSpin-owned names only -- moOde's
             # stock spspost.sh is never touched; a legacy SendSpin copy
             # under that name is removed and stock restored)
@@ -2060,6 +2112,26 @@ uninstall_sendspin() {
     
     if detect_systemd_service; then
         log_warn "Systemd service still exists"
+        found_traces=true
+    fi
+
+    if detect_header_php_meta; then
+        log_warn "Traces found in header.php"
+        found_traces=true
+    fi
+
+    if [[ -f "${WWW_DIR}/js/sendspin-display.js" ]]; then
+        log_warn "Traces found in sendspin-display.js"
+        found_traces=true
+    fi
+
+    if detect_sendspin_meta_php; then
+        log_warn "Traces found in sendspin-meta.php"
+        found_traces=true
+    fi
+
+    if detect_sendspin_metadata_sink_service || [[ -f "/var/local/www/commandw/sendspin-metadata-sink.py" ]]; then
+        log_warn "Traces found in metadata sink"
         found_traces=true
     fi
     

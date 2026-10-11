@@ -705,7 +705,7 @@ function generateSendspinService($dbh = null) {
         --log-level {$log_level} \\
         --hook-start /var/local/www/commandw/sendspin-metadata.sh \\
         --hook-stop /var/local/www/commandw/sendspin-metadata.sh
-    ExecStopPost=/var/local/www/commandw/spspost.sh
+    ExecStopPost=/var/local/www/commandw/sendspin-spspost.sh
     Restart=on-failure
     RestartSec=5
     TimeoutStartSec=30
