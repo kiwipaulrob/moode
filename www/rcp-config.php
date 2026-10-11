@@ -36,28 +36,21 @@ if (isset($_POST['save']) && $_POST['save'] == '1') {
 		'search_total_deadline' => 'TOTAL_DEADLINE_S',
 		'search_early_stop_score' => 'EARLY_STOP_SCORE',
 		'search_cover_max_size' => 'MAX_SIZE_PX',
-		'search_cover_quality' => 'COVER_QUALITY',
-		// Daemon mode settings (SSE server)
-		'sse_debounce_ms' => 'DEBOUNCE_MS',
-		'sse_cache_enabled' => 'CACHE_ENABLED',
-		'sse_last_event_send_delay' => 'LAST_EVENT_SEND_DELAY',
-		'sse_health_check_interval' => 'HEALTH_CHECK_INTERVAL',
-		'sse_segment_cover_weather' => 'SEGMENT_COVER_METEO',
-		'sse_segment_cover_traffic' => 'SEGMENT_COVER_TRAFFIC',
-		'sse_segment_cover_news' => 'SEGMENT_COVER_NEWS',
-		'sse_segment_cover_advert' => 'SEGMENT_COVER_ADVERTISING',
+		'search_cover_min_size' => 'MIN_SIZE_PX',
 		// Logging
 		'log_level' => 'LOG_LEVEL'
 	);
 
 	// Update settings
+	$validKeys = array_keys($mappingTable);
 	foreach ($_POST['config'] as $key => $value) {
+		chkKey($key, $validKeys);
 		chkValue($key, $value);
 		$param = $mappingTable[$key];
 		if ($param == 'LOG_LEVEL') {
 			$value = strtoupper($value);
 		}
-		sysCmd("sed -i 's|^" . $param . '=.*|' . $param . '=' . $value . "|' " . RADIOCOVER_PLUS_CFG);
+		sysCmdSed('s|^' . $param . '=.*|' . $param . '=' . $value . '|', RADIOCOVER_PLUS_CFG);
 	}
 }
 
@@ -109,7 +102,7 @@ $_config['search_fast_deadline'] = $config['FAST_DEADLINE_S'];
 $_config['search_total_deadline'] = $config['TOTAL_DEADLINE_S'];
 $_config['search_early_stop_score'] = $config['EARLY_STOP_SCORE'];
 $_config['search_cover_max_size'] = $config['MAX_SIZE_PX'];
-$_config['search_cover_quality'] = $config['COVER_QUALITY'];
+$_config['search_cover_min_size'] = $config['MIN_SIZE_PX'];
 $_rcucache_count = sqlQuery("SELECT count() FROM cfg_rcucache",sqlConnect())[0]['count()'];
 
 // Logging
@@ -117,17 +110,6 @@ $_config['log_level'] .= "<option value=\"Info\" " . (($config['LOG_LEVEL'] == '
 $_config['log_level'] .= "<option value=\"Warning\" " . (($config['LOG_LEVEL'] == 'WARNING') ? "selected" : "") . ">Warning</option>\n";
 $_config['log_level'] .= "<option value=\"Error\" " . (($config['LOG_LEVEL'] == 'ERROR') ? "selected" : "") . ">Error</option>\n";
 $_config['log_level'] .= "<option value=\"Critical\" " . (($config['LOG_LEVEL'] == 'CRITICAL') ? "selected" : "") . ">Critical</option>\n";
-
-// Daemon mode settings (SSE server)
-$_config['sse_debounce_ms'] = $config['DEBOUNCE_MS'];
-$_config['sse_cache_enabled'] .= "<option value=\"True\" " . (($config['CACHE_ENABLED'] == 'True') ? "selected" : "") . ">Yes</option>\n";
-$_config['sse_cache_enabled'] .= "<option value=\"False\" " . (($config['CACHE_ENABLED'] == 'False') ? "selected" : "") . ">No</option>\n";
-$_config['sse_last_event_send_delay'] = $config['LAST_EVENT_SEND_DELAY'];
-$_config['sse_health_check_interval'] = $config['HEALTH_CHECK_INTERVAL'];
-$_config['sse_segment_cover_weather'] = $config['SEGMENT_COVER_METEO'];
-$_config['sse_segment_cover_traffic'] = $config['SEGMENT_COVER_TRAFFIC'];
-$_config['sse_segment_cover_news'] = $config['SEGMENT_COVER_NEWS'];
-$_config['sse_segment_cover_advert'] = $config['SEGMENT_COVER_ADVERTISING'];
 
 waitWorker('rcp-config');
 

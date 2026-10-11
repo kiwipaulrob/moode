@@ -718,7 +718,9 @@ if ($actualCardNum == ALSA_EMPTY_CARD) {
 		phpSession('write', 'alsa_output_mode', 'iec958');
 		workerLog('worker: MPD config:    updated (iec958 device)');
 	}
-	updMpdConf();
+	if ($_SESSION['adevname'] != TRX_SENDER_NAME) {
+		updMpdConf();
+	}
 } else {
 	workerLog('worker: ALSA card:     has been reassigned to ' . $actualCardNum . ' from ' . $_SESSION['cardnum']);
 	phpSession('write', 'cardnum', $actualCardNum);
@@ -1391,7 +1393,9 @@ if (0 === preg_match('/^((?!:\d+).)*$/', $_SESSION['local_display_url'])) {
 	phpSession('write', 'local_display_url', DEFAULT_WEBUI_DISPLAY_URL);
 	workerLog('worker: WARNING:          Invalid Target URL: Reset to default');
 }
-sysCmd("sed -i 's|--app.*|--app=\"" . $_SESSION['local_display_url'] . "\" \\\\|' " . $_SESSION['home_dir'] . '/.xinitrc');
+$kioskUrl = $_SESSION['local_display_url'];
+$kioskUrl .= (strpos($kioskUrl, '?') === false ? '?' : '&') . 'kiosk=1';
+sysCmd("sed -i 's|--app.*|--app=\"" . str_replace('&', '\&', $kioskUrl) . "\" \\\\|' " . $_SESSION['home_dir'] . '/.xinitrc');
 // - Screen blank interval
 if (!isset($_SESSION['scn_blank'])) {
 	$_SESSION['scn_blank'] = '600'; // 10 mins
@@ -1549,9 +1553,8 @@ $validIPAddress = ($_SESSION['ipaddress'] != '0.0.0.0' && $wlan0Ip != explode('/
 // NOTE: updaterAutoCheck() logs status
 $_SESSION['updater_available_update'] = updaterAutoCheck($validIPAddress);
 
-// Radio cover search provider
+// Radio covers
 workerLog('worker: Radio covers:         ' . $_SESSION['radio_covers']);
-workerLog('worker: iTunes timeout:       ' . $_SESSION['itunes_query_timeout'] . ' secs');
 
 // Automatic CoverView (Preferences)
 workerLog('worker: Auto-CoverView:       ' . ($_SESSION['auto_coverview'] == '-on' ? 'on' : 'off'));
@@ -2057,6 +2060,7 @@ function chkBtActive() {
 			$GLOBALS['scnsaver_timeout'] = $_SESSION['scnsaver_timeout'];
 			sysCmd('mpc stop'); // For added robustness
 			sendFECmd('btactive1');
+			startBtMeta();
 
 			// Local volume (set to max)
 			if ($_SESSION['alsavolume'] != 'none') {
@@ -2096,6 +2100,7 @@ function chkBtActive() {
 		if ($_SESSION['btactive'] == '1') {
 			phpSession('write', 'btactive', '0');
 			sendFECmd('btactive0');
+			stopBtMeta();
 
 			// Local volume
 	        if ($_SESSION['camilladsp'] != 'off') {
@@ -3378,6 +3383,9 @@ function runQueuedJob() {
 				}
 			}
 			break;
+		case 'bt_disconnect':
+			sysCmd('/var/www/util/blu-control.sh -D');
+			break;
 
 		case 'multiroom_tx':
 			if ($_SESSION['multiroom_tx'] == 'On') {
@@ -3700,7 +3708,9 @@ function runQueuedJob() {
 			}
 			break;
 		case 'local_display_url':
-			sysCmd("sed -i 's|--app.*|--app=\"" . $_SESSION['w_queueargs'] . "\" \\\\|' " . $_SESSION['home_dir'] . '/.xinitrc');
+			$kioskUrl = $_SESSION['w_queueargs'];
+			$kioskUrl .= (strpos($kioskUrl, '?') === false ? '?' : '&') . 'kiosk=1';
+			sysCmd("sed -i 's|--app.*|--app=\"" . str_replace('&', '\&', $kioskUrl) . "\" \\\\|' " . $_SESSION['home_dir'] . '/.xinitrc');
 			stopLocalDisplay();
 			startLocalDisplay();
 			break;

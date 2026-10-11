@@ -14,19 +14,23 @@ phpSession('open');
 if (isset($_POST['save']) && $_POST['save'] == '1') {
 	$_POST['config']['upnpav'] = $_POST['config']['svctype'] == 'upnpav' ? '1' : '0';
 	$_POST['config']['openhome'] = $_POST['config']['svctype'] == 'openhome' ? '1' : '0';
+	unset($_POST['config']['svctype']);
 
+	$validKeys = array_column(sqlRead('cfg_upnp', $dbh), 'param');
 	foreach ($_POST['config'] as $key => $value) {
+		chkKey($key, $validKeys);
 		if ($key != 'qobuzpass') {
 			chkValue($key, $value);
 		}
 		if ($key != 'qobuzpass' || $value != 'Password set') {
 			sqlUpdate('cfg_upnp', $dbh, $key, $value);
 			if ($value != '') {
-				sysCmd("sed -i '/" . $key . ' =' . '/c\\' . $key . ' = ' . $value . "' /etc/upmpdcli.conf");
+				$sedExpr = '/^' . $key . ' =/c\\' . $key . ' = ' . $value;
 			}
 			else {
-				sysCmd("sed -i '/" . $key . ' =' . '/c\\' . '#' . $key . ' = ' . $value . "' /etc/upmpdcli.conf");
+				$sedExpr = '/^' . $key . ' =/c\\' . '#' . $key . ' = ' . $value;
 			}
+			sysCmdSed($sedExpr, '/etc/upmpdcli.conf');
 		}
 	}
 	$notify = $_SESSION['upnpsvc'] == '1' ?

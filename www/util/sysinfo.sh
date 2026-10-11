@@ -205,7 +205,6 @@ APPEARANCE_SETTINGS() {
 	echo -e "\nShow Queue thumbs\t= $playlist_art\c"
 	echo -e "\nShow tagview covers\t= $library_tagview_covers\c"
 	echo -e "\nRadio covers\t\t= $radio_covers\c"
-	echo -e "\niTunes query timeout\t= $itunes_query_timeout\c"
 	echo -e "\n\nLibrary\c"
 	echo -e "\n----------------------\c"
 	echo -e "\nOne touch album\t\t= $library_onetouch_album\c"
@@ -594,7 +593,7 @@ fi
 # Bluetooth
 BT_BLUETOOTH_VER=$(bluetoothd -v)
 BT_BLUEALSA_VER=$(bluealsa -V 2> /dev/null)
-BT_PAIRING_AGENT_VER="1.0.0 (bt-pairing-agent.py)"
+BT_PAIRING_AGENT_VER="1.0.0 (bt_pairing_agent.py)"
 BT_PI_BLUETOOTH_VER=$(dpkg -l | grep pi-bluetooth | awk '{print $3}')
 bt_bluez_controller_mode=$(moodeutl -d -gv bluez_controller_mode)
 TMP=$(moodeutl -d -gv bt_pairing_confirm)
@@ -805,7 +804,7 @@ xtagdisp=${arr[37]}
 rsmafterapl=${arr[38]}
 rsmafterqbz=${arr[39]}
 library_show_genres=${arr[40]}
-itunes_query_timeout=${arr[41]}
+RESERVED_42=${arr[41]}
 i2soverlay=${arr[42]}
 folder_pos=${arr[43]}
 [[ "${arr[44]}" = "1" ]] && peppy_display="On" || peppy_display="Off"

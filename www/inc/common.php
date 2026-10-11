@@ -105,6 +105,29 @@ function chkVariables($variables, $excludedKeys = array()) {
 	}
 }
 
+// Check for bogus $_POST($key) injection
+function chkKey($key, $validKeys) {
+	$valid = true;
+	$msg = '';
+
+	if (!in_array($key, $validKeys, true)) {
+		$valid = false;
+		$msg = 'Invalid key detected, request denied';
+	}
+
+	if ($valid === false) {
+		// Write log entry
+		workerLog('SECCHK: ' . $msg);
+		workerLog('SECCHK: ' . $key);
+		// Redirect to '400 Bad request' page and then exit
+		http_response_code(400);
+		header('Location: /response400.html');
+		exit(1);
+	} else {
+		//debugLog('chkKey(): ' . $key . '| Is valid);
+	}
+}
+
 // Check for unwanted characters and shell commands
 function chkValue($key = 'nokey', $value) {
 	$valid = true;
@@ -252,6 +275,12 @@ function sysCmd($cmd) {
 // Execute shell command: Return output as string with newlines "\n" included.
 function sysCmdStr($cmd) {
 	return shell_exec('sudo LC_ALL=C ' . $cmd);
+}
+// Run an in-place sed edit. Both the expression and the file name are passed as
+// single shell-escaped arguments, so config values embedded in the expression
+// can't end the quoting and have the rest of the string run as commands.
+function sysCmdSed($expr, $file) {
+	return sysCmd('sed -i ' . escapeshellarg($expr) . ' ' . escapeshellarg($file));
 }
 
 // Get major version (series) SS in 'rSSNN'
@@ -507,7 +536,7 @@ function sendFECmd ($cmd) {
 	}
 }
 
-// Send a pairing decision to the Bluetooth agent (bt-pairing-agent.py) over its
+// Send a pairing decision to the Bluetooth agent (bt_pairing_agent.py) over its
 // local socket. $accepted is '1'/'0'; $code is only used for Passkey Entry input.
 function sendBtAgentResponse($id, $accepted, $code = '') {
 	if (preg_match('/^[0-9a-f]{8}$/', $id) !== 1) {
