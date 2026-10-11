@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# moOde SendSpin Integration Installer v4.1.9
+# moOde SendSpin Integration Installer v4.1.10
 # Repository: https://github.com/kiwipaulrob/moode
 # Branch: sendspin-advanced
 #
@@ -19,7 +19,7 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.9"
+SCRIPT_VERSION="4.1.10"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
@@ -72,22 +72,7 @@ MINIMAL_INSTALL_FILES=(
     "${SYSTEMD_DIR}/sendspin.service"
 )
 
-# Files to backup for uninstall
-BACKUP_FILES=(
-    "constants.php"
-    "renderer.php"
-    "playerlib.js"
-    "ren-config.php"
-    "ren-config.html"
-    "ssp-config.php"
-    "ssp-config.html"
-    "setup_3rdparty_sendspin.txt"
-    "worker.php"
-    "sendspin-spspre.sh"
-    "sendspin-metadata.sh"
-    "sendspin-spspost.sh"
-    "sendspin-version-check.sh"
-)
+
 
 # Installation tracking
 INSTALLED_COMPONENTS=()
@@ -723,6 +708,8 @@ function stopSendspin() {
 function getSendspinVersion() {
     $result = sysCmd('sudo /root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
     $version = (!empty($result) && isset($result[0])) ? trim($result[0]) : 'unknown';
+    // CLI prints "sendspin X.Y.Z" -- callers compare it with version_compare()
+    $version = preg_replace('/^sendspin\s+/i', '', $version);
     return $version;
 }
 
@@ -732,12 +719,6 @@ function getSendspinMetadata() {
         return $meta;
     }
     return '';
-}
-
-function checkSendspinUpdate() {
-    $result = sysCmd('sendspin-version-check.sh 2>/dev/null');
-    $json = (!empty($result) && isset($result[0])) ? $result[0] : '{}';
-    return $json;
 }
 
 function updateSendspin() {
@@ -1284,8 +1265,9 @@ migrate_legacy_spspost() {
 # Best-effort restore of moOde's stock Spotify hook after a legacy migration
 # or uninstall removed our copy from the shared filename. The installer keeps
 # no backup of moOde-owned files, so fetch stock from upstream at the running
-# release tag (10.3.4 -> r1034). Never fatal: without it, Spotify stop events
-# just go unlogged until the next moOde update re-lays the file.
+# release tag (e.g. 10.3.6 -> r1036, derived from moodeutl at runtime).
+# Never fatal: without it, Spotify stop events just go unlogged until the
+# next moOde update re-lays the file.
 restore_stock_spspost() {
     local legacy="/var/local/www/commandw/spspost.sh"
     [[ -f "$legacy" ]] && return 0
@@ -1485,197 +1467,16 @@ install_setup_txt() {
         return 0
     fi
     
-    cat > "$target" << 'EOF'
-################################################################################
-#
-#  Setup Guide for SendSpin Multi-Room Audio Renderer
-#
-#  Version: 2.1 (2026-06-29)
-#
-################################################################################
+    # The guide lives in the repo (www/setup_3rdparty_sendspin.txt) and is
+    # fetched so the deployed copy can never drift behind the branch file.
+    if download_from_github "www/setup_3rdparty_sendspin.txt" "$target"; then
+        chown www-data:www-data "$target" || { log_error "  Failed to chown ${target}"; return 1; }
+        chmod 644 "$target" || { log_error "  Failed to chmod ${target}"; return 1; }
+    else
+        log_error "  Failed to download setup guide: ${target}"
+        return 1
+    fi
 
-OVERVIEW
-
-SendSpin is a synchronized multi-room audio protocol. This integration adds
-SendSpin as a first-class renderer in moOde's web UI, allowing your Raspberry Pi
-to act as an audio endpoint in multi-room systems (Music Assistant, etc.).
-
-The installer handles everything automatically  --  it installs Python 3, uv
-(Python package manager), and the sendspin CLI, then patches moOde's web
-interface, creates the systemd service, configures the database, and creates
-a backup of all modified files.
-
-REQUIREMENTS
-
-- moOde 9.x or later running on a Raspberry Pi 3, 4, or 5
-- Network connection to a SendSpin server (e.g., Music Assistant)
-- Home Assistant (optional, for now-playing metadata display)
-
-No manual installation of Python, uv, or the sendspin CLI is required  -- 
-the installer handles all prerequisites automatically.
-
-INSTALLATION
-
-Full install (all features):
-
-    git clone https://github.com/kiwipaulrob/moode.git
-    cd moode && git checkout sendspin-advanced
-    sudo bash moode-sendspin-installer.sh
-
-Or install directly from URL:
-
-    curl -fsSL https://raw.githubusercontent.com/kiwipaulrob/moode/sendspin-advanced/moode-sendspin-installer.sh | sudo bash
-
-INSTALLER COMMAND LINE OPTIONS
-
-    sudo bash moode-sendspin-installer.sh           Full install (default)
-    sudo bash moode-sendspin-installer.sh --minimal Endpoint only (ON/OFF + Resume MPD, no config page)
-    sudo bash moode-sendspin-installer.sh --check   Check installation status
-    sudo bash moode-sendspin-installer.sh --uninstall  Remove SendSpin, restore originals
-    sudo bash moode-sendspin-installer.sh --no-backup   Skip backup creation
-    sudo bash moode-sendspin-installer.sh --help    Show help
-
-USAGE
-
-After installation, open moOde's web UI and navigate to:
-  Configure -> Renderers -> SendSpin section
-
-RENDERER CONTROLS
-
-Service toggle (ON/OFF):
-    ON   --  SendSpin is active and appears as an available endpoint in controllers
-    OFF  --  SendSpin is stopped and does not appear in controllers
-    Changes take effect immediately on save.
-
-Name:
-    The name that appears in your multi-room audio controller.
-    Default: "moode-sendspin"
-    Change this to identify your device (e.g., "Kitchen Speaker", "Living Room").
-
-Resume MPD:
-    ON   --  MPD playback resumes automatically when SendSpin streaming stops
-    OFF  --  MPD remains stopped after SendSpin disconnects
-
-Restart button:
-    Restarts the SendSpin service. Use this if the device disappears from
-    the controller or audio stops working.
-
-Edit button:
-    Opens the SendSpin configuration page (ssp-config.php) with these settings:
-
-    Audio format:
-        Codec:       FLAC (lossless, recommended) or PCM (uncompressed)
-        Sample rate: 44100, 48000 (default), or 96000 Hz
-        Bit depth:   16 (CD quality), 24, or 32 bit
-        Changes take effect on next service restart.
-
-    Log level:
-        DEBUG (troubleshooting), INFO (normal), WARNING, or ERROR (minimal)
-        Controls verbosity of the SendSpin daemon log.
-
-    Version:
-        Shows installed and latest available SendSpin CLI version.
-        If an update is available, an Update button appears to upgrade
-        the CLI in the background via uv.
-
-CONFIGURATION OPTIONS (SSP-CONFIG PAGE)
-
-The Edit button opens a dedicated configuration page with settings for
-audio codec, sample rate, bit depth, and log level. All settings are
-validated and saved to the database. The SendSpin systemd service file
-is regenerated automatically on save.
-
-VOLUME LEVEL
-
-SendSpin uses moOde's standard _audioout ALSA device, the same device used
-by AirPlay, Spotify, RoonBridge, and MPD. Volume is controlled by moOde's
-integrated volume knob  --  SendSpin matches the level of all other renderers
-automatically. No manual attenuation adjustment is needed.
-
-MOODE UPDATES
-
-Re-run the installer after a moOde system update:
-
-    cd moode && git pull && sudo bash moode-sendspin-installer.sh
-
-TROUBLESHOOTING
-
-"Device in Use" error [PaErrorCode -9985]:
-
-    This error occurs when SendSpin cannot open the audio device because MPD
-    is currently using it.
-
-    SOLUTION: Enable the SendSpin service in moOde UI first. The integration
-    handles ALSA device sharing automatically. If you start SendSpin manually
-    via SSH, stop MPD first:
-
-        mpc stop
-        sudo systemctl start sendspin
-
-No audio when streaming starts:
-
-    1. Check SendSpin service status:
-       sudo systemctl status sendspin
-
-    2. View SendSpin logs:
-       sudo journalctl -u sendspin -f
-
-    3. Verify the daemon is running:
-       pgrep -f "sendspin daemon"
-
-    4. Check that the _audioout ALSA device is available:
-       aplay -L | grep _audioout
-
-moOde device not appearing in controller:
-
-    1. Check that Service is toggled ON in moOde UI
-    2. Verify mDNS discovery is working:
-       sendspin --list-servers
-    3. Ensure your controller is on the same network
-    4. Check firewall settings (port 44556/UDP for mDNS)
-    5. Restart SendSpin service
-
-Audio dropouts or stuttering:
-
-    1. Check CPU usage during playback: top
-    2. Ensure adequate power supply (especially for Pi 4/5)
-    3. Try a wired network connection instead of WiFi
-    4. Lower the audio quality in your controller settings
-
-MPD does not resume after SendSpin stops:
-
-    1. Check that Resume MPD is enabled in the SendSpin section of Renderers
-    2. Verify MPD was playing before SendSpin started
-    3. Check moOde logs: sudo tail -f /var/log/moode.log
-
-COMMAND REFERENCE
-
-    # Check SendSpin status
-    sudo systemctl status sendspin
-
-    # View SendSpin logs
-    sudo journalctl -u sendspin -f
-
-    # List available SendSpin servers on network
-    sendspin --list-servers
-
-    # List audio devices
-    sendspin --list-audio-devices
-
-    # Restart SendSpin
-    sudo systemctl restart sendspin
-
-    # Check that _audioout is available
-    aplay -L | grep _audioout
-
-################################################################################
-#  For support, visit https://github.com/kiwipaulrob/moode/issues
-################################################################################
-EOF
-    
-    chown www-data:www-data "$target" || { log_error "  Failed to chown ${target}"; return 1; }
-    chmod 644 "$target" || { log_error "  Failed to chmod ${target}"; return 1; }
-    
     if [[ ! -s "$target" ]]; then
         log_error "  Setup guide write produced no output: ${target}"
         return 1

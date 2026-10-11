@@ -652,6 +652,8 @@ function stopSendspin() {
 function getSendspinVersion() {
     $result = sysCmd('sudo /root/.local/share/uv/tools/sendspin/bin/sendspin --version 2>/dev/null');
     $version = (!empty($result) && isset($result[0])) ? trim($result[0]) : 'unknown';
+    // CLI prints "sendspin X.Y.Z" -- callers compare it with version_compare()
+    $version = preg_replace('/^sendspin\s+/i', '', $version);
     return $version;
 }
 
@@ -661,12 +663,6 @@ function getSendspinMetadata() {
         return $meta;
     }
     return '';
-}
-
-function checkSendspinUpdate() {
-    $result = sysCmd('sendspin-version-check.sh 2>/dev/null');
-    $json = (!empty($result) && isset($result[0])) ? $result[0] : '{}';
-    return $json;
 }
 
 function updateSendspin() {

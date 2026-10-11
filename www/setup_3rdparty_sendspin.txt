@@ -46,6 +46,8 @@ INSTALLER COMMAND LINE OPTIONS
 
     sudo bash moode-sendspin-installer.sh           Full install (default)
     sudo bash moode-sendspin-installer.sh --minimal Endpoint only (ON/OFF + Resume MPD, no config page)
+      NOTE: --minimal writes a hook-less service unit (no metadata display,
+      no post-stop cleanup) -- full install regenerates the complete unit.
     sudo bash moode-sendspin-installer.sh --check   Check installation status
     sudo bash moode-sendspin-installer.sh --uninstall  Remove SendSpin, restore originals
     sudo bash moode-sendspin-installer.sh --no-backup   Skip backup creation
