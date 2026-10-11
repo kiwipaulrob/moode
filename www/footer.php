@@ -184,8 +184,8 @@
 
 <script src="js/sendspin-display.js?v=3"></script>
 <?php
-//workerLog('-- footer.php');
-$return_val = session_write_close();
-//workerLog('session_write_close=' . (($return_val) ? 'TRUE' : 'FALSE'));
-echo "</body></html>";
+	//workerLog('-- footer.php');
+	$return_val = session_write_close();
+	//workerLog('session_write_close=' . (($return_val) ? 'TRUE' : 'FALSE'));
+	echo "</body></html>";
 ?>

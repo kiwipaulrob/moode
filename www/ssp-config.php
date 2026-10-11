@@ -13,8 +13,12 @@ $dbh = sqlConnect();
 phpSession('open');
 
 // Handle save
-if (isset($_POST['save']) && $_POST['save'] == '1') {
+if (isset($_POST['save']) && $_POST['save'] == '1' && isset($_POST['config']) && is_array($_POST['config'])) {
+	// Upstream pattern: allowlist POST keys against the table's own params
+	$validKeys = array();
+	foreach (sqlRead('cfg_sendspin', $dbh) as $row) { $validKeys[] = $row['param']; }
 	foreach ($_POST['config'] as $key => $value) {
+		chkKey($key, $validKeys);
 		chkValue($key, $value);
 		sqlUpdate('cfg_sendspin', $dbh, $key, $value);
 	}
