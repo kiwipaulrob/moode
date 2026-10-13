@@ -17,6 +17,7 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 ## Requirements
 
 - moOde 9.x or later — verified against the current release, moOde 10.3.6 (r1036, Trixie); the fork is re-merged with every new upstream release
+- **Live-verified on moOde 10.3.6** (in-place update from 10.3.5, 2026-10-12): installer v4.1.10 reports 19/19 components, the `sendspin` service runs enabled with the daemon holding `_audioout`, CLI 7.5.0 is pinned with the `aiosendspin>=6.1.1,<6.2` override recorded in the uv receipt, and the monitoring suite reports **55 passed / 0 failed**
 - Raspberry Pi 3/4/5
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
