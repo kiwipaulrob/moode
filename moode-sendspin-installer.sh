@@ -19,14 +19,14 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.10"
+SCRIPT_VERSION="4.1.11"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
-SENDSPIN_VERSION="7.5.0"
+SENDSPIN_VERSION="8.0.0"
 # aiosendspin workaround — see ensure_aiosendspin_override() and README (upstream sendspin#280)
-AIOSENDSPIN_OVERRIDE_SPEC=">=6.1.1,<6.2"
-AIOSENDSPIN_MIN_VERSION="6.1.1"
+AIOSENDSPIN_OVERRIDE_SPEC=">=9.1.1,<9.2"
+AIOSENDSPIN_MIN_VERSION="9.1.1"
 AIOSENDSPIN_OVERRIDE_FILE="/etc/moode-sendspin-aiosendspin.overrides.txt"
 BASE_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}"
 
@@ -378,7 +378,8 @@ check_installation() {
 # ============================================================================
 
 # Apply the aiosendspin override (upstream Sendspin-Protocol/sendspin#280).
-# sendspin 7.5.0 declares aiosendspin[server]~=6.0.1, i.e. >=6.0.1,<6.1.0.
+# sendspin 8.0.0 needs aiosendspin 9.1.x (pairing/encryption stack:
+# cpace, noiseprotocol, cryptography).
 # aiosendspin 6.1.0 added seek/seek_relative to MediaCommand, and servers now
 # advertise them (Music Assistant 2.10.x sends seek_relative). On 6.0.x the
 # value cannot be parsed and, because supported_commands is typed
