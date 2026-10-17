@@ -229,7 +229,56 @@ Tracked upstream as **Sendspin-Protocol/sendspin#280** and **#278**; resolved by
 grep overrides /root/.local/share/uv/tools/sendspin/uv-receipt.toml
 ```
 
-The upper bound is deliberately narrow: `aiosendspin` 9.x required code migration in `sendspin` (see upstream PR #276), so 6.1.x — the additive delta verified in #280 — is the safe range. Drop the override once upstream relaxes the pin.
+The upper bound is deliberately narrow: `aiosendspin` major bumps have required code migration in `sendspin` before (see upstream PR #276), so each override pins the additive delta verified at the time. The 9.x line arrived with SendSpin 8.0.0 itself, so the current override follows it.
+
+## Changelog
+
+### 8.0.0 (2026-10-12) — currently deployed on this Pi
+
+This release adds encryption and pairing, and needs Music Assistant 2.10 or newer.
+
+After upgrading:
+
+- Each player gets a new client ID, so Music Assistant sees it as a new player. You will need to re-add it to groups and update any Home Assistant automations that used the old one.
+- Unpaired access is on by default, so Music Assistant and other servers let the player play without a PIN. To require pairing before playing, start the player with `--unpaired-access false`.
+- `--id` is removed, so take it out of any service file or the player will not start. To run multiple players on one machine, give each one its own `--settings-dir` instead.
+
+Breaking changes:
+
+- #277 — Bump aiosendspin to 9.1.1 and wire up pairing/encryption (@OnFreund)
+
+Bugfixes:
+
+- #286 — fix(audio): treat ValueError from format probing as unsupported, raw ALSA devices (@kiwipaulrob)
+- #285 — fix(settings): write settings file atomically via temp + rename (@kiwipaulrob)
+- #283 — fix(utils): log fire-and-forget background task failures (@kiwipaulrob)
+- #287 — fix(settings): create the identity key file with owner-only mode from the outset (@kiwipaulrob)
+- #288 — fix(tui): idle the visualizer refresh once interpolation settles (@kiwipaulrob)
+- #284 — fix(daemon): keep reconnecting after unexpected errors instead of exiting 0 (@kiwipaulrob)
+- #282 — fix(serve): sample play_start_us from CLOCK_MONOTONIC_RAW (@kiwipaulrob)
+- #279 — Fix ALSA hardware volume detection for CARD=<name> and bare sysdefault devices (@OnFreund)
+
+Features:
+
+- #293 — Add `--unpaired-access` option, on by default (@maximmaxim345)
+
+Maintenance:
+
+- #292 — Auto-label PRs and sort all labels into release notes (@maximmaxim345)
+- #281 — docs: clarify daemon upgrade flow for dedicated sendspin service user (@kadykov)
+
+### 7.6.0 (2026-10-10) — prerelease, superseded by 8.0.0
+
+Not published to PyPI. Its changes (the seven bugfixes above plus #281, #277 and #279) all shipped in 8.0.0.
+
+### 7.5.0 (2026-06-16)
+
+- #255 — Reduce audible startup sync correction (@trisweb)
+- #266 — Display album artwork in the TUI via `artwork@v1` (@maximmaxim345)
+- #265 — Run pytest in CI (@maximmaxim345)
+- #264 — Visualizer follow-up fixes (@maximmaxim345)
+
+Older releases: https://github.com/Sendspin/sendspin-python-cli/releases
 
 ## Uninstall
 
