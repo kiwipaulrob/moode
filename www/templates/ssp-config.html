@@ -26,13 +26,18 @@
 			<div class="controls">
 				<input class="config-input-large" type="text" id="latest-version" name="latest_version" value="$_select[latest_version]" readonly>
 			</div>
+			<label class="control-label" for="pinned-version">Pinned</label>
+			<div class="controls">
+				<input class="config-input-large" type="text" id="pinned-version" name="pinned_version" value="$_select[pinned_version]" readonly>
+			</div>
 
 			<div class="controls" id="sendspin-update-row">
 				$_select[sendspin_update_btn]
 				<span class="config-btn-after">Update SendSpin</span>
+				$_select[major_note]
 				<a aria-label="Help" class="config-info-toggle" data-cmd="info-sendspin-update" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
 				<span id="info-sendspin-update" class="config-help-info">
-					Updates the SendSpin CLI to the latest version using uv tool upgrade. The SendSpin service will be restarted after the update.
+					Installs patch updates within the pinned SendSpin version using uv tool upgrade. The SendSpin service will be restarted after the update. New major versions ship with an installer re-run (new pin and compatibility range), never through this button.
                 </span>
 			</div>
 
