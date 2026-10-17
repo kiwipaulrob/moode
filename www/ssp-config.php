@@ -39,7 +39,7 @@ if (isset($_POST['save']) && $_POST['save'] == '1' && isset($_POST['config']) &&
 if (isset($_POST['update_sendspin']) && $_POST['update_sendspin'] == '1') {
 	if (($_SESSION['sendspinsvc'] ?? '0') == '1') {
 		updateSendspin();
-		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin updated and restarted');
+		$notify = array('title' => NOTIFY_TITLE_INFO, 'msg' => 'SendSpin update launched in background (patches within the pinned version)');
 	} else {
 		$notify = array('title' => '', 'msg' => '');
 	}
@@ -84,6 +84,30 @@ $_latest_version_display = '';
 $_update_available = false;
 $_can_update = false;
 
+// Pinned channel: the installer pins a sendspin>=X.Y,<X.Z line in the uv
+// receipt, so the Update button (bare `uv tool upgrade`) delivers patches on
+// that line but can never jump majors. New majors ship with an installer
+// re-run (new pin range). $mm() reduces a version to its major.minor line.
+$mm = function ($v) {
+	$p = explode('.', preg_replace('/[^0-9.]/', '', (string)$v));
+	return ($p[0] ?? '0') . '.' . ($p[1] ?? '0');
+};
+$_pin_spec = '';
+$_pinned_version = '';
+$_pinned_version_display = 'Not pinned';
+$_major_available = false;
+$receipt = @file_get_contents('/root/.local/share/uv/tools/sendspin/uv-receipt.toml');
+if ($receipt !== false && preg_match('/specifier\s*=\s*"([^"]+)"/', $receipt, $m)) {
+	$_pin_spec = $m[1];
+	if (preg_match('/>=\s*([0-9][0-9.]*)/', $_pin_spec, $v)) {
+		$_pinned_version = $v[1];
+	} elseif (preg_match('/==\s*([0-9][0-9.]*)/', $_pin_spec, $v)) {
+		$_pinned_version = $v[1];
+	}
+	$_pinned_version_display = htmlspecialchars($_pin_spec);
+}
+
+
 $cacheFile = '/tmp/sendspin_version_cache.json';
 $cacheAge = 3600; // 1 hour
 
@@ -110,8 +134,19 @@ if ($pypi_json !== false) {
 		$_latest_version_display = htmlspecialchars($_latest_version);
 		$_can_update = true;
 		if ($_installed_version && version_compare($_installed_version, $_latest_version, '<')) {
+		if ($_pinned_version && version_compare($mm($_latest_version), $mm($_pinned_version), '>')) {
+			// A newer line exists upstream (beyond the pinned major.minor).
+			$_major_available = true;
+		} elseif ($_pinned_version && version_compare($mm($_installed_version), $mm($_pinned_version), '<')) {
+			// Installed is behind the pinned line entirely: the installer
+			// re-run owns this state, not the button.
+			$_major_available = true;
+		} else {
 			$_update_available = true;
 		}
+
+
+	}
 	}
 } else {
 	$_latest_version_display = 'Unable to check';
@@ -124,7 +159,16 @@ $_select['sendspin_update_btn'] = (($_SESSION['sendspinsvc'] ?? '0') == '1') && 
 
 $_select['installed_version'] = $_installed_version_display;
 $_select['latest_version'] = $_latest_version_display;
+$_select['pinned_version'] = $_pinned_version_display;
 $_select['update_available'] = $_update_available ? 'yes' : 'no';
+$_major_note = '';
+if (!empty($_major_available)) {
+	$_major_note = 'A newer SendSpin line (' . htmlspecialchars($_latest_version) . ') is available upstream — it ships with an installer re-run, not this button.';
+} elseif ($_pinned_version && $_installed_version && version_compare($mm($_installed_version), $mm($_pinned_version), '>')) {
+	$_major_note = 'Installed ' . htmlspecialchars($_installed_version) . ' is ahead of the pinned line (' . htmlspecialchars($_pin_spec) . ') — the next installer re-run will set it back.';
+}
+
+$_select['major_note'] = $_major_note ? '<span class="config-btn-after">Note: ' . $_major_note . '</span>' : '';
 
 // Audio codec
 $codec = $cfgSendspin['audio_codec'] ?? 'flac';

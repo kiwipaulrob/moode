@@ -19,11 +19,15 @@
 # CONFIGURATION
 # ============================================================================
 
-SCRIPT_VERSION="4.1.11"
+SCRIPT_VERSION="4.1.12"
 REPO_OWNER="kiwipaulrob"
 REPO_NAME="moode"
 BRANCH="sendspin-advanced"
 SENDSPIN_VERSION="8.0.0"
+# Patch channel: the pin is a >= floor with a <8.1-style ceiling so the
+# ssp-config Update button (bare `uv tool upgrade`) can deliver 8.0.x patches.
+# New majors still need an installer change (new floor + override range).
+SENDSPIN_PIN_SPEC=">=8.0.0,<8.1"
 # aiosendspin workaround — see ensure_aiosendspin_override() and README (upstream sendspin#280)
 AIOSENDSPIN_OVERRIDE_SPEC=">=9.1.1,<9.2"
 AIOSENDSPIN_MIN_VERSION="9.1.1"
@@ -407,7 +411,7 @@ ensure_aiosendspin_override() {
         return 1
     }
 
-    if uv tool install "sendspin==${SENDSPIN_VERSION}" --overrides "$AIOSENDSPIN_OVERRIDE_FILE" -q; then
+    if uv tool install "sendspin${SENDSPIN_PIN_SPEC}" --overrides "$AIOSENDSPIN_OVERRIDE_FILE" -q; then
         new=$(ls "$sp" 2>/dev/null | sed -n 's/^aiosendspin-\([0-9][0-9.]*\)\.dist-info$/\1/p' | head -1)
         log_success "  aiosendspin override applied (${cur:-none} -> ${new:-unknown})"
         return 0
@@ -443,17 +447,19 @@ install_prerequisites() {
         pip3 install uv --break-system-packages -q
     fi
     
-    # Check/install sendspin CLI (pinned: fresh installs are reproducible;
-    # deliberate upgrades go through the ssp-config Update button)
+    # Check/install sendspin CLI (pinned to the 8.0.x line: fresh installs are
+    # reproducible; patches arrive via the ssp-config Update button, majors via
+    # an installer pin bump)
     if ! command -v sendspin &>/dev/null; then
-        log_info "  Installing sendspin CLI v${SENDSPIN_VERSION} via uv..."
-        uv tool install "sendspin==${SENDSPIN_VERSION}" -q
+        log_info "  Installing sendspin CLI ${SENDSPIN_PIN_SPEC} via uv..."
+        uv tool install "sendspin${SENDSPIN_PIN_SPEC}" -q
         log_success "  sendspin CLI installed ($(sendspin --version 2>/dev/null || echo 'unknown'))"
     else
-        local installed_version
+        local installed_version pin_line
         installed_version=$(sendspin --version 2>/dev/null || echo 'unknown')
-        if [[ "$installed_version" != *"$SENDSPIN_VERSION"* ]]; then
-            log_warn "  sendspin CLI is ${installed_version} (installer pin is v${SENDSPIN_VERSION}); leaving as-is"
+        pin_line="${SENDSPIN_VERSION%.*}"
+        if [[ "$installed_version" != *"$pin_line."* ]]; then
+            log_warn "  sendspin CLI is ${installed_version} (installer pin line is v${pin_line}.x); leaving as-is"
         else
             log_info "  sendspin CLI already installed (${installed_version})"
         fi
