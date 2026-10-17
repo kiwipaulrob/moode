@@ -17,7 +17,7 @@ SendSpin is a synchronized multi-room audio receiver. This integration adds Send
 ## Requirements
 
 - moOde 9.x or later — verified against the current release, moOde 10.3.6 (r1036, Trixie); the fork is re-merged with every new upstream release
-- **Live-verified on moOde 10.3.6** (in-place update from 10.3.5, 2026-10-12): installer v4.1.10 reports 19/19 components, the `sendspin` service runs enabled with the daemon holding `_audioout`, CLI 7.5.0 is pinned with the `aiosendspin>=6.1.1,<6.2` override recorded in the uv receipt, and the monitoring suite reports **55 passed / 0 failed**
+- **Live-verified on moOde 10.3.6** (in-place update from 10.3.5, 2026-10-12; SendSpin upgraded 2026-10-17): installer v4.1.11 reports 19/19 components, the `sendspin` service runs enabled with the daemon holding `_audioout`, CLI **8.0.0** is pinned with the `aiosendspin>=9.1.1,<9.2` override recorded in the uv receipt, MA 2.10.6 sees `moode-sendspin` available, and a silent playback test passed with zero errors
 - Raspberry Pi 3/4/5
 - Network connection to a SendSpin server (e.g., Music Assistant)
 - Home Assistant (optional — for metadata display via HA polling)
@@ -33,7 +33,7 @@ The installer automatically installs Python 3, `uv` (Python package manager), an
 
 ## Installer
 
-**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, component detection, and all features. **Current version: v4.1.10** (moOde 10.3.6 / r1036 support; v4.1.9 audit fixes: SENDSPINMETA_FILE constant, ExecStopPost name sync, backup-restore stdout fix, complete uninstall; v4.1.10 minor batch: dead update-check removal, ssp-config key allowlist, setup guide fetched from repo, moode-worker.service removal; fork issue #21 fixes: confirmation prompts read from /dev/tty so piped `curl | sudo bash` installs stay answerable, SendSpin stop-hook renamed to `sendspin-spspost.sh` so moOde's stock Spotify `spspost.sh` is never installed over or deleted; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
+**`moode-sendspin-installer.sh`** — Full-featured installer with backup, uninstall, component detection, and all features. **Current version: v4.1.11** (SendSpin 8.0.0 pin + aiosendspin `>=9.1.1,<9.2` override; moOde 10.3.6 / r1036 support; v4.1.9 audit fixes: SENDSPINMETA_FILE constant, ExecStopPost name sync, backup-restore stdout fix, complete uninstall; v4.1.10 minor batch: dead update-check removal, ssp-config key allowlist, setup guide fetched from repo, moode-worker.service removal; fork issue #21 fixes: confirmation prompts read from /dev/tty so piped `curl | sudo bash` installs stay answerable, SendSpin stop-hook renamed to `sendspin-spspost.sh` so moOde's stock Spotify `spspost.sh` is never installed over or deleted; idempotent re-runs — safe to run repeatedly, no duplicate DB rows; partial installations detected and repaired automatically; boot-time auto-start honors the UI toggle).
 
 ### Installation
 
@@ -210,7 +210,7 @@ sudo systemctl restart php8.4-fpm     # match your Pi's PHP version
 
 A built `header.php` already carries the SendSpin `<script src="js/sendspin-display.js" defer>` line, so restoring it keeps the integration intact. The installer refuses to patch a source-variant `header.php` and tells you why.
 
-### Known upstream issue: aiosendspin pinned below 6.1
+### Resolved upstream issue: aiosendspin pinned below 6.1 (fixed by the 8.0.0 upgrade)
 
 `sendspin` 7.5.0 declares `aiosendspin[server]~=6.0.1`, which PEP 440 resolves to `>=6.0.1,<6.1.0`. `aiosendspin` 6.1.0 added `seek` and `seek_relative` to `MediaCommand`, and servers now advertise them — **Music Assistant 2.10.x** sends `seek_relative` in `supported_commands`, as does Loxone/Sonn Core 4.0.0-beta.21. On 6.0.x that value cannot be parsed, and because `supported_commands` is typed `list[MediaCommand]` the **entire `server/state` message is discarded**:
 
@@ -221,9 +221,9 @@ mashumaro.exceptions.InvalidFieldValue: Field "supported_commands" of type list[
 
 Audio keeps playing (a different message), so the client still looks healthy while controller state — volume, mute, repeat, shuffle — silently stops syncing. Streams with no duration are unaffected, which makes it look source-specific rather than protocol-specific.
 
-Tracked upstream as **Sendspin-Protocol/sendspin#280** and **#278**; no fix released yet.
+Tracked upstream as **Sendspin-Protocol/sendspin#280** and **#278**; resolved by the SendSpin 8.0.0 / aiosendspin 9.1.1 upgrade (2026-10-17, verified live on this Pi).
 
-**What the installer does:** it records an `--overrides` entry for `aiosendspin>=6.1.1,<6.2` in the uv tool receipt. This is a *declared* override, not a hand-patched environment, so it also survives `uv tool upgrade` (which otherwise re-resolves straight back to 6.0.x). Check it with:
+**What the installer does (v4.1.11+):** it records an `--overrides` entry for `aiosendspin>=9.1.1,<9.2` in the uv tool receipt (previously `>=6.1.1,<6.2` — the 8.0.0 upgrade resolved upstream #280, since aiosendspin 9.1.x parses `seek_relative`). This is a *declared* override, not a hand-patched environment, so it also survives `uv tool upgrade` (which otherwise re-resolves straight back to 6.0.x). Check it with:
 
 ```bash
 grep overrides /root/.local/share/uv/tools/sendspin/uv-receipt.toml
