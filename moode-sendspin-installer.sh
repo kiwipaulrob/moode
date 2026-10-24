@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# moOde SendSpin Integration Installer v4.1.10
+# moOde SendSpin Integration Installer v4.1.12
 # Repository: https://github.com/kiwipaulrob/moode
 # Branch: sendspin-advanced
 #
