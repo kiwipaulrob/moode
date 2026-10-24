@@ -3,8 +3,14 @@
 SendSpin Metadata Sink for moOde Audio Player (HA Polling Edition)
 
 Music Assistant does not populate the SendSpin metadata@v1 role fields.
-This daemon polls Home Assistant's REST API for the media_player.moode_sendspin
-entity state and writes track metadata to moOde's metadata file format.
+This daemon polls Home Assistant's REST API for the moode_sendspin
+media_player entity state and writes track metadata to moOde's metadata
+file format.
+
+The HA entity_id is resolved dynamically (see HA_ENTITY_HINTS): Home
+Assistant appends suffixes like _2 when a stale twin holds the base name,
+so a hardcoded entity_id 404s forever after a rename. The sink polls the
+cached entity, re-discovers on consecutive 404s, and backs off on 401s.
 
 The SendSpin listener is kept for connection monitoring (so we know when
 a server connects/disconnects), but actual track data comes from HA.
@@ -17,18 +23,23 @@ Systemd service: sendspin-metadata-sink.service
 """
 
 import asyncio
+import glob
 import hashlib
 import json
 import logging
 import os
 import signal
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
-# Use the aiosendspin library from sendspin-cli's venv (for connection monitoring)
-VENV_SITE = "/root/.local/share/uv/tools/sendspin/lib/python3.12/site-packages"
-sys.path.insert(0, VENV_SITE)
+# Use the aiosendspin library from sendspin-cli's venv (for connection monitoring).
+# Resolved dynamically — the bundled Python version moves with uv updates
+# (seen: python3.12 at install time, python3.13 after upgrade).
+for _candidate in sorted(glob.glob("/root/.local/share/uv/tools/sendspin/lib/python3.*/site-packages")):
+    if _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
 
 from aiohttp import web, ClientSession, ClientTimeout
 from aiosendspin.client.client import SendspinClient
@@ -45,8 +56,19 @@ CLIENT_ID = "sendspin-metadata-moOde"
 # Home Assistant configuration
 HA_URL = "http://192.168.214.159:8123"
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
-HA_ENTITY = "media_player.moode_sendspin"
+# Initial hint only — the live entity_id is resolved dynamically (HA appends
+# _2/_3 when a stale twin holds the base name; the base name 404s forever
+# after such a rename). First 200 wins; cache refreshes on 404s.
+HA_ENTITY = "media_player.moode_sendspin_2"
+HA_ENTITY_HINTS = [HA_ENTITY, "media_player.moode_sendspin"]
 HA_POLL_INTERVAL = 3  # seconds between HA API polls
+HA_AUTH_BACKOFF_S = 60  # back off this long after a 401 (bad/expired token)
+
+# Runtime resolution state (module-level so the poll loop shares it).
+_cached_ha_entity = HA_ENTITY  # fast path: poll the last-known-good entity
+_cache_misses = 0  # consecutive 404s against the cached entity
+_auth_backoff_until = 0.0  # monotonic deadline; skip polls while in backoff
+_auth_warned = False  # log the 401 warning only once per backoff episode
 
 # moOde metadata format: Title~~~Artist~~~Album~~~Duration~~~CoverPath~~~Codec
 CLEARED_META = "~~~SendSpin~~~Stopped~~~0~~~~~~"
@@ -142,26 +164,129 @@ last_artist = None
 is_streaming = False
 
 
+def _ha_entity_candidates():
+    """Yield entity_ids to try, cached winner first, then static hints."""
+    seen = set()
+    if _cached_ha_entity:
+        seen.add(_cached_ha_entity)
+        yield _cached_ha_entity
+    for hint in HA_ENTITY_HINTS:
+        if hint not in seen:
+            seen.add(hint)
+            yield hint
+
+
+def _rank_ha_candidate(entity_id, state, attrs):
+    """Rank a discovery candidate: playing with title wins, unavailable loses."""
+    if "moode" not in entity_id or "sendspin" not in entity_id:
+        return -1
+    has_title = bool(attrs.get("media_title"))
+    if state == "playing" and has_title:
+        return 3
+    if state == "paused" and has_title:
+        return 2
+    if has_title:
+        return 1
+    if state not in ("unavailable", "unknown"):
+        return 0
+    return -1
+
+
+async def discover_ha_entity(session, headers):
+    """Scan /api/states for the live moode_sendspin entity.
+
+    Returns the best entity_id or None. Runs only on repeated 404s (rename
+    or fresh client ID), never on the hot path, so one full-dump fetch per
+    rename event is acceptable.
+    """
+    try:
+        url = f"{HA_URL}/api/states"
+        async with session.get(url, headers=headers, timeout=ClientTimeout(total=10)) as resp:
+            if resp.status == 401:
+                return None  # caller handles auth backoff
+            if resp.status != 200:
+                logger.warning("HA discovery returned status %d", resp.status)
+                return None
+            states = await resp.json()
+    except Exception as e:
+        logger.warning("HA discovery failed: %s", e)
+        return None
+
+    best, best_rank = None, -1
+    for entry in states:
+        if not isinstance(entry, dict):
+            continue
+        entity_id = entry.get("entity_id", "")
+        if not entity_id.startswith("media_player."):
+            continue
+        rank = _rank_ha_candidate(entity_id, entry.get("state"), entry.get("attributes", {}))
+        if rank > best_rank:
+            best, best_rank = entity_id, rank
+    return best
+
+
 async def poll_ha_metadata(session):
-    """Poll Home Assistant for media_player.moode_sendspin state."""
+    """Poll Home Assistant for the moode_sendspin state (auto-discovered)."""
     global last_title, last_artist
+    global _cached_ha_entity, _cache_misses
+    global _auth_backoff_until, _auth_warned
 
     if not HA_TOKEN:
         logger.error("HA_TOKEN not set - cannot poll Home Assistant")
         return
 
-    url = f"{HA_URL}/api/states/{HA_ENTITY}"
+    if time.monotonic() < _auth_backoff_until:
+        return  # 401 backoff active: skip quietly until the deadline passes
+
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json",
     }
 
+    data = None
     try:
-        async with session.get(url, headers=headers, timeout=ClientTimeout(total=5)) as resp:
-            if resp.status != 200:
-                logger.warning("HA API returned status %d", resp.status)
+        for candidate in _ha_entity_candidates():
+            url = f"{HA_URL}/api/states/{candidate}"
+            try:
+                async with session.get(url, headers=headers, timeout=ClientTimeout(total=5)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        _cached_ha_entity = candidate
+                        _cache_misses = 0
+                        break
+                    if resp.status == 404:
+                        # Entity not present under this name (rename twin) — try next.
+                        continue
+                    if resp.status == 401:
+                        # Bad/expired token: back off, warn once per episode.
+                        _auth_backoff_until = time.monotonic() + HA_AUTH_BACKOFF_S
+                        if not _auth_warned:
+                            logger.warning(
+                                "HA API 401 Unauthorized — backing off %ds "
+                                "(check HA_TOKEN in the systemd unit)",
+                                HA_AUTH_BACKOFF_S,
+                            )
+                            _auth_warned = True
+                        return
+                    logger.warning("HA API returned status %d", resp.status)
+                    return
+            except Exception as e:
+                logger.warning("HA poll failed: %s", e)
                 return
-            data = await resp.json()
+        else:
+            # Every candidate 404d. Count the miss; re-discover (not warn)
+            # so a rename heals itself within a few polls.
+            _cache_misses += 1
+            if _cache_misses >= 2:
+                found = await discover_ha_entity(session, headers)
+                if found:
+                    logger.info("HA entity re-discovered as %s", found)
+                    _cached_ha_entity = found
+                    _cache_misses = 0
+                    return  # pick up metadata on the next poll
+            logger.debug("HA moode_sendspin entities all returned 404")
+            return
+        _auth_warned = False  # a 200 resets the once-per-episode 401 warning
     except Exception as e:
         logger.warning("HA poll failed: %s", e)
         return
@@ -292,7 +417,7 @@ async def main():
         sys.exit(1)
 
     logger.info("Starting SendSpin Metadata Sink (HA polling mode) on port %d", LISTEN_PORT)
-    logger.info("HA URL: %s, Entity: %s", HA_URL, HA_ENTITY)
+    logger.info("HA URL: %s, Entity hints: %s", HA_URL, HA_ENTITY_HINTS)
 
     listener = ClientListener(
         client_id=CLIENT_ID,
