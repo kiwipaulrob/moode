@@ -12,8 +12,11 @@ Assistant appends suffixes like _2 when a stale twin holds the base name,
 so a hardcoded entity_id 404s forever after a rename. The sink polls the
 cached entity, re-discovers on consecutive 404s, and backs off on 401s.
 
-The SendSpin listener is kept for connection monitoring (so we know when
-a server connects/disconnects), but actual track data comes from HA.
+There is deliberately no SendSpin websocket listener: Music Assistant does
+not populate the metadata role fields, so a listener can only do connection
+bookkeeping the HA poll already covers within one interval. HA polling is
+the sole data path (removed Oct 2026 after the client_id= -> identity=
+API break; see PR).
 
 Requires:
   - Home Assistant accessible at HA_URL with a long-lived access token
@@ -25,7 +28,6 @@ Systemd service: sendspin-metadata-sink.service
 import asyncio
 import glob
 import hashlib
-import json
 import logging
 import os
 import signal
@@ -34,24 +36,18 @@ import time
 import urllib.request
 from pathlib import Path
 
-# Use the aiosendspin library from sendspin-cli's venv (for connection monitoring).
+# aiohttp comes from the sendspin-cli venv (system python may lack it).
 # Resolved dynamically — the bundled Python version moves with uv updates
 # (seen: python3.12 at install time, python3.13 after upgrade).
 for _candidate in sorted(glob.glob("/root/.local/share/uv/tools/sendspin/lib/python3.*/site-packages")):
     if _candidate not in sys.path:
         sys.path.insert(0, _candidate)
 
-from aiohttp import web, ClientSession, ClientTimeout
-from aiosendspin.client.client import SendspinClient
-from aiosendspin.client.listener import ClientListener
-from aiosendspin.models.types import Roles
+from aiohttp import ClientSession, ClientTimeout
 
 # --- Configuration ---
 META_FILE = "/var/local/www/sendspinmeta.txt"
 COVER_DIR = "/var/local/www/imagesw/sendspin-covers"
-LISTEN_PORT = 8929  # Different from audio daemon (8928)
-CLIENT_NAME = "moOde Metadata"
-CLIENT_ID = "sendspin-metadata-moOde"
 
 # Home Assistant configuration
 HA_URL = "http://192.168.214.159:8123"
@@ -161,7 +157,6 @@ def is_meta_file_cleared():
 # --- HA Polling State ---
 last_title = None
 last_artist = None
-is_streaming = False
 
 
 def _ha_entity_candidates():
@@ -337,74 +332,11 @@ async def poll_ha_metadata(session):
 
 
 async def ha_poll_loop():
-    """Continuously poll HA for metadata - always running, not gated on stream state."""
+    """Continuously poll HA for metadata (sole data path — no listener)."""
     async with ClientSession() as session:
         while True:
             await poll_ha_metadata(session)
             await asyncio.sleep(HA_POLL_INTERVAL)
-
-
-# --- SendSpin connection monitoring (for stream start/stop detection) ---
-def on_metadata(payload):
-    """Called when server sends metadata updates - logged but not used for display."""
-    meta = getattr(payload, "metadata", None)
-    if meta is not None:
-        logger.debug("SendSpin metadata (unused): title=%s artist=%s",
-                     getattr(meta, "title", None), getattr(meta, "artist", None))
-
-
-def on_disconnect():
-    """Called when server disconnects."""
-    global is_streaming, last_title, last_artist
-    logger.info("Server disconnected")
-    is_streaming = False
-    clear_meta_file()
-    last_title = None
-    last_artist = None
-
-
-def on_stream_start(message):
-    """Called when audio stream starts."""
-    global is_streaming
-    is_streaming = True
-    logger.info("Stream started - HA polling active")
-
-
-def on_stream_end(roles):
-    """Called when audio stream ends."""
-    global is_streaming, last_title, last_artist
-    is_streaming = False
-    logger.info("Stream ended - clearing metadata")
-    clear_meta_file()
-    last_title = None
-    last_artist = None
-
-
-async def handle_connection(ws: web.WebSocketResponse) -> None:
-    """Handle incoming server connection."""
-    logger.info("Server connecting...")
-
-    client = SendspinClient(
-        client_id=CLIENT_ID,
-        client_name=CLIENT_NAME,
-        roles=[Roles.METADATA],
-    )
-
-    client.add_metadata_listener(on_metadata)
-    client.add_disconnect_listener(on_disconnect)
-    client.add_stream_start_listener(on_stream_start)
-    client.add_stream_end_listener(on_stream_end)
-
-    try:
-        await client.attach_websocket(ws)
-        logger.info("Server connected, monitoring stream state...")
-        disconnect_event = asyncio.Event()
-        client.add_disconnect_listener(disconnect_event.set)
-        await disconnect_event.wait()
-    except Exception as e:
-        logger.error("Connection error: %s", e)
-    finally:
-        clear_meta_file()
 
 
 async def main():
@@ -416,15 +348,8 @@ async def main():
         logger.error("Set it in the systemd service file: Environment=\"HA_TOKEN=your_token\"")
         sys.exit(1)
 
-    logger.info("Starting SendSpin Metadata Sink (HA polling mode) on port %d", LISTEN_PORT)
+    logger.info("Starting SendSpin Metadata Sink (HA polling mode)")
     logger.info("HA URL: %s, Entity hints: %s", HA_URL, HA_ENTITY_HINTS)
-
-    listener = ClientListener(
-        client_id=CLIENT_ID,
-        on_connection=handle_connection,
-        port=LISTEN_PORT,
-        client_name=CLIENT_NAME,
-    )
 
     stop_event = asyncio.Event()
 
@@ -435,17 +360,13 @@ async def main():
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    await listener.start()
-    logger.info("Listening on port %d, advertising as '%s'", LISTEN_PORT, CLIENT_NAME)
-
-    # Start HA polling loop
+    # HA polling is the sole data path (no websocket listener).
     poll_task = asyncio.create_task(ha_poll_loop())
 
     await stop_event.wait()
 
     logger.info("Stopping...")
     poll_task.cancel()
-    await listener.stop()
     clear_meta_file()
     logger.info("Stopped")
 

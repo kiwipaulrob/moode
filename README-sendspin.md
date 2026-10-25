@@ -117,6 +117,8 @@ The overlay chain is: sink polls HA → writes `/var/local/www/sendspinmeta.txt`
 
 1. **HA entity rename (most common).** The sink resolves the entity dynamically: it polls the last-known-good `entity_id`, falls back through `HA_ENTITY_HINTS`, and after consecutive 404s scans `/api/states` for the best `media_player.*moode*sendspin*` match (playing with a title wins). A rename heals itself within a few polls — no Pi edit needed. Cause of renames: HA appends `_2`/`_3` when a stale twin (e.g. an old dead MA player still exposed to HA) holds the base name.
 2. **HA token (401).** A bad/expired `HA_TOKEN` backs off to one warning + 60s-quiet retries. Check `sudo journalctl -u sendspin-metadata-sink --no-pager | tail` for the 401 line, then set a fresh long-lived token in `/etc/systemd/system/sendspin-metadata-sink.service` (`Environment="HA_TOKEN=..."`) and `sudo systemctl restart sendspin-metadata-sink`.
+The sink is HA-poll only by design (no `:8929` websocket listener/mDNS advertisement): Music Assistant does not populate the SendSpin metadata role fields, so a listener could only repeat connection bookkeeping the 3s poll already covers — and its old `client_id=` constructor broke against aiosendspin 9.x (`identity=` API with pairing store), throwing on every server connect. A native-metadata listener would need MA server support first.
+
 3. **Quick checks.** `cat /var/local/www/sendspinmeta.txt` (cleared file = `~~~SendSpin~~~Stopped~~~0~~~~~~` means HA reports idle/unavailable — correct when nothing plays); `curl -s http://localhost/command/sendspin-meta.php` should return the same content the browser poller sees.
 
 ## Backup System
