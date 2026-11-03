@@ -128,18 +128,6 @@ function autoConfigSettings() {
 		['requires' => ['timezone'], 'handler' => 'setSessVarOnlySysCmd', 'cmd' => 'set-timezone %s'],
 		['requires' => ['keyboard'], 'handler' => 'setSessVarOnlySysCmd', 'cmd' => 'set-keyboard %s'],
 		['requires' => ['reduce_notifications'], 'handler' => 'setSessVarOnly'],
-		['requires' => ['worker_responsiveness'], 'handler' => function($values) {
-			$_SESSION['worker_responsiveness'] = $values['worker_responsiveness'];
-			if ($values['worker_responsiveness'] == 'Default') {
-				$workerSleep = 3000000;
-				$waitworkerSleep = 1000000;
-			} else {
-				$workerSleep = 1500000;
-				$waitworkerSleep = 750000;
-			}
-			sysCmd('sed -i "/const WORKER_SLEEP/c\const WORKER_SLEEP = ' . $workerSleep . ';" /var/www/inc/sleep-interval.php');
-			sysCmd('sed -i "/const WAITWORKER_SLEEP/c\const WAITWORKER_SLEEP = ' . $waitworkerSleep . ';" /var/www/inc/sleep-interval.php');
-		}],
 		['requires' => ['cpugov'], 'handler' => function($values) {
 			phpSession('write', 'cpugov', $values['cpugov']);
 			sysCmd('sh -c ' . "'" . 'echo "' . $values['cpugov'] . '" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor' . "'");
@@ -192,6 +180,7 @@ function autoConfigSettings() {
 			$_SESSION['avahi_options'] = $values['avahi_options'];
 			updAvahiOptions($values['avahi_options']);
 		}],
+		['requires' => ['dashmon_svc'], 'handler' => 'setSessVarOnly'],
 		['requires' => ['external_antenna'], 'handler' => function($values) {
 			$_SESSION['external_antenna'] = $values['external_antenna'];
 			$value = $values['external_antenna'] == '0' ? '#' : '';
@@ -944,6 +933,7 @@ function autoConfig($cfgFile) {
 			$script = $autoCfgIni[$scriptKey];
 
 			if (file_exists($script)) {
+				sysCmd('chmod +x "' . $script . '"');
 				$output = sysCmd($script);
 				foreach ($output as $line) {
 					autoCfgLog($line);

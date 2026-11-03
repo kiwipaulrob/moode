@@ -104,19 +104,6 @@
 
 			<div class="config-horiz-rule">Performance</div>
 
-			<label class="control-label" for="worker-responsiveness">Worker response</label>
-			<div class="controls">
-				<select id="worker-responsiveness" class="config-select-large" name="worker_responsiveness" onchange="autoClick('#btn-set-worker-responsiveness');">
-					$_select[worker_responsiveness]
-				</select>
-				<button id="btn-set-worker-responsiveness" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_worker_responsiveness" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
-				<a aria-label="Help" class="config-info-toggle" data-cmd="info-worker-responsiveness" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
-				<span id="info-worker-responsiveness" class="config-help-info">
-					<b>Default:</b> For all Raspberry Pi models.<br>
-					<b>Boosted:</b> Experimental for multi-core Raspberry Pi's. This provides more responsiveness when using the Configuration screens or making other setting changes that require processing by the Worker daemon.
-				</span>
-			</div>
-
 			<label class="control-label" for="cpugov">CPU governor</label>
 			<div class="controls">
 				<select id="cpugov" class="config-select-large" name="cpugov" onchange="autoClick('#btn-set-cpugov');">
@@ -324,6 +311,20 @@
 					If this occurs try setting the option to IPv4-only which can eliminate the second advertized host.
 				</span>
 			</div>
+
+			<label class="control-label">Dashboard monitor</label>
+			<div class="controls">
+				<div class="toggle">
+					<label class="toggle-radio toggle-dashmon" for="toggle-dashmon-2">ON </label>$_select[dashmon_on]
+					<label class="toggle-radio toggle-dashmon" for="toggle-dashmon-1">OFF</label>$_select[dashmon_off]
+				</div>
+				<button id="btn-set-dashmon" class="hide btn btn-primary btn-small config-btn-set btn-submit" type="submit" name="update_dashmon_svc" value="novalue"><i class="fa fa-solid fa-sharp fa-arrow-turn-down-left"></i></button>
+				<a aria-label="Help" class="config-info-toggle" data-cmd="info-dashmon" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
+				<span id="info-dashmon" class="config-help-info">
+					Monitor the network for moOde hosts and automatically update the Dashboard cache.
+				</span>
+			</div>
+
 			<label class="control-label">External antenna</label>
 			<div class="controls">
 				<div class="toggle">
@@ -565,17 +566,16 @@
 				<a href="bkp-config.php?action=backup"><button class="btn btn-medium btn-primary config-btn">Backup</button></a>
 				<a aria-label="Help" class="config-info-toggle" data-cmd="info-backup-system" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
 				<span id="info-backup-system" class="config-help-info">
-					Backup configuration settings and preferences, radio stations, playlists and CamillaDSP configs.
-                </span>
+					Backup configuration settings and preferences, radio stations, playlists, CamillaDSP configs and renderer Plugins.
+				</span>
 			</div>
-
 			<label class="control-label">Restore system</label>
 			<div class="controls">
 				<a href="bkp-config.php?action=restore"><button class="btn btn-medium btn-primary config-btn">Restore</button></a>
 				<a aria-label="Help" class="config-info-toggle" data-cmd="info-restore-system" href="#notarget"><i class="fa-regular fa-sharp fa-info-circle"></i></a>
 				<span id="info-restore-system" class="config-help-info">
-					Restore configuration settings and preferences, radio stations, playlists and CamillaDSP configs.
-                </span>
+					Restore configuration settings and preferences, radio stations, playlists, CamillaDSP configs and renderer Plugins.
+				</span>
 			</div>
 		</div>
 

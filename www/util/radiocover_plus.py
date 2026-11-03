@@ -115,7 +115,7 @@ def read_global():
 
 	values = {}
 	if not os.path.isfile(CONFIG_FILE):
-		logging(f"[read_global] Config file missing: {CONFIG_FILE}")
+		logging.error(f"[read_global] Config file missing: {CONFIG_FILE}")
 		return
 
 	try:
@@ -125,18 +125,18 @@ def read_global():
 				if not line or line.startswith("#"):
 					continue
 				if "=" not in line:
-					logging(f"[read_global] Invalid line {lineno}: {line}")
+					logging.warning(f"[read_global] Invalid line {lineno}: {line}")
 					continue
 				key, value = line.split("=", 1)
 				values[key.strip()] = value.strip() or None
 	except Exception as e:
-		logging(f"[read_global] Error reading config: {e}")
+		logging.error(f"[read_global] Error reading config: {e}")
 		return
 
 	def load_token(name):
 		val = values.get(name)
 		if not val:
-			logging(f"[read_global] Missing or empty token: {name}")
+			logging.error(f"[read_global] Missing or empty token: {name}")
 		return val
 
 	def load_float(key, fallback):
@@ -147,7 +147,7 @@ def read_global():
 				if val < 0: raise ValueError
 				return val
 		except ValueError:
-			logging(f"[read_global] Invalid {key}, fallback={fallback}")
+			logging.error(f"[read_global] Invalid {key}, fallback={fallback}")
 		return fallback
 
 	def load_int(key, fallback):
@@ -158,7 +158,7 @@ def read_global():
 				if val < 0: raise ValueError
 				return val
 		except ValueError:
-			logging(f"[read_global] Invalid {key}, fallback={fallback}")
+			logging.error(f"[read_global] Invalid {key}, fallback={fallback}")
 		return fallback
 
 	# Search parameters
@@ -444,6 +444,12 @@ def get_image_resolution(url, mode="regex"):
 		try:
 			m = re.search(r'(\d+)x(\d+)', url)
 			if m: return int(m.group(1)), int(m.group(2))
+			m_caa = re.search(r'(?:front-|thumb)(\d+)', url)
+			if m_caa:
+				dim = int(m_caa.group(1))
+				return dim, dim
+			if "archive.org" in url and "_thumb" in url:
+				return 500, 500
 		except Exception:
 			pass
 		return 0, 0
@@ -521,33 +527,44 @@ def search_musicbrainz(artist, title, album=None):
 		r = requests.get(
 			"https://musicbrainz.org/ws/2/recording",
 			headers={"User-Agent": USER_AGENT},
-			params={"query": q, "fmt": "json", "limit": 3},
+			params={"query": q, "fmt": "json", "limit": 4},
 			timeout=MB_TIMEOUT
 		)
-		if r.ok:
-			for rec in r.json().get("recordings", []):
-				for rel in rec.get("releases", []):
-					mbid = rel.get("id")
-					rel_title = rel.get("title")
-					release_group = rel.get("release-group", {})
-					album_type = release_group.get("primary-type") if release_group else None
-					if not mbid: continue
-					try:
-						cr = requests.get(
-							f"https://coverartarchive.org/release/{mbid}",
-							headers={"User-Agent": USER_AGENT},
-							timeout=MB_TIMEOUT
-						)
-						if cr.ok:
-							for img in cr.json().get("images", []):
-								if img.get("front"):
-									img_url = (img.get("image")
-											   or img.get("thumbnails", {}).get("large")
-											   or img.get("thumbnails", {}).get("small"))
-									if img_url:
-										return img_url, rel_title, album_type
-					except Exception as e:
-						logging.warning(f"[search_musicbrainz] CAA error {mbid}: {e}")
+		if not r.ok:
+			return None, None, None
+
+		recordings = r.json().get("recordings", [])
+		candidates = []
+		for rec in recordings:
+			for rel in rec.get("releases", []):
+				mbid = rel.get("id")
+				if not mbid: continue
+				rel_title = rel.get("title")
+				status = rel.get("status", "")
+				release_group = rel.get("release-group", {})
+				album_type = release_group.get("primary-type") if release_group else None
+				priority = 1 if status == "Official" else 2
+				candidates.append((priority, mbid, rel_title, album_type))
+
+		# Prioritize official releases
+		candidates.sort(key=lambda x: x[0])
+
+		# Probe top candidates: primary 500px (lightweight), fallback 1200px
+		for _, mbid, rel_title, album_type in candidates[:3]:
+			for size in ("front-500", "front-1200"):
+				caa_url = f"https://coverartarchive.org/release/{mbid}/{size}"
+				try:
+					head_res = requests.head(
+						caa_url,
+						headers={"User-Agent": USER_AGENT},
+						timeout=1.5,
+						allow_redirects=True
+					)
+					if head_res.status_code == 200:
+						final_url = head_res.url if head_res.url else caa_url
+						return final_url, rel_title, album_type
+				except Exception:
+					pass
 	except Exception as e:
 		logging.error(f"[search_musicbrainz] {e}")
 	return None, None, None
@@ -777,11 +794,12 @@ def search_cover_parallel(artist, title, attempt=1):
 		cover_data = [(x, _best_res(x), y) for x,y in cover_data]
 		cover_data.sort(key=lambda x: x[1], reverse=True)
 		if cover_data:
+			discarded_provider = cover_data[0][2]
 			if cover_data[0][1] != 0:
 				chosen = cover_data[0][0]
-				chosen_provider = cover_data[0][2]
+				chosen_provider = discarded_provider
 			else:
-				logging.error(f"[search_cover_parallel] Cover discarded {chosen_provider}, not within min/max size limit")
+				logging.error(f"[search_cover_parallel] Cover discarded {discarded_provider}, not within min/max size limit")
 				chosen = None
 				chosen_provider = None
 		return chosen, float(best_score), best_album, chosen_provider
@@ -860,7 +878,10 @@ def search_cover_parallel(artist, title, attempt=1):
 				break
 
 	finally:
-		pass
+		try:
+			executor.shutdown(wait=False, cancel_futures=True)
+		except Exception:
+			pass
 
 	elapsed_ms = (time.monotonic() - t_start) * 1000.0
 	done_cnt   = len(providers) - len(futures)

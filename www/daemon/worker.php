@@ -148,7 +148,8 @@ $sessionVars = array(
 	'mpd_db_stats',
 	'mpd_dbupdate_status',
 	'trackcover_url_cache',
-	'radio_track_covers'
+	'radio_track_covers',
+	'worker_responsiveness'
 );
 foreach ($sessionVars as $var) {
 	sysCmd('moodeutl -D ' . $var);
@@ -927,6 +928,10 @@ if (!isset($_SESSION['mpd_dbregen_count'])) {
 if (!isset($_SESSION['mpd_dbanalyze_count'])) {
 	$_SESSION['mpd_dbanalyze_count'] = 0;
 }
+// MPD HTTP local audio out option
+if (!isset($_SESSION['mpd_httpd_local_audio'])) {
+	$_SESSION['mpd_httpd_local_audio'] = '1'; // Default is on
+}
 
 // Start MPD
 sysCmd("systemctl start mpd");
@@ -1644,10 +1649,6 @@ if (!isset($_SESSION['lib_recent_playlist'])) {
 if (!isset($_SESSION['reduce_notifications'])) {
 	$_SESSION['reduce_notifications'] = '0';
 }
-// Worker sleep interval
-if (!isset($_SESSION['worker_responsiveness'])) {
-	$_SESSION['worker_responsiveness'] = 'Default';
-}
 // PCI express
 if (!isset($_SESSION['pci_express'])) {
 	$_SESSION['pci_express'] = 'auto';
@@ -1663,6 +1664,10 @@ if (!isset($_SESSION['fs_mountmon'])) {
 if (!isset($_SESSION['mpd_monitor_svc'])) {
 	$_SESSION['mpd_monitor_svc'] = 'Off';
 	$_SESSION['mpd_monitor_opt'] = '6,Yes,3'; // sleep_interval,resume_play,msg_threshold
+}
+// Dashboard monitor
+if (!isset($_SESSION['dashmon_svc'])) {
+	$_SESSION['dashmon_svc'] = '0';
 }
 // Bluetooth timeout
 if (!isset($_SESSION['bt_auto_disconnect'])) {
@@ -1807,7 +1812,7 @@ sysCmd('killall -s 9 mountmon.php');
 if ($_SESSION['fs_mountmon'] == 'On') {
 	sysCmd('/var/www/daemon/mountmon.php > /dev/null 2>&1 &');
 }
-workerLog('worker: Mount monitor:    ' . ($_SESSION['fs_mountmon'] == 'On' ? 'started' : 'off'));
+workerLog('worker: Mount monitor:     ' . ($_SESSION['fs_mountmon'] == 'On' ? 'started' : 'off'));
 
 // Start MPD radio stream monitor
 sysCmd('killall -s 9 mpdmon.php');
@@ -1815,21 +1820,27 @@ if ($_SESSION['mpd_monitor_svc'] == 'On') {
 	sysCmd('truncate ' . MPD_LOG . ' --size 0');
 	sysCmd('/var/www/daemon/mpdmon.php "' . $_SESSION['mpd_monitor_opt'] . '" > /dev/null 2>&1 &');
 }
-workerLog('worker: Radio monitor:    ' . ($_SESSION['mpd_monitor_svc'] == 'On' ? 'started' : 'off'));
+workerLog('worker: Radio monitor:     ' . ($_SESSION['mpd_monitor_svc'] == 'On' ? 'started' : 'off'));
+
+// Start Dashboard monitor
+sysCmd('killall -s 9 dashmon.php');
+if ($_SESSION['dashmon_svc'] == '1') {
+	sysCmd('/var/www/daemon/dashmon.php > /dev/null 2>&1 &');
+}
+workerLog('worker: Dashboard monitor: ' . ($_SESSION['dashmon_svc'] == '1' ? 'started' : 'off'));
 
 // Start watchdog monitor
 sysCmd('killall -s 9 watchdog.sh');
-
 sysCmd('/var/www/daemon/watchdog.sh ' . WATCHDOG_SLEEP . ' > /dev/null 2>&1 &');
-workerLog('worker: Watchdog monitor: started');
+workerLog('worker: Watchdog monitor:  started');
 
 // Sleep intervals
-workerLog('worker: Responsiveness:   ' . $_SESSION['worker_responsiveness']);
 debugLog('Sleep intervals:  ' .
 	'worker=' . WORKER_SLEEP / 1000000 . ', ' .
 	'waitworker=' . WAITWORKER_SLEEP / 1000000 . ', ' .
 	'watchdog=' . WATCHDOG_SLEEP . ', ' .
 	'mountmon=' . MOUNTMON_SLEEP . ', ' .
+	'dashmon=' . DASHMON_SLEEP . ', ' .
 	'mpdmon=' . explode(',', $_SESSION['mpd_monitor_opt'])[0] . ', ' .
 	'gpiobuttons=' . GPIOBUTTONS_SLEEP
 );
@@ -3104,8 +3115,14 @@ function runQueuedJob() {
 			}
 			break;
 		case 'mpd_httpd':
-			$cmd = $_SESSION['w_queueargs'] == '1' ? 'mpc enable "' . HTTP_SERVER . '"' : 'mpc disable "' . HTTP_SERVER . '"';
-			sysCmd($cmd);
+			if ($_SESSION['w_queueargs'] == '1') {
+				sysCmd('mpc enable "' . HTTP_SERVER . '"');
+			} else {
+				sysCmd('mpc disable "' . HTTP_SERVER . '"');
+				if ($_SESSION['audioout'] == 'Local') {
+					sysCmd('mpc enable "' . ALSA_DEFAULT . '"');
+				}
+			}
 			break;
 		case 'mpd_httpd_port':
 			updMpdConf();
@@ -3114,6 +3131,10 @@ function runQueuedJob() {
 		case 'mpd_httpd_encoder':
 			updMpdConf();
 			sysCmd('systemctl restart mpd');
+			break;
+		case 'mpd_httpd_local_audio':
+			$cmd = $_SESSION['w_queueargs'] == '1' ? 'enable' : 'disable';
+			sysCmd('mpc ' . $cmd . ' "' . ALSA_DEFAULT . '"');
 			break;
 		// Equalizers/DSP
 		case 'alsaequal':
@@ -3258,13 +3279,6 @@ function runQueuedJob() {
 		case 'reset_bt_auto_disconnect':
 			$GLOBALS['bt_auto_disconnect'] = $_SESSION['bt_auto_disconnect'];
 			break;
-		case 'install_airplay':
-			// https://raw.githubusercontent.com/moode-player/plugins/main
-			$fullLog = $_SESSION['home_dir'] . '/install_airplay.log';
-			sysCmd('rm "' . $fullLog . '"');
-			$result = sqlQuery("SELECT plugin FROM cfg_plugin WHERE component='renderer' AND type='airplay'", $GLOBALS['dbh']);
-			sysCmd('/var/www/util/plugin-updater.sh "renderer" "' . $result[0]['plugin'] . '" > "' . $fullLog . '" 2>&1 &');
-			break;
 		case 'airplaysvc':
 			stopAirPlay();
 			if ($_SESSION['airplaysvc'] == 1) {
@@ -3274,13 +3288,6 @@ function runQueuedJob() {
 			if ($_SESSION['w_queueargs'] == 'disconnect_renderer' && $_SESSION['rsmafterapl'] == 'Yes') {
 				sysCmd('mpc play');
 			}
-			break;
-		case 'install_spotify':
-			// https://raw.githubusercontent.com/moode-player/plugins/main
-			$fullLog = $_SESSION['home_dir'] . '/install_spotify.log';
-			sysCmd('rm "' . $fullLog . '"');
-			$result = sqlQuery("SELECT plugin FROM cfg_plugin WHERE component='renderer' AND type='spotify-connect'", $GLOBALS['dbh']);
-			sysCmd('/var/www/util/plugin-updater.sh "renderer" "' . $result[0]['plugin'] . '" > "' . $fullLog . '" 2>&1 &');
 			break;
 		case 'spotifysvc':
 			stopSpotify();
@@ -3320,11 +3327,17 @@ function runQueuedJob() {
 				sysCmd('mpc play');
 			}
 			break;
+		case 'install_airplay':
+		case 'install_spotify':
 		case 'install_qobuz':
-			$fullLog = $_SESSION['home_dir'] . '/install_qobuz.log';
-			sysCmd('rm "' . $fullLog . '"');
-			$result = sqlQuery("SELECT plugin FROM cfg_plugin WHERE component='renderer' AND type='qobuz-connect'", $GLOBALS['dbh']);
-			sysCmd('/var/www/util/plugin-updater.sh "renderer" "' . $result[0]['plugin'] . '" > "' . $fullLog . '" 2>&1 &');
+			// Log file and plugin type
+			$fullLog = $_SESSION['home_dir'] . '/' . $_SESSION['w_queue'] . '.log';
+			$types = array('install_airplay' => 'airplay', 'install_spotify' => 'spotify-connect', 'install_qobuz' => 'qobuz-connect');
+			$type = $types[$_SESSION['w_queue']];
+			// Install plugin
+			$plugin = sqlQuery("SELECT plugin FROM cfg_plugin WHERE component='renderer' AND type='" . $type . "'", $GLOBALS['dbh'])[0]['plugin'];
+			$suffix = sqlQuery("SELECT value FROM cfg_system WHERE param='pkgid_suffix'", $GLOBALS['dbh'])[0]['value'];
+			sysCmd('/var/www/util/plugin-updater.sh "renderer" "' . $type . '" "' . $plugin . $plugin_suffix . '" > "' . $fullLog . '" 2>&1 &');
 			break;
 		case 'slsvc':
 			if ($_SESSION['slsvc'] == '1') {
@@ -3517,17 +3530,6 @@ function runQueuedJob() {
 			$validIPAddress = ($_SESSION['ipaddress'] != '0.0.0.0' && $GLOBALS['wlan0Ip'][0] != explode('/', $_SESSION['ap_network_addr'])[0]);
 			$_SESSION['updater_available_update'] = updaterAutoCheck($validIPAddress);
 			break;
-		case 'worker_responsiveness':
-			if ($_SESSION['w_queueargs'] == 'Default') {
-				$workerSleep = 3000000;
-				$waitworkerSleep = 1000000;
-			} else {
-				$workerSleep = 1500000;
-				$waitworkerSleep = 750000;
-			}
-			sysCmd('sed -i "/const WORKER_SLEEP/c\const WORKER_SLEEP = ' . $workerSleep . ';" /var/www/inc/sleep-interval.php');
-			sysCmd('sed -i "/const WAITWORKER_SLEEP/c\const WAITWORKER_SLEEP = ' . $waitworkerSleep . ';" /var/www/inc/sleep-interval.php');
-			break;
 		case 'cpugov':
 			sysCmd('sh -c ' . "'" . 'echo "' . $_SESSION['w_queueargs'] . '" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor' . "'");
 			break;
@@ -3557,6 +3559,12 @@ function runQueuedJob() {
 			break;
 		case 'avahi_options':
 			updAvahiOptions($_SESSION['w_queueargs']);
+			break;
+		case 'dashmon_svc':
+			sysCmd('killall -s 9 dashmon.php');
+			if ($_SESSION['w_queueargs'] == '1') {
+				sysCmd('/var/www/daemon/dashmon.php > /dev/null 2>&1 &');
+			}
 			break;
 		case 'external_antenna':
 			$value = $_SESSION['w_queueargs'] == '0' ? '#' : '';
@@ -3766,9 +3774,8 @@ function runQueuedJob() {
 			restartMpdAndRenderers($resetAlsaCtl);
 			break;
 		case 'install_moode_meters':
-			// https://raw.githubusercontent.com/moode-player/plugins/main
-			$latestPlugin = sqlQuery("SELECT plugin FROM cfg_plugin WHERE component='peppydisplay' AND type='moode-meters'", $GLOBALS['dbh'])[0]['plugin'];
-			sysCmd('/var/www/util/plugin-updater.sh "peppydisplay" "' . $latestPlugin . '"');
+			$plugin = sqlQuery("SELECT plugin FROM cfg_plugin WHERE component='peppydisplay' AND type='moode-meters'", $GLOBALS['dbh'])[0]['plugin'];
+			sysCmd('/var/www/util/plugin-updater.sh "peppydisplay" "moode-meters" "' . $plugin . '"');
 			break;
 		case 'scn_blank':
 			setScreenBlankTimeout($_SESSION['w_queueargs']);

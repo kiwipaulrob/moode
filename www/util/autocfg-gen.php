@@ -38,7 +38,6 @@ foreach ($result as $row) {
 // Add session-only params so they are available to autoConfigExtract()
 // System
 $currentSettings['updater_auto_check'] = $_SESSION['updater_auto_check'];
-$currentSettings['worker_responsiveness'] = $_SESSION['worker_responsiveness'];
 $currentSettings['pi_audio_driver'] = $_SESSION['pi_audio_driver'];
 $currentSettings['pci_express'] = $_SESSION['pci_express'];
 $currentSettings['fan_temp0'] = $_SESSION['fan_temp0'];
@@ -56,6 +55,7 @@ $currentSettings['reduce_notifications'] = $_SESSION['reduce_notifications'];
 $currentSettings['shellinabox'] = $_SESSION['shellinabox'];
 // Network
 $currentSettings['approto'] = $_SESSION['approto'];
+$currentSettings['dashmon_svc'] = $_SESSION['dashmon_svc'];
 // Audio: MPD options
 $currentSettings['ashuffle_mode'] = $_SESSION['ashuffle_mode'];
 $currentSettings['ashuffle_window'] = $_SESSION['ashuffle_window'];
